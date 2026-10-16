@@ -27,8 +27,11 @@ downloader.
 | --- | --- |
 | `start-marquee.bat` | Starts Marquee (and Docker Desktop if needed), then opens the browser |
 | `stop-marquee.bat` | Stops Marquee. Users, libraries and watch history are kept. |
-| `update-marquee.bat` | Pulls the latest code (if you used `git clone`), rebuilds with the newest ffmpeg and yt-dlp, and restarts |
+| `update-marquee.bat` | Gets the latest version from GitHub (works for `git clone` and ZIP installs), rebuilds with the newest ffmpeg and yt-dlp, and restarts. Your `.env`, users and libraries are kept. |
 | `marquee-logs.bat` | Shows the server log, for troubleshooting |
+
+All of them run `marquee.ps1`, which you can also use directly, e.g.
+`powershell -ExecutionPolicy Bypass -File marquee.ps1 InstallHelper`.
 
 Marquee restarts on its own whenever Docker Desktop is running. To start Docker Desktop with
 Windows, turn on *Settings → General → Start Docker Desktop when you sign in*.
@@ -59,6 +62,25 @@ You can also manage folders by hand in **Settings → Edit** on a library, using
 still listed in `.env`.
 
 **Changing other settings later:** edit `.env`, then run `start-marquee.bat` again.
+
+### Updating
+
+Marquee checks GitHub for new versions twice a day. Admins see a green dot on their avatar when an
+update is available. **Settings → Updates** shows what's new, and has **Check now** and
+**Update now** buttons.
+
+**Update now** needs the *update helper*, a small background task on the server PC. The app runs
+inside Docker and can't rebuild itself, so the helper does it. The first time you run
+`start-marquee.bat`, it asks whether to turn the helper on; answer **Y**.
+- **What it is:** a Windows scheduled task named "Marquee Updater" that starts when you sign in.
+- **What it does:** it waits until you press *Update now*, then downloads the new version,
+  rebuilds and restarts Marquee. The web page shows progress and reloads by itself when the update
+  is done.
+- **Turning it off:** run `marquee.ps1 RemoveHelper`, or delete the task in Task Scheduler.
+- **Without the helper:** run `update-marquee.bat` on the server PC. It does exactly the same thing.
+
+The helper and the app talk only through the `control` folder next to `docker-compose.yml`. The app
+never gets access to Docker itself.
 
 ## Features
 

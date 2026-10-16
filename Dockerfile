@@ -26,6 +26,12 @@ RUN useradd --system --create-home --uid 999 marquee \
  && mkdir -p /data /media \
  && chown -R marquee:marquee /data /media /usr/local/bin/yt-dlp
 
+# Which version this image was built from (passed in by marquee.ps1; used for update checks).
+ARG MARQUEE_COMMIT=
+ARG MARQUEE_BUILT_AT=
+ENV MARQUEE_COMMIT=$MARQUEE_COMMIT \
+    MARQUEE_BUILT_AT=$MARQUEE_BUILT_AT
+
 ENV NODE_ENV=production \
     PORT=32500 \
     HOST=0.0.0.0 \

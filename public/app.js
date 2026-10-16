@@ -111,9 +111,10 @@ function renderSidebar() {
     ${state.libraries.length ? '' : state.user?.role === 'admin' ? html`<a href="#/settings">＋ Add a library</a>` : html`<div class="muted" style="padding:8px 12px;font-size:13px">No libraries shared with you yet.</div>`}
     <div class="section">${state.user?.role === 'admin' ? 'Manage' : 'You'}</div>
     ${state.user?.canDownload ? html`<a href="#/downloads" class="${path === '/downloads' ? 'active' : ''}">⤓ Downloads</a>` : ''}
-    ${state.user?.role === 'admin' ? html`<a href="#/settings" class="${path === '/settings' ? 'active' : ''}">⚙ Settings</a>` : ''}
+    ${state.user?.role === 'admin' ? html`<a href="#/settings" data-nav="settings" class="${path === '/settings' ? 'active' : ''}">⚙ Settings</a>` : ''}
     <a href="#/account" class="${path === '/account' ? 'active' : ''}">👤 Account</a>
   `.s;
+  if (state.status) noteUpdateAvailable(state.status);
 }
 
 // ---------- scan status polling ----------
@@ -125,6 +126,7 @@ async function pollStatus() {
     const prev = state.status;
     state.status = await api('/api/status');
     const s = state.status;
+    noteUpdateAvailable(s);
     const ind = $('#scan-indicator');
     ind.hidden = !s.scanning;
     if (s.scanning && s.current) {
@@ -518,7 +520,7 @@ async function viewSearch({ query, seq }) {
 async function viewSettings({ query, seq }) {
   view.onclick = null;
   if (state.user.role !== 'admin') { location.replace('#/account'); return; }
-  const [, s, users, metaSettings] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'), api('/api/settings')]);
+  const [, s, users, metaSettings, updates] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'), api('/api/settings'), api('/api/updates')]);
   state.status = s;
   const libs = state.libraries;
   if (!setView(seq, html`
@@ -544,8 +546,10 @@ async function viewSettings({ query, seq }) {
           <button class="btn small danger" data-act="delete">Delete</button>
         </div>
       </div>`) : html`<div class="panel muted">No libraries yet. Add one to get started.</div>`}
+    ${updates.check?.status === 'available' || updates.helper.state === 'updating' ? updatesSection(updates) : ''}
     ${metadataSection(metaSettings)}
     ${usersSection(users)}
+    ${updates.check?.status === 'available' || updates.helper.state === 'updating' ? '' : updatesSection(updates)}
     <h2 style="margin:28px 0 12px">Server</h2>
     <div class="panel">
       <dl class="kv">
@@ -560,6 +564,8 @@ async function viewSettings({ query, seq }) {
   $('#add-lib').onclick = () => showLibraryForm();
   bindUsersSection(users);
   bindMetadataSection();
+  bindUpdatesSection(updates);
+  if (query.get('section') === 'updates') $('#updates')?.scrollIntoView({ block: 'start' });
   if ($('#scan-all')) $('#scan-all').onclick = async () => { await api('/api/scan', { method: 'POST' }); toast('Scanning all libraries…'); pollStatus(); };
   if (query.get('add')) showLibraryForm();
   view.onclick = async (e) => {

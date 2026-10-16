@@ -16,6 +16,7 @@ const subs = require('./lib/subtitles');
 const lib = require('./lib/library');
 const metadata = require('./lib/metadata');
 const { Matcher } = require('./lib/matcher');
+const { Updater } = require('./lib/updates');
 
 const PORT = Number(process.env.PORT) || 32500;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -45,6 +46,7 @@ store.data.settings ||= {};
 metadata.configure(() => store.data.settings);
 const matcher = new Matcher(store, path.join(DATA_DIR, 'images'));
 const scanner = new Scanner(store, DATA_DIR, matcher);
+const updater = new Updater(store, __dirname);
 const auth = new Auth(store);
 const downloader = new Downloader(store, { onFinished: (job) => scanner.enqueue(job.libraryId) });
 const transcodes = new Set();
@@ -304,7 +306,7 @@ route('GET', '/api/status', async (req, res, p, url, user) => json(res, 200, {
   name: 'Marquee', version: require('./package.json').version, hostname: os.hostname(),
   metadataProviders: metadata.available(), ...scanner.status(), activeTranscodes: transcodes.size,
   downloader: downloader.status(),
-  ...(user.role === 'admin' ? { dataDir: DATA_DIR, mediaRoot: MEDIA_ROOT } : {}),
+  ...(user.role === 'admin' ? { dataDir: DATA_DIR, mediaRoot: MEDIA_ROOT, updateAvailable: updater.updateAvailable(), updating: updater.helper().state === 'updating' } : {}),
 }));
 
 route('GET', '/api/libraries', async (req, res, p, url, user) =>
@@ -442,6 +444,7 @@ const settingsView = () => {
     tmdbKeyHint: st.tmdbKey ? `••••${st.tmdbKey.slice(-4)}` : null,
     language: st.language || process.env.METADATA_LANGUAGE || 'en-US',
     autoMatch: st.autoMatch !== false,
+    updateCheck: st.updateCheck !== false,
     providers: metadata.available(),
   };
 };
@@ -462,6 +465,7 @@ route('PATCH', '/api/settings', async (req, res) => {
     st.language = body.language;
   }
   if (body.autoMatch !== undefined) st.autoMatch = !!body.autoMatch;
+  if (body.updateCheck !== undefined) st.updateCheck = !!body.updateCheck;
   store.save();
   json(res, 200, settingsView());
 }, 'admin');
@@ -541,6 +545,11 @@ route('DELETE', '/api/meta/:id/art/:kind', async (req, res, { id, kind: artKind 
   matcher.resetArt(target, kind, artKind);
   json(res, 200, afterMetaChange(id, user));
 }, 'admin');
+
+// --- updates (admin) ---
+route('GET', '/api/updates', async (req, res) => json(res, 200, updater.status()), 'admin');
+route('POST', '/api/updates/check', async (req, res) => { await updater.check(); json(res, 200, updater.status()); }, 'admin');
+route('POST', '/api/updates/apply', async (req, res, p, url, user) => { updater.requestUpdate(user); json(res, 202, updater.status()); }, 'admin');
 
 // --- my list + continue watching ---
 route('GET', '/api/watchlist', async (req, res, p, url, user) => json(res, 200, lib.watchlist(store, user)));
@@ -683,6 +692,7 @@ async function main() {
     downloader.checkTool().then((v) => console.log(v ? `yt-dlp ${v} available for downloads` : 'yt-dlp not found: video downloads disabled'));
   });
   scanner.enqueueAll();
+  updater.startSchedule();
   if (SCAN_INTERVAL_MIN > 0) setInterval(() => scanner.enqueueAll(), SCAN_INTERVAL_MIN * 60_000).unref();
 }
 

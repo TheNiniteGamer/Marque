@@ -8,3 +8,6 @@ test
 scripts
 *.bat
 *.log
+control
+.marquee-commit
+*.ps1

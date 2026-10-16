@@ -4,3 +4,5 @@ sample-media/
 media/
 .env
 *.log
+control/
+.marquee-commit

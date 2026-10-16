@@ -2,7 +2,12 @@
 # (copy .env.example to .env and edit it, or let start-marquee.bat do it for you on Windows).
 services:
   marquee:
-    build: .
+    build:
+      context: .
+      args:
+        # Set by marquee.ps1 so the app knows which version it is (for update checks).
+        MARQUEE_COMMIT: ${MARQUEE_COMMIT:-}
+        MARQUEE_BUILT_AT: ${MARQUEE_BUILT_AT:-}
     image: marquee:latest
     container_name: marquee
     restart: unless-stopped
@@ -13,6 +18,9 @@ services:
       TMDB_API_KEY: ${TMDB_API_KEY:-}
       SCAN_INTERVAL: ${SCAN_INTERVAL:-30}
       TRANSCODE_PRESET: ${TRANSCODE_PRESET:-veryfast}
+      # Update checks look at this GitHub repository; the helper and the app talk through /control.
+      MARQUEE_REPO: ${MARQUEE_REPO:-TheNiniteGamer/Marque}
+      CONTROL_DIR: /control
       # Libraries built from the folders below. Extra drives (…_2, …_3, …_4) are only included when set
       # in .env, and folders added there later are attached to the existing library on the next start.
       AUTO_LIBRARIES: >-
@@ -27,6 +35,8 @@ services:
     volumes:
       # Database, thumbnails and caches (a Docker-managed volume; survives updates).
       - marquee-data:/data
+      # Shared with the update helper on your PC (marquee.ps1 Watch).
+      - ./control:/control
       # Your media. On Windows use forward slashes, e.g. MOVIES_DIR=D:/Movies
       - "${MOVIES_DIR:-./media/movies}:/media/movies"
       - "${MOVIES_DIR_2:-./media/unused/movies2}:/media/movies2"

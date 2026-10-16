@@ -410,3 +410,21 @@ textarea.input { height: auto; padding: 8px 10px; resize: vertical; font: inheri
 .kbd-list dd { margin: 0; }
 kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--bg-3); font: 600 12px ui-monospace, monospace; text-align: center; }
 .player .p-speed { max-width: 96px; }
+
+/* ---------- updates ---------- */
+.upd-state { font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.upd-state.ok { color: #46a758; }
+.upd-state.new { color: var(--accent); }
+.upd-state.bad { color: var(--danger); font-weight: 400; font-size: 14px; }
+.upd-state .spin { width: 14px; height: 14px; border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
+.changes ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; display: grid; gap: 3px; }
+.changes code, #updates-panel code { font-size: 12px; }
+.upd-log { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 12px; max-height: 220px; overflow: auto; white-space: pre-wrap; margin: 0; }
+.upd-log.bad { border-color: rgba(229,72,77,.5); }
+.user-menu.has-update .avatar { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px #46a758; }
+.sidebar a.has-update::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #46a758; margin-left: auto; }
+.user-pop .upd-link { display: none; color: #46a758; }
+.user-menu.has-update .user-pop .upd-link { display: block; }
+.restart-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(17,19,23,.94); display: grid; place-content: center; text-align: center; gap: 4px; padding: 20px; }
+.restart-overlay .spinner { margin: 0 auto 16px; }
+#updates { scroll-margin-top: calc(var(--topbar) + 16px); }

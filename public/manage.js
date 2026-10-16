@@ -64,6 +64,7 @@ function renderUserMenu() {
       <a href="#/account">Account</a>
       ${u.canDownload ? html`<a href="#/downloads">Downloads</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/settings">Settings</a>` : ''}
+      ${u.role === 'admin' ? html`<a href="#/settings?section=updates" class="upd-link">Update available</a>` : ''}
       <button id="sign-out">Sign out</button>
     </div>`.s;
   const pop = $('#user-pop');

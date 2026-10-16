@@ -393,3 +393,141 @@ document.addEventListener('keydown', (e) => {
     gPending = 0;
   }
 });
+
+// ---------- Settings → Updates ----------
+const shortSha = (s) => (s ? s.slice(0, 7) : '');
+function updatesSection(u) {
+  const c = u.check;
+  const h = u.helper;
+  const b = u.build;
+  const updating = h.state === 'updating';
+  const ago = (t) => (t ? fmtDate(t) : 'never');
+  let summary;
+  if (updating) summary = html`<div class="upd-state busy"><span class="spin"></span> ${h.message || 'Updating…'}</div>`;
+  else if (!c) summary = html`<div class="upd-state">Not checked yet.</div>`;
+  else if (c.status === 'current') summary = html`<div class="upd-state ok">✓ Marquee is up to date</div>`;
+  else if (c.status === 'available') summary = html`<div class="upd-state new">${c.behindBy} update${c.behindBy === 1 ? '' : 's'} available</div>`;
+  else if (c.status === 'error') summary = html`<div class="upd-state bad">Couldn't check for updates: ${c.error}</div>`;
+  else summary = html`<div class="upd-state">Can't tell which version is installed${b.install === 'docker' ? ' (it was probably set up from a ZIP download). Running an update once fixes this.' : '.'}
+    ${c.latest ? html`<br><span class="muted">Latest version: ${shortSha(c.latest.sha)} — ${c.latest.message}</span>` : ''}</div>`;
+
+  let how = '';
+  if (b.install === 'docker') {
+    how = h.alive
+      ? html`<span class="muted">The update helper is running on the server PC.</span>`
+      : html`<span class="muted">To update from this page, turn on the update helper on the server PC: run <b>start-marquee.bat</b> and answer <b>Y</b>
+          (or run <code>marquee.ps1 InstallHelper</code>). You can always update by running <b>update-marquee.bat</b> there.</span>`;
+  } else if (b.install === 'git') {
+    how = html`<span class="muted">To update: run <code>git pull</code> in the Marquee folder, then restart the server.</span>`;
+  } else {
+    how = html`<span class="muted">To update: download the latest version from GitHub and restart the server.</span>`;
+  }
+  const canApply = b.install === 'docker' && h.alive && !updating && (c?.status === 'available' || c?.status === 'unknown');
+
+  return html`
+    <h2 style="margin:28px 0 12px" id="updates">Updates</h2>
+    <div class="panel form" id="updates-panel" style="max-width:none">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div>
+          ${summary}
+          <div class="muted" style="font-size:13px;margin-top:4px">
+            Running version ${b.version}${b.commit ? html` · <code>${shortSha(b.commit)}</code>` : ''}${b.builtAt ? ` · built ${fmtDate(Date.parse(b.builtAt))}` : ''}
+            · checked ${ago(c?.checkedAt)} · from <a href="https://github.com/${b.repo}" target="_blank" rel="noopener">github.com/${b.repo}</a>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn small" id="upd-check" ${updating ? 'disabled' : ''}>↻ Check now</button>
+          ${canApply ? html`<button class="btn primary small" id="upd-apply">⤓ Update now</button>` : ''}
+        </div>
+      </div>
+      ${c?.status === 'available' && c.changes.length ? html`<div class="changes"><b>What's new</b>
+        <ul>${c.changes.map((x) => html`<li><a href="${x.url || '#'}" target="_blank" rel="noopener"><code>${x.sha}</code></a> ${x.message}
+          ${x.date ? html`<span class="muted">· ${new Date(x.date).toLocaleDateString()}</span>` : ''}</li>`)}</ul></div>` : ''}
+      ${updating || h.state === 'failed' ? html`<pre class="upd-log ${h.state === 'failed' ? 'bad' : ''}">${h.state === 'failed' ? `Update failed: ${h.message}\n\n` : ''}${(h.log || []).join('\n')}</pre>` : ''}
+      ${h.state === 'done' && h.finishedAt ? html`<div class="muted" style="font-size:13px">Last update finished ${fmtDate(h.finishedAt)} — ${h.message}.</div>` : ''}
+      <div>${how}</div>
+      <label class="check"><input type="checkbox" id="upd-auto" ${u.autoCheck ? 'checked' : ''}> Check for updates automatically (twice a day)</label>
+    </div>`;
+}
+
+function bindUpdatesSection(u) {
+  $('#upd-check').onclick = async (e) => {
+    e.target.disabled = true; e.target.textContent = 'Checking…';
+    try {
+      const r = await api('/api/updates/check', { method: 'POST' });
+      toast(r.check.status === 'available' ? `${r.check.behindBy} update(s) available` : r.check.status === 'current' ? 'Marquee is up to date' : r.check.error || 'Checked');
+      await refreshStatus();
+    } catch (err) { toast(err.message, true); }
+    router();
+  };
+  if ($('#upd-apply')) {
+    $('#upd-apply').onclick = async () => {
+      if (!confirm('Update Marquee now? It will be unavailable for a minute or two while it rebuilds and restarts. Anyone watching will be interrupted.')) return;
+      try { await api('/api/updates/apply', { method: 'POST' }); toast('Update requested — the helper will start in a few seconds'); watchUpdate(); router(); } catch (err) { toast(err.message, true); }
+    };
+  }
+  $('#upd-auto').onchange = async (e) => {
+    try { await api('/api/settings', { method: 'PATCH', body: { updateCheck: e.target.checked } }); toast('Saved'); } catch (err) { toast(err.message, true); }
+  };
+  if (u.helper.state === 'updating' || u.helper.pending) watchUpdate();
+}
+
+// Follow an update: refresh the panel while it runs, then wait out the restart and reload into the new version.
+let updateWatch = null;
+function watchUpdate() {
+  if (updateWatch) return;
+  let sawUpdating = false;
+  updateWatch = setInterval(async () => {
+    try {
+      const u = await fetch('/api/updates').then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))));
+      if (u.helper.state === 'updating') sawUpdating = true;
+      if (parseHash().path === '/settings' && !$('.modal-backdrop')) {
+        const panel = $('#updates-panel');
+        if (panel) { const fresh = document.createElement('div'); fresh.innerHTML = updatesSection(u).s; panel.replaceWith(fresh.querySelector('#updates-panel')); bindUpdatesSection(u); }
+      }
+      if (sawUpdating && u.helper.state !== 'updating') {
+        clearInterval(updateWatch); updateWatch = null;
+        if (u.helper.state === 'done') { showRestarting(); waitForRestart(); } else toast(`Update failed: ${u.helper.message}`, true);
+      }
+    } catch {
+      // The server went away: the new version is starting.
+      clearInterval(updateWatch); updateWatch = null;
+      showRestarting();
+      waitForRestart();
+    }
+  }, 2500);
+}
+function showRestarting() {
+  if ($('#restart-overlay')) return;
+  const el = document.createElement('div');
+  el.id = 'restart-overlay';
+  el.className = 'restart-overlay';
+  el.innerHTML = '<div class="spinner"></div><h2>Marquee is restarting with the new version…</h2><p class="muted">This page will reload by itself.</p>';
+  document.body.append(el);
+}
+function waitForRestart() {
+  let downSeen = false;
+  const waitStarted = Date.now();
+  const t = setInterval(async () => {
+    const ok = await fetch('/api/health', { cache: 'no-store' }).then((r) => r.ok).catch(() => false);
+    if (!ok) { downSeen = true; return; }
+    // Up again: reload once it has been down, or after a short grace period if the restart was too quick to notice.
+    if (downSeen || (Date.now() - waitStarted > 20000)) { clearInterval(t); location.reload(); }
+  }, 2000);
+}
+
+// A small dot on the avatar and a one-time toast when an update is waiting (admins only).
+function noteUpdateAvailable(status) {
+  const on = state.user?.role === 'admin' && !!status?.updateAvailable;
+  $('#user-menu')?.classList.toggle('has-update', on);
+  const link = $('.sidebar a[data-nav="settings"]');
+  if (link) link.classList.toggle('has-update', on);
+  if (on && !sessionStorage.getItem('marquee:update-toast')) {
+    try { sessionStorage.setItem('marquee:update-toast', '1'); } catch { /* ignore */ }
+    toast('A Marquee update is available — see Settings → Updates');
+  }
+  if (status?.updating && state.user?.role === 'admin') watchUpdate();
+}
+async function refreshStatus() {
+  try { state.status = await api('/api/status'); noteUpdateAvailable(state.status); } catch { /* ignore */ }
+}
