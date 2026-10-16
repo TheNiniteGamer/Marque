@@ -65,11 +65,16 @@ function renderUserMenu() {
       ${u.canDownload ? html`<a href="#/downloads">Downloads</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/settings">Settings</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/settings?section=updates" class="upd-link">Update available</a>` : ''}
+      ${window.MarqueeAndroid ? html`<button id="switch-server">Switch server</button>` : ''}
       <button id="sign-out">Sign out</button>
     </div>`.s;
   const pop = $('#user-pop');
   $('#user-btn').onclick = (e) => { e.stopPropagation(); pop.hidden = !pop.hidden; $('#user-btn').setAttribute('aria-expanded', String(!pop.hidden)); };
-  pop.onclick = (e) => { if (e.target.id === 'sign-out') signOut(); pop.hidden = true; };
+  pop.onclick = (e) => {
+    if (e.target.id === 'sign-out') signOut();
+    if (e.target.id === 'switch-server') window.MarqueeAndroid?.changeServer();
+    pop.hidden = true;
+  };
 }
 document.addEventListener('click', (e) => { const pop = $('#user-pop'); if (pop && !e.target.closest('#user-menu')) pop.hidden = true; });
 
@@ -92,6 +97,12 @@ async function viewAccount({ seq }) {
       <label class="check"><input type="checkbox" data-pref="subsOn" ${store.get('subsOn', false) ? 'checked' : ''}> Turn on subtitles by default</label>
       <p class="muted" style="margin:0;font-size:13px">These are saved in this browser.</p>
     </div>
+    ${window.MarqueeAndroid ? '' : html`<div class="panel">
+      <h2 style="margin-top:0">Android app</h2>
+      <p class="muted" style="margin:0 0 10px">Watch on your Android phone or tablet with the Marquee app. It plays videos in the phone's own player,
+        so more files play without converting. Open this page on your phone to install it.</p>
+      <a class="btn" href="https://github.com/TheNiniteGamer/Marque/releases/latest" target="_blank" rel="noopener">⤓ Get the Android app</a>
+    </div>`}
     <form class="panel form" id="pw-form">
       <h2>Change password</h2>
       <label>Current password<input class="input" type="password" name="currentPassword" autocomplete="current-password" required></label>

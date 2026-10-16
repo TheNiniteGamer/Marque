@@ -6,3 +6,5 @@ Dockerfile text eol=lf
 docker-compose.yml text eol=lf
 *.js text eol=lf
 *.ps1 text eol=crlf
+*.keystore binary
+*.apk binary

@@ -696,6 +696,12 @@ async function viewPlay({ params: [id], query }) {
   if (!item.media) { toast('This file cannot be played', true); return history.back(); }
   let start = query.has('t') ? Number(query.get('t')) || 0 : 0;
   if (!query.has('t') && item.progress && !item.progress.watched && item.progress.position > 15) start = item.progress.position;
+  // Inside the Android app, videos open in the phone's native player.
+  if (window.MarqueeAndroid?.play) {
+    window.MarqueeAndroid.play(JSON.stringify({ id: item.id, start, autoplayNext: store.get('autoplayNext', true), subsOn: store.get('subsOn', false) }));
+    if (state.inAppNav) history.back(); else location.replace(`#/item/${item.id}`);
+    return;
+  }
   player = new Player(item, start);
 }
 
@@ -1098,6 +1104,9 @@ async function router() {
     setView(seq, html`<div class="empty"><h2>Something went wrong</h2><p class="error-box" style="display:inline-block">${err.message}</p><br><a class="btn" href="#/">Go home</a></div>`);
   }
 }
+
+// The Android app's player closed: refresh progress, Continue Watching, etc.
+window.addEventListener('marquee-native-closed', () => router());
 
 let firstRoute = true;
 window.addEventListener('hashchange', () => {

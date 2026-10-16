@@ -233,7 +233,8 @@ const route = (method, pattern, handler, access = 'user') =>
   routes.push({ method, access, re: new RegExp(`^${pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)')}$`), handler });
 
 // --- auth ---
-route('GET', '/api/health', async (req, res) => json(res, 200, { ok: true }), 'public');
+// Public: also used by the Android app to recognise Marquee servers on the network.
+route('GET', '/api/health', async (req, res) => json(res, 200, { ok: true, name: 'Marquee', version: require('./package.json').version }), 'public');
 
 route('GET', '/api/auth/me', async (req, res, p, url, user) => {
   if (!user) return json(res, 401, { error: 'Not signed in', setupRequired: !auth.hasUsers() });
