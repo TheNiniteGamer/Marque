@@ -36,17 +36,36 @@ Windows, turn on *Settings → General → Start Docker Desktop when you sign in
 **Phones, TVs and other computers** can use `http://YOUR-PC-NAME:32500`. If they can't connect,
 allow Docker Desktop through Windows Firewall on private networks.
 
-**Changing folders later:** edit `.env`, then run `start-marquee.bat` again. To add more folders,
-add extra lines under `volumes:` in `docker-compose.yml` (for example
-`- "E:/More Movies:/media/more-movies"`), restart, and add `/media/more-movies` to a library in
-Settings.
+### Movies (or TV) spread over several drives
+
+One library can combine folders from several drives. They show up as a single collection, and
+each folder is labelled in Settings with its file count. In `.env`, remove the `#` in front of the
+extra slots and fill them in:
+
+```ini
+MOVIES_DIR=D:/Movies
+MOVIES_DIR_2=E:/Movies
+MOVIES_DIR_3=F:/More Movies
+TV_DIR=D:/TV Shows
+TV_DIR_2=E:/TV Shows
+```
+
+Run `start-marquee.bat` again, and the new folders join your existing Movies / TV Shows library on
+their own. There are up to 4 movie and 4 TV folders. If a drive is unplugged, its movies and watch
+history are kept, and the folder is marked *offline* in Settings until it's back.
+
+You can also manage folders by hand in **Settings → Edit** on a library, using
+**＋ Add another folder** and **Browse…**. Folders you remove there stay removed, even if they're
+still listed in `.env`.
+
+**Changing other settings later:** edit `.env`, then run `start-marquee.bat` again.
 
 ## Features
 
 | Feature | What Marquee does |
 | --- | --- |
 | **Accounts** | Sign-in screen, with an admin account created on first run. Admins add users, choose which libraries each one can see, and decide who can use the downloader. Each user has their own watch history, Continue Watching and resume points. |
-| **Libraries** | Movie and TV Show libraries, each backed by one or more folders. Add, edit and remove them in Settings with a built-in folder picker. |
+| **Libraries** | Movie and TV Show libraries, each combining one or more folders, which can be on different drives. Add, edit and remove them in Settings with a built-in folder picker. |
 | **Scanning** | Probes new or changed files with `ffprobe`, removes deleted ones, and rescans periodically. If a drive is offline, its items and watch history are kept. |
 | **Filename matching** | `Movie (Year).ext`, release-style names like `Movie.2019.1080p.BluRay.x264`, `Show/Season 01/Show - S01E02 - Title.ext`, `1x02`, `S01E01-E02`, Specials folders. |
 | **Artwork & metadata** | Local `poster.jpg` / `fanart.jpg` / `<name>-poster.jpg`, or a frame from the video. Optional **TMDB** posters, summaries, genres, ratings and episode titles. |
@@ -93,7 +112,8 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `PORT` / `HOST` | `32500` / `0.0.0.0` | Where the server listens |
 | `DATA_DIR` | `./data` (`/data` in Docker) | Database, thumbnails, caches |
 | `MEDIA_ROOT` | home folder (`/media` in Docker) | Where the folder picker starts |
-| `AUTO_LIBRARIES` | — | Libraries to create on first start: `Name:movie\|show:/path;…` |
+| `AUTO_LIBRARIES` | — | Libraries to set up from config: `Name:movie\|show:/path1,/path2;…`. Checked on every start, so new folders are added. |
+| `MEDIA_LABELS` | — | Display names for container folders: `/media/movies=D:/Movies\|…` (set by Docker Compose) |
 | `SCAN_INTERVAL` | `30` | Minutes between automatic rescans (`0` disables) |
 | `TMDB_API_KEY` / `TMDB_TOKEN` | — | Enables online metadata (free key from themoviedb.org) |
 | `TRANSCODE_PRESET` | `veryfast` | x264 preset used when video must be re-encoded |

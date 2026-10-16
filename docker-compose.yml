@@ -13,14 +13,29 @@ services:
       TMDB_API_KEY: ${TMDB_API_KEY:-}
       SCAN_INTERVAL: ${SCAN_INTERVAL:-30}
       TRANSCODE_PRESET: ${TRANSCODE_PRESET:-veryfast}
-      # Created automatically on first start (you can rename or change them later in Settings).
-      AUTO_LIBRARIES: "Movies:movie:/media/movies;TV Shows:show:/media/tv;YouTube:movie:/media/youtube"
+      # Libraries built from the folders below. Extra drives (…_2, …_3, …_4) are only included when set
+      # in .env, and folders added there later are attached to the existing library on the next start.
+      AUTO_LIBRARIES: >-
+        Movies:movie:/media/movies${MOVIES_DIR_2:+,/media/movies2}${MOVIES_DIR_3:+,/media/movies3}${MOVIES_DIR_4:+,/media/movies4};
+        TV Shows:show:/media/tv${TV_DIR_2:+,/media/tv2}${TV_DIR_3:+,/media/tv3}${TV_DIR_4:+,/media/tv4};
+        YouTube:movie:/media/youtube
+      # Lets the web UI show your real folder names (e.g. E:/Movies) instead of /media/movies2.
+      MEDIA_LABELS: >-
+        /media/movies=${MOVIES_DIR:-}|/media/movies2=${MOVIES_DIR_2:-}|/media/movies3=${MOVIES_DIR_3:-}|/media/movies4=${MOVIES_DIR_4:-}|
+        /media/tv=${TV_DIR:-}|/media/tv2=${TV_DIR_2:-}|/media/tv3=${TV_DIR_3:-}|/media/tv4=${TV_DIR_4:-}|
+        /media/youtube=${YOUTUBE_DIR:-}
     volumes:
       # Database, thumbnails and caches (a Docker-managed volume; survives updates).
       - marquee-data:/data
       # Your media. On Windows use forward slashes, e.g. MOVIES_DIR=D:/Movies
       - "${MOVIES_DIR:-./media/movies}:/media/movies"
+      - "${MOVIES_DIR_2:-./media/unused/movies2}:/media/movies2"
+      - "${MOVIES_DIR_3:-./media/unused/movies3}:/media/movies3"
+      - "${MOVIES_DIR_4:-./media/unused/movies4}:/media/movies4"
       - "${TV_DIR:-./media/tv}:/media/tv"
+      - "${TV_DIR_2:-./media/unused/tv2}:/media/tv2"
+      - "${TV_DIR_3:-./media/unused/tv3}:/media/tv3"
+      - "${TV_DIR_4:-./media/unused/tv4}:/media/tv4"
       # Where the YouTube downloader saves videos.
       - "${YOUTUBE_DIR:-./media/youtube}:/media/youtube"
 

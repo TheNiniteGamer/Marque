@@ -170,6 +170,10 @@ select:focus, .input:focus { border-color: var(--accent); }
 .lib-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .lib-row .lib-info { flex: 1; min-width: 220px; }
 .lib-row .paths { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.lib-row .path-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 2px; }
+.lib-row .path-inner { opacity: .6; }
+.path-tag { font-family: system-ui, sans-serif; font-size: 11px; padding: 0 7px; border-radius: 9px; border: 1px solid var(--line); }
+.path-tag.bad { color: var(--danger); border-color: rgba(229,72,77,.5); }
 .form { display: grid; gap: 14px; max-width: 640px; }
 .form label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
 .form .path-row { display: flex; gap: 8px; }

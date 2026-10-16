@@ -21,6 +21,19 @@ const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const MEDIA_ROOT = process.env.MEDIA_ROOT ? path.resolve(process.env.MEDIA_ROOT) : null;
 const SCAN_INTERVAL_MIN = Number(process.env.SCAN_INTERVAL ?? 30);
+// MEDIA_LABELS="/media/movies=D:/Movies|/media/movies2=E:/Movies": the host folder behind each
+// container folder, so the UI can show names people recognise. ('|' never appears in Windows paths.)
+const MEDIA_LABELS = (process.env.MEDIA_LABELS || '').split('|').map((s) => {
+  const i = s.indexOf('=');
+  return i > 0 && s.slice(i + 1).trim() ? [path.resolve(s.slice(0, i).trim()), s.slice(i + 1).trim().replace(/[\\/]+$/, '')] : null;
+}).filter(Boolean);
+function hostLabel(p) {
+  for (const [inner, host] of MEDIA_LABELS) {
+    if (p === inner) return host;
+    if (p.startsWith(inner + path.sep)) return `${host}/${p.slice(inner.length + 1)}`;
+  }
+  return null;
+}
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const THUMB_DIR = path.join(DATA_DIR, 'thumbs');
 const SUB_CACHE = path.join(DATA_DIR, 'subs');
@@ -111,7 +124,13 @@ function librarySummary(l, user) {
     id: l.id, name: l.name, type: l.type, createdAt: l.createdAt, scannedAt: l.scannedAt || null,
     count: l.type === 'show' ? Object.values(store.data.shows).filter((s) => s.libraryId === l.id).length : items.length,
     episodeCount: l.type === 'show' ? items.length : undefined,
-    ...(admin ? { paths: l.paths, missingPaths: l.paths.filter((p) => !fs.existsSync(p)) } : {}),
+    ...(admin ? {
+      paths: l.paths,
+      missingPaths: l.paths.filter((p) => !fs.existsSync(p)),
+      pathLabels: Object.fromEntries(l.paths.map((p) => [p, hostLabel(p)]).filter(([, v]) => v)),
+      // How many files each folder contributes, so multi-drive libraries are easy to check.
+      pathCounts: Object.fromEntries(l.paths.map((p) => [p, items.filter((i) => i.file === p || i.file.startsWith(p.endsWith(path.sep) ? p : p + path.sep)).length])),
+    } : {}),
   };
 }
 
@@ -437,7 +456,8 @@ route('GET', '/api/fs', async (req, res, p, url) => {
     try { return fs.statSync(path.join(dir, e.name)).isDirectory(); } catch { return false; }
   })()))).map((e) => e.name).sort((a, b) => a.localeCompare(b));
   const parent = path.dirname(dir);
-  json(res, 200, { path: dir, parent: parent === dir ? null : parent, dirs, home: MEDIA_ROOT || os.homedir() });
+  const labels = Object.fromEntries(dirs.map((d) => [d, hostLabel(path.join(dir, d))]).filter(([, v]) => v));
+  json(res, 200, { path: dir, label: hostLabel(dir), parent: parent === dir ? null : parent, dirs, labels, home: MEDIA_ROOT || os.homedir() });
 }, 'admin');
 
 // ---------- server ----------
@@ -477,23 +497,49 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-// AUTO_LIBRARIES="Movies:movie:/media/movies;TV Shows:show:/media/tv" creates libraries on first start
-// (used by the Docker setup so a fresh install is ready to go).
-function autoCreateLibraries() {
+// AUTO_LIBRARIES="Movies:movie:/media/movies,/media/movies2;TV Shows:show:/media/tv" sets up libraries
+// from configuration (used by the Docker setup, where each drive is mounted as its own folder).
+// Runs on every start: a library is created once, and folders added to the configuration later are
+// attached to it. Anything the admin removes or deletes in the UI is remembered and not re-added.
+function applyAutoLibraries() {
   const spec = process.env.AUTO_LIBRARIES;
-  if (!spec || store.data.autoLibrariesDone) return;
+  if (!spec) return;
+  const auto = (store.data.autoLibraries ||= {}); // name -> { id, paths: [every path ever auto-added] }
+  if (store.data.autoLibrariesDone) {
+    // Installs from before multi-folder support: adopt the libraries created back then.
+    for (const l of store.data.libraries) auto[l.name] ||= { id: l.id, paths: [...l.paths] };
+    delete store.data.autoLibrariesDone;
+  }
   for (const entry of spec.split(';').map((s) => s.trim()).filter(Boolean)) {
-    const [name, type, ...rest] = entry.split(':');
-    const dir = path.resolve(rest.join(':'));
-    if (!name || !['movie', 'show'].includes(type) || !fs.existsSync(dir)) {
-      console.warn(`[auto-libraries] skipping "${entry}" (expected Name:movie|show:/path to an existing folder)`);
+    const [rawName, type, ...rest] = entry.split(':');
+    const name = (rawName || '').trim();
+    const dirs = rest.join(':').split(',').map((p) => p.trim()).filter(Boolean).map((p) => path.resolve(p));
+    if (!name || !['movie', 'show'].includes(type) || !dirs.length) {
+      console.warn(`[auto-libraries] skipping "${entry}" (expected Name:movie|show:/path[,/path2…])`);
       continue;
     }
-    if (store.data.libraries.some((l) => l.paths.includes(dir))) continue;
-    store.data.libraries.push({ id: randomId(), name: name.trim(), type, paths: [dir], createdAt: Date.now() });
-    console.log(`[auto-libraries] created "${name}" (${type}) -> ${dir}`);
+    const fresh = dirs.filter((d) => !auto[name]?.paths.includes(d));
+    const missing = fresh.filter((d) => !fs.existsSync(d));
+    for (const d of missing) console.warn(`[auto-libraries] "${name}": folder not found, skipping for now: ${d}`);
+    const toAdd = fresh.filter((d) => fs.existsSync(d) && !store.data.libraries.some((l) => l.paths.includes(d)));
+    if (!toAdd.length) continue;
+
+    const known = auto[name];
+    let library = known && store.library(known.id);
+    if (known && !library) {
+      // The admin deleted this library; leave it deleted.
+      known.paths.push(...toAdd);
+      continue;
+    }
+    if (!library) {
+      library = { id: randomId(), name, type, paths: [], createdAt: Date.now() };
+      store.data.libraries.push(library);
+      console.log(`[auto-libraries] created "${name}" (${type})`);
+    }
+    library.paths.push(...toAdd);
+    auto[name] = { id: library.id, paths: [...(known?.paths || []), ...toAdd] };
+    for (const d of toAdd) console.log(`[auto-libraries] "${name}" += ${d}`);
   }
-  store.data.autoLibrariesDone = true;
   store.save();
 }
 
@@ -502,7 +548,7 @@ async function main() {
     console.error('ffprobe/ffmpeg not found. Install ffmpeg (or set FFMPEG_PATH / FFPROBE_PATH).');
     process.exit(1);
   }
-  autoCreateLibraries();
+  applyAutoLibraries();
   server.listen(PORT, HOST, () => {
     console.log(`Marquee is running at http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
     console.log(`Data directory: ${DATA_DIR}${metadata.enabled() ? ' · TMDB metadata enabled' : ''}`);

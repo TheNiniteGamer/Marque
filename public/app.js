@@ -435,7 +435,8 @@ async function viewSettings({ query, seq }) {
         <div style="font-size:28px">${l.type === 'show' ? '📺' : '🎬'}</div>
         <div class="lib-info">
           <div style="font-weight:600">${l.name} <span class="muted" style="font-weight:400">· ${l.type === 'show' ? `${l.count} shows, ${l.episodeCount} episodes` : `${l.count} movies`}</span></div>
-          <div class="paths">${l.paths.map((p) => html`<div>${p}${l.missingPaths.includes(p) ? html` <span style="color:var(--danger)">(not found)</span>` : ''}</div>`)}</div>
+          <div class="paths">${l.paths.map((p) => html`<div class="path-line">📁 ${l.pathLabels?.[p] ? html`${l.pathLabels[p]} <span class="path-inner">(${p})</span>` : p}
+            ${l.missingPaths.includes(p) ? html`<span class="path-tag bad">offline / not found</span>` : html`<span class="path-tag">${l.pathCounts[p]} file${l.pathCounts[p] === 1 ? '' : 's'}</span>`}</div>`)}</div>
           <div class="muted" style="font-size:12px;margin-top:4px">Last scanned: ${fmtDate(l.scannedAt)}</div>
         </div>
         <div class="row">
@@ -503,7 +504,8 @@ function showLibraryForm(lib = null) {
             ${paths.length > 1 ? html`<button type="button" class="btn small danger" data-rm="${i}" aria-label="Remove folder">✕</button>` : ''}
           </div>`)}
         </label>
-        <div><button type="button" class="btn small" id="add-path">＋ Add another folder</button></div>
+        <div class="row"><button type="button" class="btn small" id="add-path">＋ Add another folder</button>
+          <span class="muted" style="font-size:13px">A library can combine folders from several drives — they show up as one collection.</span></div>
         <p class="muted" style="margin:0;font-size:13px">Movies: <code>Movie Name (Year).mkv</code> or <code>Movie Name (Year)/file.mkv</code>.
           TV: <code>Show Name/Season 01/Show Name - S01E01.mkv</code>.</p>
         <div class="form-error" id="form-error"></div>
@@ -559,10 +561,10 @@ function pickFolder(start) {
       root.innerHTML = html`
         <div class="modal-backdrop" id="mb">
           <div class="modal" role="dialog" aria-label="Choose a folder">
-            <header><h2>Choose a folder</h2><div class="cwd">${cur.path}</div></header>
+            <header><h2>Choose a folder</h2><div class="cwd">${cur.label ? `${cur.label}  (${cur.path})` : cur.path}</div></header>
             <div class="modal-body dir-list">
               ${cur.parent ? html`<button data-dir="${cur.parent}">⬆ ..</button>` : ''}
-              ${cur.dirs.map((d) => html`<button data-dir="${cur.path.replace(/\/$/, '')}/${d}">📁 ${d}</button>`)}
+              ${cur.dirs.map((d) => html`<button data-dir="${cur.path.replace(/\/$/, '')}/${d}">📁 ${d}${cur.labels?.[d] ? html` <span class="muted">— ${cur.labels[d]}</span>` : ''}</button>`)}
               ${cur.dirs.length ? '' : html`<div class="muted" style="padding:12px">No subfolders</div>`}
             </div>
             <footer><button class="btn small" data-dir="${cur.home}" style="margin-right:auto">Home</button>
