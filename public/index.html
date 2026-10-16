@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111317">
+  <title>Marquee</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn menu-btn" id="menu-btn" aria-label="Menu">☰</button>
+    <a href="#/" class="brand"><img src="/icon.svg" alt=""> <span>Marquee</span></a>
+    <form class="search" id="search-form" role="search">
+      <input id="search-input" type="search" placeholder="Search movies, shows, episodes" autocomplete="off">
+    </form>
+    <div class="scan-indicator" id="scan-indicator" hidden></div>
+    <a href="#/settings" class="icon-btn" title="Settings" aria-label="Settings">⚙</a>
+  </header>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main id="view" tabindex="-1"></main>
+  </div>
+  <div id="player-root"></div>
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "marquee",
+  "version": "0.1.0",
+  "description": "A small self-hosted media server inspired by Plex: libraries, metadata, streaming with transcoding, resume and watch tracking.",
+  "main": "server.js",
+  "bin": { "marquee": "server.js" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "sample": "bash scripts/make-sample-media.sh"
+  },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}
