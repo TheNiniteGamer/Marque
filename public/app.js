@@ -21,6 +21,7 @@ async function api(url, { method = 'GET', body } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
+  if (res.status === 401 && state.user) showAuth({ setupRequired: data?.setupRequired, message: 'Your session has ended. Please sign in again.' });
   if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
   return data;
 }
@@ -82,7 +83,7 @@ const store = {
 };
 
 // ---------- app state ----------
-const state = { libraries: [], status: null, inAppNav: false };
+const state = { user: null, libraries: [], status: null, inAppNav: false };
 let renderSeq = 0;
 const view = $('#view');
 function setView(seq, content) {
@@ -104,9 +105,11 @@ function renderSidebar() {
     <div class="section">Libraries</div>
     ${state.libraries.map((l) => html`
       <a href="#/library/${l.id}" class="${path === `/library/${l.id}` ? 'active' : ''}">${icon(l.type)} ${l.name}<span class="count">${l.count}</span></a>`)}
-    ${state.libraries.length ? '' : html`<a href="#/settings">＋ Add a library</a>`}
-    <div class="section">Manage</div>
-    <a href="#/settings" class="${path === '/settings' ? 'active' : ''}">⚙ Settings</a>
+    ${state.libraries.length ? '' : state.user?.role === 'admin' ? html`<a href="#/settings">＋ Add a library</a>` : html`<div class="muted" style="padding:8px 12px;font-size:13px">No libraries shared with you yet.</div>`}
+    <div class="section">${state.user?.role === 'admin' ? 'Manage' : 'You'}</div>
+    ${state.user?.canDownload ? html`<a href="#/downloads" class="${path === '/downloads' ? 'active' : ''}">⤓ Downloads</a>` : ''}
+    ${state.user?.role === 'admin' ? html`<a href="#/settings" class="${path === '/settings' ? 'active' : ''}">⚙ Settings</a>` : ''}
+    <a href="#/account" class="${path === '/account' ? 'active' : ''}">👤 Account</a>
   `.s;
 }
 
@@ -114,6 +117,7 @@ function renderSidebar() {
 let pollTimer;
 async function pollStatus() {
   clearTimeout(pollTimer);
+  if (!state.user) return;
   try {
     const prev = state.status;
     state.status = await api('/api/status');
@@ -192,6 +196,9 @@ document.addEventListener('click', async (e) => {
 // ---------- views ----------
 async function viewHome({ seq }) {
   const homeData = await api('/api/home');
+  if (!state.libraries.length && state.user.role !== 'admin') {
+    return setView(seq, html`<div class="empty"><h2>Welcome, ${state.user.username}</h2><p>No libraries have been shared with you yet. Ask the server's administrator for access.</p></div>`);
+  }
   if (!state.libraries.length) {
     return setView(seq, html`<div class="empty"><h2>Welcome to Marquee</h2>
       <p>Point Marquee at the folders where you keep your movies and TV shows,<br>and it will organize them into a browsable library.</p>
@@ -238,7 +245,7 @@ async function viewLibrary({ params: [id], seq }) {
         ${[['title', 'Title'], ['added', 'Date added'], ['year', 'Year'], ['rating', 'Rating'], ...(lib.type === 'movie' ? [['duration', 'Duration']] : [])]
           .map(([k, label]) => html`<option value="${k}" ${prefs.sort === k ? 'selected' : ''}>${label}</option>`)}
       </select>
-      <button class="btn small" id="lib-scan">↻ Scan</button>
+      ${state.user.role === 'admin' ? html`<button class="btn small" id="lib-scan">↻ Scan</button>` : ''}
     </div>
     <div class="grid" id="lib-grid"></div>`)) return;
   render();
@@ -249,7 +256,7 @@ async function viewLibrary({ params: [id], seq }) {
     $$('#lib-filter button').forEach((b) => b.classList.toggle('on', b.dataset.f === f));
     render();
   };
-  $('#lib-scan').onclick = async () => { await api(`/api/libraries/${id}/scan`, { method: 'POST' }); toast(`Scanning ${lib.name}…`); pollStatus(); };
+  if ($('#lib-scan')) $('#lib-scan').onclick = async () => { await api(`/api/libraries/${id}/scan`, { method: 'POST' }); toast(`Scanning ${lib.name}…`); pollStatus(); };
 }
 
 function backdrop(id) {
@@ -377,7 +384,7 @@ async function viewItem({ params: [id], seq }) {
             ${it.prev ? html`<a class="btn small" href="#/item/${it.prev.id}">‹ ${epLabel(it.prev)}</a>` : ''}
             ${it.next ? html`<a class="btn small" href="#/item/${it.next.id}">${epLabel(it.next)} ›</a>` : ''}</div>` : ''}
           <dl class="tech">
-            <dt>File</dt><dd>${it.file}</dd>
+            <dt>File</dt><dd>${it.file || it.fileName}</dd>
             <dt>Size</dt><dd>${fmtSize(it.size)}</dd>
             ${it.media ? html`
               <dt>Container</dt><dd>${it.media.container}</dd>
@@ -412,8 +419,9 @@ async function viewSearch({ query, seq }) {
 // ---------- settings ----------
 async function viewSettings({ query, seq }) {
   view.onclick = null;
-  await refreshLibraries();
-  const s = state.status || await api('/api/status');
+  if (state.user.role !== 'admin') { location.replace('#/account'); return; }
+  const [, s, users] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users')]);
+  state.status = s;
   const libs = state.libraries;
   if (!setView(seq, html`
     <div class="toolbar"><h1>Settings</h1>
@@ -437,21 +445,25 @@ async function viewSettings({ query, seq }) {
           <button class="btn small danger" data-act="delete">Delete</button>
         </div>
       </div>`) : html`<div class="panel muted">No libraries yet. Add one to get started.</div>`}
+    ${usersSection(users)}
     <h2 style="margin:28px 0 12px">Server</h2>
     <div class="panel">
       <dl class="kv">
         <dt>Version</dt><dd>${s.name} ${s.version}</dd>
-        <dt>Host</dt><dd>${s.hostname} — open <code>${location.origin}</code> from any device on your network</dd>
+        <dt>Web address</dt><dd><code>${location.origin}</code>${/^(localhost|127\.)/.test(location.hostname) ? html` <span class="muted">— from phones, TVs and other computers, use this PC's name or IP address instead of “localhost”</span>` : ''}</dd>
         <dt>Online metadata</dt><dd>${s.tmdb ? 'TMDB enabled' : html`Off — start the server with <code>TMDB_API_KEY=…</code> to fetch posters, summaries and ratings`}</dd>
         <dt>Active streams</dt><dd>${s.activeTranscodes} transcoding</dd>
+        <dt>Video downloader</dt><dd>${s.downloader.available ? html`yt-dlp ${s.downloader.version} — <a href="#/downloads">Downloads</a>` : 'yt-dlp not installed'}</dd>
+        <dt>Data folder</dt><dd><code>${s.dataDir}</code></dd>
       </dl>
     </div>`)) return;
 
   $('#add-lib').onclick = () => showLibraryForm();
+  bindUsersSection(users);
   if ($('#scan-all')) $('#scan-all').onclick = async () => { await api('/api/scan', { method: 'POST' }); toast('Scanning all libraries…'); pollStatus(); };
   if (query.get('add')) showLibraryForm();
   view.onclick = async (e) => {
-    const b = e.target.closest('[data-act]'); if (!b) return;
+    const b = e.target.closest('[data-act]'); if (!b || !b.closest('[data-lib]')) return;
     const lib = libs.find((l) => l.id === b.closest('[data-lib]').dataset.lib);
     try {
       if (b.dataset.act === 'scan' || b.dataset.act === 'meta') {
@@ -904,11 +916,15 @@ const routes = [
   [/^\/play\/(\w+)$/, viewPlay],
   [/^\/search$/, viewSearch],
   [/^\/settings$/, viewSettings],
+  [/^\/account$/, viewAccount],
+  [/^\/downloads$/, viewDownloads],
 ];
 
 async function router() {
+  if (!state.user) return;
   const { path, query } = parseHash();
   document.body.classList.remove('nav-open');
+  if ($('#user-pop')) $('#user-pop').hidden = true;
   const isPlay = path.startsWith('/play/');
   if (!isPlay) closePlayer();
   if (path !== '/search' && !isPlay) $('#search-input').value = '';
@@ -957,9 +973,20 @@ document.addEventListener('keydown', (e) => {
 $('#menu-btn').addEventListener('click', () => document.body.classList.toggle('nav-open'));
 document.addEventListener('click', (e) => { if (document.body.classList.contains('nav-open') && !e.target.closest('.sidebar, #menu-btn')) document.body.classList.remove('nav-open'); });
 
-(async function init() {
+async function startApp() {
+  document.body.classList.remove('auth-mode');
+  renderUserMenu();
   await Promise.all([refreshLibraries().catch(() => {}), api('/api/status').then((s) => { state.status = s; }).catch(() => {})]);
+  view.innerHTML = '';
   await router();
   firstRoute = false;
   pollStatus();
+}
+
+(async function init() {
+  const res = await fetch('/api/auth/me').catch(() => null);
+  const data = res ? await res.json().catch(() => ({})) : {};
+  if (!res?.ok) return showAuth({ setupRequired: !!data.setupRequired, message: res ? '' : 'Cannot reach the server.' });
+  state.user = data.user;
+  startApp();
 })();

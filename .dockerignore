@@ -1,0 +1,10 @@
+.git
+.env
+data
+media
+sample-media
+node_modules
+test
+scripts
+*.bat
+*.log

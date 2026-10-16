@@ -1,0 +1,7 @@
+* text=auto
+# Windows scripts must keep CRLF line endings; files used inside Linux containers must keep LF.
+*.bat text eol=crlf
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+*.js text eol=lf

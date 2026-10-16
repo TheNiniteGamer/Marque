@@ -9,6 +9,8 @@ const path = require('node:path');
 const { pipeline } = require('node:stream');
 const { Store, randomId } = require('./lib/store');
 const { Scanner } = require('./lib/scanner');
+const { Auth, publicUser, canSeeLibrary, canDownload } = require('./lib/auth');
+const { Downloader } = require('./lib/downloader');
 const media = require('./lib/media');
 const subs = require('./lib/subtitles');
 const lib = require('./lib/library');
@@ -17,6 +19,7 @@ const metadata = require('./lib/metadata');
 const PORT = Number(process.env.PORT) || 32500;
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
+const MEDIA_ROOT = process.env.MEDIA_ROOT ? path.resolve(process.env.MEDIA_ROOT) : null;
 const SCAN_INTERVAL_MIN = Number(process.env.SCAN_INTERVAL ?? 30);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const THUMB_DIR = path.join(DATA_DIR, 'thumbs');
@@ -25,6 +28,8 @@ const SUB_CACHE = path.join(DATA_DIR, 'subs');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const store = new Store(path.join(DATA_DIR, 'db.json'));
 const scanner = new Scanner(store, DATA_DIR);
+const auth = new Auth(store);
+const downloader = new Downloader(store, { onFinished: (job) => scanner.enqueue(job.libraryId) });
 const transcodes = new Set();
 
 // ---------- helpers ----------
@@ -77,17 +82,36 @@ function sendFile(req, res, file, { type, headers = {} } = {}) {
   pipeline(fs.createReadStream(file, { start, end }), res, () => {});
 }
 
-const getItem = (id) => store.data.items[id] || (() => { throw new HttpError(404, 'Item not found'); })();
-const getShow = (id) => store.data.shows[id] || (() => { throw new HttpError(404, 'Show not found'); })();
-const getLibrary = (id) => store.library(id) || (() => { throw new HttpError(404, 'Library not found'); })();
+// Lookups that also enforce the user's library access (hidden items look like they don't exist).
+function getItem(id, user) {
+  const it = store.data.items[id];
+  if (!it || !canSeeLibrary(user, it.libraryId)) throw new HttpError(404, 'Item not found');
+  return it;
+}
+function getShow(id, user) {
+  const s = store.data.shows[id];
+  if (!s || !canSeeLibrary(user, s.libraryId)) throw new HttpError(404, 'Show not found');
+  return s;
+}
+function getLibrary(id, user) {
+  const l = store.library(id);
+  if (!l || !canSeeLibrary(user, l.id)) throw new HttpError(404, 'Library not found');
+  return l;
+}
+function getUser(id) {
+  const u = auth.byId(id);
+  if (!u) throw new HttpError(404, 'User not found');
+  return u;
+}
 
-function librarySummary(l) {
+function librarySummary(l, user) {
   const items = Object.values(store.data.items).filter((i) => i.libraryId === l.id);
+  const admin = user.role === 'admin';
   return {
-    id: l.id, name: l.name, type: l.type, paths: l.paths, createdAt: l.createdAt, scannedAt: l.scannedAt || null,
+    id: l.id, name: l.name, type: l.type, createdAt: l.createdAt, scannedAt: l.scannedAt || null,
     count: l.type === 'show' ? Object.values(store.data.shows).filter((s) => s.libraryId === l.id).length : items.length,
     episodeCount: l.type === 'show' ? items.length : undefined,
-    missingPaths: l.paths.filter((p) => !fs.existsSync(p)),
+    ...(admin ? { paths: l.paths, missingPaths: l.paths.filter((p) => !fs.existsSync(p)) } : {}),
   };
 }
 
@@ -112,12 +136,17 @@ function validateLibraryInput(body, partial = false) {
 }
 
 function removeLibraryData(libraryId) {
-  for (const it of Object.values(store.data.items)) if (it.libraryId === libraryId) { delete store.data.items[it.id]; delete store.data.progress[it.id]; }
+  for (const it of Object.values(store.data.items)) {
+    if (it.libraryId !== libraryId) continue;
+    delete store.data.items[it.id];
+    for (const map of Object.values(store.data.progress)) delete map[it.id];
+  }
   for (const s of Object.values(store.data.shows)) if (s.libraryId === libraryId) delete store.data.shows[s.id];
+  for (const u of store.data.users) if (Array.isArray(u.libraries)) u.libraries = u.libraries.filter((id) => id !== libraryId);
 }
 
 // Artwork, falling back to a frame grabbed from the video.
-async function resolveArt(kind, id) {
+async function resolveArt(kind, id, user) {
   const item = store.data.items[id];
   const show = store.data.shows[id];
   const exists = (p) => p && fs.existsSync(p) ? p : null;
@@ -126,7 +155,7 @@ async function resolveArt(kind, id) {
     const dur = it.media?.duration || 0;
     return media.thumbnail(it.file, path.join(THUMB_DIR, `${it.id}.jpg`), dur ? Math.min(dur * 0.15, 300) : 5).catch(() => null);
   };
-  if (item) {
+  if (item && canSeeLibrary(user, item.libraryId)) {
     if (kind === 'thumb') return exists(item.meta?.still) || frame(item);
     const parentShow = item.showId && store.data.shows[item.showId];
     if (kind === 'poster') return exists(item.meta?.poster) || exists(item.poster) ||
@@ -134,7 +163,7 @@ async function resolveArt(kind, id) {
     if (kind === 'backdrop') return exists(item.meta?.backdrop) || exists(item.backdrop) ||
       (parentShow && (exists(parentShow.meta?.backdrop) || exists(parentShow.backdrop))) || exists(item.meta?.still) || frame(item);
   }
-  if (show) {
+  if (show && canSeeLibrary(user, show.libraryId)) {
     const eps = lib.episodesOf(store, show.id);
     if (kind === 'poster') return exists(show.meta?.poster) || exists(show.poster) || frame(eps[0]);
     return exists(show.meta?.backdrop) || exists(show.backdrop) || frame(eps[0]);
@@ -161,106 +190,185 @@ async function subtitleVtt(item, subId) {
   throw new HttpError(404, 'Subtitle not found');
 }
 
-// ---------- routes ----------
-const routes = [];
-const route = (method, pattern, handler) => routes.push({ method, re: new RegExp(`^${pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)')}$`), handler });
+const clientIp = (req) => req.socket.remoteAddress || 'unknown';
 
-route('GET', '/api/status', async (req, res) => json(res, 200, {
+// ---------- routes ----------
+// access: 'public' (no login), 'user' (any logged-in user), 'admin', 'download' (admin or users allowed to download)
+const routes = [];
+const route = (method, pattern, handler, access = 'user') =>
+  routes.push({ method, access, re: new RegExp(`^${pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)')}$`), handler });
+
+// --- auth ---
+route('GET', '/api/health', async (req, res) => json(res, 200, { ok: true }), 'public');
+
+route('GET', '/api/auth/me', async (req, res, p, url, user) => {
+  if (!user) return json(res, 401, { error: 'Not signed in', setupRequired: !auth.hasUsers() });
+  json(res, 200, { user: publicUser(user) });
+}, 'public');
+
+route('POST', '/api/auth/setup', async (req, res) => {
+  if (auth.hasUsers()) throw new HttpError(409, 'Setup is already complete');
+  const body = await readBody(req);
+  const user = await auth.createUser({ username: body.username, password: body.password, role: 'admin' });
+  // Watch history recorded before accounts existed (flat itemId -> progress) belongs to the first admin.
+  const flat = Object.entries(store.data.progress).filter(([, v]) => v && typeof v.updatedAt === 'number');
+  if (flat.length) {
+    store.data.progress[user.id] = Object.fromEntries(flat);
+    for (const [k] of flat) delete store.data.progress[k];
+  }
+  auth.createSession(req, res, user);
+  json(res, 201, { user: publicUser(user) });
+}, 'public');
+
+route('POST', '/api/auth/login', async (req, res) => {
+  const ip = clientIp(req);
+  if (auth.isLimited(ip)) throw new HttpError(429, 'Too many failed attempts. Try again in a few minutes.');
+  const body = await readBody(req);
+  const user = await auth.login(body.username, body.password);
+  if (!user) { auth.recordFailure(ip); throw new HttpError(401, 'Wrong username or password'); }
+  auth.createSession(req, res, user);
+  json(res, 200, { user: publicUser(user) });
+}, 'public');
+
+route('POST', '/api/auth/logout', async (req, res, p, url, user) => {
+  if (user) auth.destroySession(req, res);
+  json(res, 200, { ok: true });
+}, 'public');
+
+route('POST', '/api/auth/password', async (req, res, p, url, user) => {
+  const body = await readBody(req);
+  if (!(await auth.login(user.username, body.currentPassword))) throw new HttpError(400, 'Current password is incorrect');
+  await auth.updateUser(user, { password: body.newPassword || '' });
+  auth.endSessionsFor(user.id, req.sessionKey); // sign out other devices
+  json(res, 200, { ok: true });
+});
+
+// --- users (admin) ---
+route('GET', '/api/users', async (req, res) => json(res, 200, auth.users.map(publicUser)), 'admin');
+
+route('POST', '/api/users', async (req, res) => {
+  const user = await auth.createUser(await readBody(req));
+  json(res, 201, publicUser(user));
+}, 'admin');
+
+route('PATCH', '/api/users/:id', async (req, res, { id }, url, me) => {
+  const target = getUser(id);
+  const body = await readBody(req);
+  if (target.id === me.id && body.role === 'user') throw new HttpError(400, 'You cannot remove your own admin role');
+  await auth.updateUser(target, body);
+  if (body.password) auth.endSessionsFor(target.id, target.id === me.id ? req.sessionKey : null);
+  json(res, 200, publicUser(target));
+}, 'admin');
+
+route('DELETE', '/api/users/:id', async (req, res, { id }, url, me) => {
+  const target = getUser(id);
+  if (target.id === me.id) throw new HttpError(400, 'You cannot delete your own account');
+  auth.deleteUser(target);
+  json(res, 200, { ok: true });
+}, 'admin');
+
+// --- server + libraries ---
+route('GET', '/api/status', async (req, res, p, url, user) => json(res, 200, {
   name: 'Marquee', version: require('./package.json').version, hostname: os.hostname(),
   tmdb: metadata.enabled(), ...scanner.status(), activeTranscodes: transcodes.size,
+  downloader: downloader.status(),
+  ...(user.role === 'admin' ? { dataDir: DATA_DIR, mediaRoot: MEDIA_ROOT } : {}),
 }));
 
-route('GET', '/api/libraries', async (req, res) => json(res, 200, store.data.libraries.map(librarySummary)));
+route('GET', '/api/libraries', async (req, res, p, url, user) =>
+  json(res, 200, store.data.libraries.filter((l) => canSeeLibrary(user, l.id)).map((l) => librarySummary(l, user))));
 
-route('POST', '/api/libraries', async (req, res) => {
+route('POST', '/api/libraries', async (req, res, p, url, user) => {
   const input = validateLibraryInput(await readBody(req));
   const library = { id: randomId(), ...input, createdAt: Date.now() };
   store.data.libraries.push(library);
   store.save();
   scanner.enqueue(library.id);
-  json(res, 201, librarySummary(library));
-});
+  json(res, 201, librarySummary(library, user));
+}, 'admin');
 
-route('PATCH', '/api/libraries/:id', async (req, res, { id }) => {
-  const library = getLibrary(id);
+route('PATCH', '/api/libraries/:id', async (req, res, { id }, url, user) => {
+  const library = getLibrary(id, user);
   const input = validateLibraryInput(await readBody(req), true);
   if (input.type && input.type !== library.type) removeLibraryData(library.id);
   Object.assign(library, input);
   store.save();
   if (input.paths || input.type) scanner.enqueue(library.id);
-  json(res, 200, librarySummary(library));
-});
+  json(res, 200, librarySummary(library, user));
+}, 'admin');
 
-route('DELETE', '/api/libraries/:id', async (req, res, { id }) => {
-  getLibrary(id);
+route('DELETE', '/api/libraries/:id', async (req, res, { id }, url, user) => {
+  getLibrary(id, user);
   removeLibraryData(id);
   store.data.libraries = store.data.libraries.filter((l) => l.id !== id);
   store.save();
   json(res, 200, { ok: true });
-});
+}, 'admin');
 
-route('POST', '/api/libraries/:id/scan', async (req, res, { id }) => {
-  getLibrary(id);
+route('POST', '/api/libraries/:id/scan', async (req, res, { id }, url, user) => {
+  getLibrary(id, user);
   const body = await readBody(req);
   scanner.enqueue(id, { refreshMeta: !!body.refreshMetadata });
   json(res, 202, scanner.status());
+}, 'admin');
+
+route('POST', '/api/scan', async (req, res) => { scanner.enqueueAll(); json(res, 202, scanner.status()); }, 'admin');
+
+route('GET', '/api/libraries/:id/items', async (req, res, { id }, url, user) => {
+  const library = getLibrary(id, user);
+  json(res, 200, { library: librarySummary(library, user), items: lib.libraryContents(store, user, library) });
 });
 
-route('POST', '/api/scan', async (req, res) => { scanner.enqueueAll(); json(res, 202, scanner.status()); });
+// --- browsing + watch state ---
+route('GET', '/api/home', async (req, res, p, url, user) => json(res, 200, lib.home(store, user)));
 
-route('GET', '/api/libraries/:id/items', async (req, res, { id }) => {
-  const library = getLibrary(id);
-  json(res, 200, { library: librarySummary(library), items: lib.libraryContents(store, library) });
-});
+route('GET', '/api/search', async (req, res, p, url, user) => json(res, 200, lib.search(store, user, url.searchParams.get('q') || '')));
 
-route('GET', '/api/home', async (req, res) => json(res, 200, lib.home(store)));
+route('GET', '/api/shows/:id', async (req, res, { id }, url, user) => json(res, 200, lib.showDetail(store, user, getShow(id, user))));
 
-route('GET', '/api/search', async (req, res, p, url) => json(res, 200, lib.search(store, url.searchParams.get('q') || '')));
-
-route('GET', '/api/shows/:id', async (req, res, { id }) => json(res, 200, lib.showDetail(store, getShow(id))));
-
-route('POST', '/api/shows/:id/watched', async (req, res, { id }) => {
+route('POST', '/api/shows/:id/watched', async (req, res, { id }, url, user) => {
   const body = await readBody(req);
-  const show = getShow(id);
+  const show = getShow(id, user);
   let eps = lib.episodesOf(store, show.id);
   if (body.season !== undefined) eps = eps.filter((e) => (e.season ?? null) === body.season);
-  lib.setWatched(store, eps.map((e) => e.id), body.watched !== false);
-  json(res, 200, lib.showDetail(store, show));
+  lib.setWatched(store, user, eps.map((e) => e.id), body.watched !== false);
+  json(res, 200, lib.showDetail(store, user, show));
 });
 
-route('GET', '/api/items/:id', async (req, res, { id }) => json(res, 200, lib.itemDetail(store, getItem(id))));
+route('GET', '/api/items/:id', async (req, res, { id }, url, user) => json(res, 200, lib.itemDetail(store, user, getItem(id, user))));
 
-route('POST', '/api/items/:id/progress', async (req, res, { id }) => {
-  const item = getItem(id);
+route('POST', '/api/items/:id/progress', async (req, res, { id }, url, user) => {
+  const item = getItem(id, user);
   const body = await readBody(req);
   const position = Number(body.position);
   if (!Number.isFinite(position)) throw new HttpError(400, 'position (seconds) required');
-  json(res, 200, lib.setProgress(store, item, position));
+  json(res, 200, lib.setProgress(store, user, item, position));
 });
 
-route('POST', '/api/items/:id/watched', async (req, res, { id }) => {
-  const item = getItem(id);
+route('POST', '/api/items/:id/watched', async (req, res, { id }, url, user) => {
+  const item = getItem(id, user);
   const body = await readBody(req);
-  lib.setWatched(store, [item.id], body.watched !== false);
-  json(res, 200, lib.itemSummary(store, item));
+  lib.setWatched(store, user, [item.id], body.watched !== false);
+  json(res, 200, lib.itemSummary(store, user, item));
 });
 
-route('GET', '/api/items/:id/stream', async (req, res, { id }, url) => {
-  const item = getItem(id);
+// --- playback ---
+route('GET', '/api/items/:id/stream', async (req, res, { id }, url, user) => {
+  const item = getItem(id, user);
   const headers = url.searchParams.has('download')
     ? { 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(item.file))}` } : {};
   sendFile(req, res, item.file, { type: url.searchParams.has('download') ? 'application/octet-stream' : media.mimeFor(item.file), headers });
 });
 
-route('GET', '/api/items/:id/seekpoint', async (req, res, { id }, url) => {
-  const item = getItem(id);
+route('GET', '/api/items/:id/seekpoint', async (req, res, { id }, url, user) => {
+  const item = getItem(id, user);
   const t = Math.max(0, Number(url.searchParams.get('t')) || 0);
   // Request the transcode with `t`; the stream's first frame will be at `start` (<= t).
   json(res, 200, { t, start: await media.seekPoint(item, t) });
 });
 
-route('GET', '/api/items/:id/transcode', async (req, res, { id }, url) => {
-  const item = getItem(id);
+route('GET', '/api/items/:id/transcode', async (req, res, { id }, url, user) => {
+  const item = getItem(id, user);
   if (!fs.existsSync(item.file)) throw new HttpError(404, 'File not found on disk');
   const start = Math.max(0, Number(url.searchParams.get('start')) || 0);
   const audioIndex = Math.max(0, Number(url.searchParams.get('audio')) || 0);
@@ -279,32 +387,58 @@ route('GET', '/api/items/:id/transcode', async (req, res, { id }, url) => {
   pipeline(proc.stdout, res, () => stop());
 });
 
-route('GET', '/api/items/:id/subtitles/:sub', async (req, res, { id, sub }, url) => {
-  const item = getItem(id);
+route('GET', '/api/items/:id/subtitles/:sub', async (req, res, { id, sub }, url, user) => {
+  const item = getItem(id, user);
   const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
   const vtt = subs.shiftVtt(await subtitleVtt(item, sub), offset);
   res.writeHead(200, { 'Content-Type': 'text/vtt; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(vtt);
 });
 
-route('GET', '/api/art/:kind/:id', async (req, res, { kind, id }) => {
+route('GET', '/api/art/:kind/:id', async (req, res, { kind, id }, url, user) => {
   if (!['poster', 'backdrop', 'thumb'].includes(kind)) throw new HttpError(404, 'Unknown art kind');
-  const file = await resolveArt(kind, id);
+  const file = await resolveArt(kind, id, user);
   if (!file) throw new HttpError(404, 'No artwork');
   sendFile(req, res, file, { headers: { 'Cache-Control': 'private, max-age=3600' } });
 });
 
-// Folder picker for adding libraries.
+// --- downloads (yt-dlp) ---
+const jobView = (j) => ({ ...j, dest: undefined });
+const ownJobs = (user) => downloader.jobs.filter((j) => user.role === 'admin' || j.userId === user.id);
+function getJob(id, user) {
+  const job = ownJobs(user).find((j) => j.id === id);
+  if (!job) throw new HttpError(404, 'Download not found');
+  return job;
+}
+
+route('GET', '/api/downloads', async (req, res, p, url, user) => json(res, 200, {
+  ...downloader.status(),
+  targets: store.data.libraries.filter((l) => l.type === 'movie' && canSeeLibrary(user, l.id)).map((l) => ({ id: l.id, name: l.name })),
+  jobs: ownJobs(user).map(jobView),
+}), 'download');
+
+route('POST', '/api/downloads', async (req, res, p, url, user) => {
+  const body = await readBody(req);
+  if (!canSeeLibrary(user, body.libraryId)) throw new HttpError(400, 'Choose a library to save into');
+  json(res, 201, jobView(downloader.add(body, user)));
+}, 'download');
+
+route('POST', '/api/downloads/:id/cancel', async (req, res, { id }, url, user) => { getJob(id, user); json(res, 200, jobView(downloader.cancel(id))); }, 'download');
+route('POST', '/api/downloads/:id/retry', async (req, res, { id }, url, user) => { getJob(id, user); json(res, 200, jobView(downloader.retry(id))); }, 'download');
+route('DELETE', '/api/downloads/:id', async (req, res, { id }, url, user) => { getJob(id, user); downloader.remove(id); json(res, 200, { ok: true }); }, 'download');
+route('POST', '/api/downloads/update-tool', async (req, res) => json(res, 200, await downloader.selfUpdate()), 'admin');
+
+// --- folder picker for adding libraries (admin) ---
 route('GET', '/api/fs', async (req, res, p, url) => {
-  const dir = path.resolve(url.searchParams.get('path') || os.homedir());
+  const dir = path.resolve(url.searchParams.get('path') || MEDIA_ROOT || os.homedir());
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (err) { throw new HttpError(400, `Cannot read ${dir}: ${err.code}`); }
   const dirs = entries.filter((e) => !e.name.startsWith('.') && (e.isDirectory() || (e.isSymbolicLink() && (() => {
     try { return fs.statSync(path.join(dir, e.name)).isDirectory(); } catch { return false; }
   })()))).map((e) => e.name).sort((a, b) => a.localeCompare(b));
   const parent = path.dirname(dir);
-  json(res, 200, { path: dir, parent: parent === dir ? null : parent, dirs, home: os.homedir() });
-});
+  json(res, 200, { path: dir, parent: parent === dir ? null : parent, dirs, home: MEDIA_ROOT || os.homedir() });
+}, 'admin');
 
 // ---------- server ----------
 function serveStatic(req, res, pathname) {
@@ -321,10 +455,15 @@ const server = http.createServer(async (req, res) => {
       const method = req.method === 'HEAD' ? 'GET' : req.method;
       for (const r of routes) {
         const m = r.method === method && r.re.exec(url.pathname);
-        if (m) {
-          const params = Object.fromEntries(Object.entries(m.groups || {}).map(([k, v]) => [k, decodeURIComponent(v)]));
-          return await r.handler(req, res, params, url);
+        if (!m) continue;
+        const user = auth.authenticate(req);
+        if (r.access !== 'public') {
+          if (!user) throw Object.assign(new HttpError(401, 'Please sign in'), { setupRequired: !auth.hasUsers() });
+          if (r.access === 'admin' && user.role !== 'admin') throw new HttpError(403, 'Admins only');
+          if (r.access === 'download' && !canDownload(user)) throw new HttpError(403, 'You are not allowed to download videos');
         }
+        const params = Object.fromEntries(Object.entries(m.groups || {}).map(([k, v]) => [k, decodeURIComponent(v)]));
+        return await r.handler(req, res, params, url, user);
       }
       throw new HttpError(404, 'Not found');
     }
@@ -333,19 +472,42 @@ const server = http.createServer(async (req, res) => {
   } catch (err) {
     const status = err.status || 500;
     if (status === 500) console.error(`[http] ${req.method} ${url.pathname}:`, err);
-    if (!res.headersSent) json(res, status, { error: err.message || 'Internal error' });
+    if (!res.headersSent) json(res, status, { error: err.message || 'Internal error', ...(err.setupRequired ? { setupRequired: true } : {}) });
     else res.destroy();
   }
 });
+
+// AUTO_LIBRARIES="Movies:movie:/media/movies;TV Shows:show:/media/tv" creates libraries on first start
+// (used by the Docker setup so a fresh install is ready to go).
+function autoCreateLibraries() {
+  const spec = process.env.AUTO_LIBRARIES;
+  if (!spec || store.data.autoLibrariesDone) return;
+  for (const entry of spec.split(';').map((s) => s.trim()).filter(Boolean)) {
+    const [name, type, ...rest] = entry.split(':');
+    const dir = path.resolve(rest.join(':'));
+    if (!name || !['movie', 'show'].includes(type) || !fs.existsSync(dir)) {
+      console.warn(`[auto-libraries] skipping "${entry}" (expected Name:movie|show:/path to an existing folder)`);
+      continue;
+    }
+    if (store.data.libraries.some((l) => l.paths.includes(dir))) continue;
+    store.data.libraries.push({ id: randomId(), name: name.trim(), type, paths: [dir], createdAt: Date.now() });
+    console.log(`[auto-libraries] created "${name}" (${type}) -> ${dir}`);
+  }
+  store.data.autoLibrariesDone = true;
+  store.save();
+}
 
 async function main() {
   if (!(await media.checkFfmpeg())) {
     console.error('ffprobe/ffmpeg not found. Install ffmpeg (or set FFMPEG_PATH / FFPROBE_PATH).');
     process.exit(1);
   }
+  autoCreateLibraries();
   server.listen(PORT, HOST, () => {
     console.log(`Marquee is running at http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
     console.log(`Data directory: ${DATA_DIR}${metadata.enabled() ? ' · TMDB metadata enabled' : ''}`);
+    if (!auth.hasUsers()) console.log('First run: open the web UI to create the admin account.');
+    downloader.checkTool().then((v) => console.log(v ? `yt-dlp ${v} available for downloads` : 'yt-dlp not found: video downloads disabled'));
   });
   scanner.enqueueAll();
   if (SCAN_INTERVAL_MIN > 0) setInterval(() => scanner.enqueueAll(), SCAN_INTERVAL_MIN * 60_000).unref();
@@ -353,6 +515,7 @@ async function main() {
 
 function shutdown() {
   for (const p of transcodes) p.kill('SIGKILL');
+  for (const p of downloader.procs.values()) p.kill('SIGTERM'); // interrupted downloads are requeued on next start
   store.flush();
   process.exit(0);
 }
