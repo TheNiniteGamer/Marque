@@ -100,8 +100,9 @@ async function viewAccount({ seq }) {
     ${window.MarqueeAndroid ? '' : html`<div class="panel">
       <h2 style="margin-top:0">Android app</h2>
       <p class="muted" style="margin:0 0 10px">Watch on your Android phone or tablet with the Marquee app. It plays videos in the phone's own player,
-        so more files play without converting. Open this page on your phone to install it.</p>
-      <a class="btn" href="https://github.com/TheNiniteGamer/Marque/releases/latest" target="_blank" rel="noopener">⤓ Get the Android app</a>
+        so more files play without converting. Open this page on your phone and tap the button; Android will ask you to allow
+        installing apps from your browser once.</p>
+      <a class="btn" href="/downloads/Marquee.apk" download="Marquee.apk">⤓ Get the Android app</a>
     </div>`}
     <form class="panel form" id="pw-form">
       <h2>Change password</h2>

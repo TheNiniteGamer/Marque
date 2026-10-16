@@ -13,8 +13,9 @@ A small Android app (Android 8.0+) for watching your Marquee server on a phone o
 
 ## Install
 
-Download `Marquee.apk` from the [latest release](https://github.com/TheNiniteGamer/Marque/releases/latest)
-on your phone and open it. Android will ask you to allow installing apps from your browser; allow it once.
+Your Marquee server hosts the app. On your phone, open Marquee in the browser and go to
+**Account → Get the Android app** (or open `http://YOUR-PC:32500/downloads/Marquee.apk`). Then open the
+downloaded file. Android will ask you to allow installing apps from your browser; allow it once.
 
 New versions install over the old one: every build is signed with the same sideload key
 (`marquee-sideload.keystore`). That key is only for sideloading, not the Play Store.
@@ -28,6 +29,7 @@ The app uses only what ships with Android: no Gradle and no libraries. You need:
 ```bash
 ANDROID_HOME=~/Android/Sdk ./build.sh     # -> build/Marquee.apk
 ./test.sh                                  # unit tests for the app's logic
+cp build/Marquee.apk ../public/downloads/  # what the server offers for download
 ```
 
 Note: the dex tool in build-tools 34 crashes on *inner* and *anonymous* classes compiled by Java 21.
