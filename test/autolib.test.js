@@ -25,7 +25,7 @@ function clip(file) {
 async function start(autoLibraries) {
   server = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', DATA_DIR: path.join(ROOT, 'data'), SCAN_INTERVAL: '0',
-      AUTO_LIBRARIES: autoLibraries, TMDB_API_KEY: '', TMDB_TOKEN: '', YTDLP_PATH: '/nonexistent' },
+      AUTO_LIBRARIES: autoLibraries, TVMAZE_DISABLED: '1', TMDB_API_KEY: '', TMDB_TOKEN: '', YTDLP_PATH: '/nonexistent' },
     stdio: 'ignore',
   });
   for (let i = 0; i < 100; i++) {

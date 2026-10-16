@@ -85,6 +85,12 @@ async function viewAccount({ seq }) {
         <dt>Downloads</dt><dd>${u.canDownload ? 'Allowed' : 'Not allowed'}</dd>
       </dl>
     </div>
+    <div class="panel form" id="prefs">
+      <h2>Playback</h2>
+      <label class="check"><input type="checkbox" data-pref="autoplayNext" ${store.get('autoplayNext', true) ? 'checked' : ''}> Play the next episode automatically</label>
+      <label class="check"><input type="checkbox" data-pref="subsOn" ${store.get('subsOn', false) ? 'checked' : ''}> Turn on subtitles by default</label>
+      <p class="muted" style="margin:0;font-size:13px">These are saved in this browser.</p>
+    </div>
     <form class="panel form" id="pw-form">
       <h2>Change password</h2>
       <label>Current password<input class="input" type="password" name="currentPassword" autocomplete="current-password" required></label>
@@ -95,6 +101,7 @@ async function viewAccount({ seq }) {
       <p class="muted" style="margin:0;font-size:13px">Changing your password signs you out on your other devices.</p>
     </form>`)) return;
   $('#acct-signout').onclick = signOut;
+  $('#prefs').onchange = (e) => { const k = e.target.dataset.pref; if (k) { store.set(k, e.target.checked); toast('Saved'); } };
   $('#pw-form').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target.elements;

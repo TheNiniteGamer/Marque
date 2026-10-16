@@ -15,6 +15,7 @@ const media = require('./lib/media');
 const subs = require('./lib/subtitles');
 const lib = require('./lib/library');
 const metadata = require('./lib/metadata');
+const { Matcher } = require('./lib/matcher');
 
 const PORT = Number(process.env.PORT) || 32500;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -40,7 +41,10 @@ const SUB_CACHE = path.join(DATA_DIR, 'subs');
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const store = new Store(path.join(DATA_DIR, 'db.json'));
-const scanner = new Scanner(store, DATA_DIR);
+store.data.settings ||= {};
+metadata.configure(() => store.data.settings);
+const matcher = new Matcher(store, path.join(DATA_DIR, 'images'));
+const scanner = new Scanner(store, DATA_DIR, matcher);
 const auth = new Auth(store);
 const downloader = new Downloader(store, { onFinished: (job) => scanner.enqueue(job.libraryId) });
 const transcodes = new Set();
@@ -66,9 +70,18 @@ function readBody(req) {
   });
 }
 
+function readRaw(req, limit) {
+  return new Promise((resolve, reject) => {
+    let size = 0; const chunks = [];
+    req.on('data', (c) => { size += c.length; if (size > limit) { reject(new HttpError(413, 'File too large')); req.destroy(); } else chunks.push(c); });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
   '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.vtt': 'text/vtt; charset=utf-8',
 };
 
@@ -175,17 +188,17 @@ async function resolveArt(kind, id, user) {
     return media.thumbnail(it.file, path.join(THUMB_DIR, `${it.id}.jpg`), dur ? Math.min(dur * 0.15, 300) : 5).catch(() => null);
   };
   if (item && canSeeLibrary(user, item.libraryId)) {
-    if (kind === 'thumb') return exists(item.meta?.still) || frame(item);
+    if (kind === 'thumb') return exists(item.edits?.thumb) || exists(item.meta?.still) || frame(item);
     const parentShow = item.showId && store.data.shows[item.showId];
-    if (kind === 'poster') return exists(item.meta?.poster) || exists(item.poster) ||
-      (parentShow && (exists(parentShow.meta?.poster) || exists(parentShow.poster))) || frame(item);
-    if (kind === 'backdrop') return exists(item.meta?.backdrop) || exists(item.backdrop) ||
-      (parentShow && (exists(parentShow.meta?.backdrop) || exists(parentShow.backdrop))) || exists(item.meta?.still) || frame(item);
+    const showArt = (k) => parentShow && (exists(parentShow.edits?.[k]) || exists(parentShow.meta?.[k]) || exists(parentShow[k]));
+    if (kind === 'poster') return exists(item.edits?.poster) || exists(item.meta?.poster) || exists(item.poster) || showArt('poster') || frame(item);
+    if (kind === 'backdrop') return exists(item.edits?.backdrop) || exists(item.meta?.backdrop) || exists(item.backdrop) || showArt('backdrop') ||
+      exists(item.edits?.thumb) || exists(item.meta?.still) || frame(item);
   }
   if (show && canSeeLibrary(user, show.libraryId)) {
     const eps = lib.episodesOf(store, show.id);
-    if (kind === 'poster') return exists(show.meta?.poster) || exists(show.poster) || frame(eps[0]);
-    return exists(show.meta?.backdrop) || exists(show.backdrop) || frame(eps[0]);
+    if (kind === 'poster') return exists(show.edits?.poster) || exists(show.meta?.poster) || exists(show.poster) || frame(eps[0]);
+    return exists(show.edits?.backdrop) || exists(show.meta?.backdrop) || exists(show.backdrop) || frame(eps[0]);
   }
   return null;
 }
@@ -289,7 +302,7 @@ route('DELETE', '/api/users/:id', async (req, res, { id }, url, me) => {
 // --- server + libraries ---
 route('GET', '/api/status', async (req, res, p, url, user) => json(res, 200, {
   name: 'Marquee', version: require('./package.json').version, hostname: os.hostname(),
-  tmdb: metadata.enabled(), ...scanner.status(), activeTranscodes: transcodes.size,
+  metadataProviders: metadata.available(), ...scanner.status(), activeTranscodes: transcodes.size,
   downloader: downloader.status(),
   ...(user.role === 'admin' ? { dataDir: DATA_DIR, mediaRoot: MEDIA_ROOT } : {}),
 }));
@@ -421,6 +434,120 @@ route('GET', '/api/art/:kind/:id', async (req, res, { kind, id }, url, user) => 
   sendFile(req, res, file, { headers: { 'Cache-Control': 'private, max-age=3600' } });
 });
 
+// --- settings (admin) ---
+const settingsView = () => {
+  const st = store.data.settings;
+  return {
+    tmdbKeySet: !!st.tmdbKey, tmdbKeyFromEnv: !st.tmdbKey && !!(process.env.TMDB_API_KEY || process.env.TMDB_TOKEN),
+    tmdbKeyHint: st.tmdbKey ? `••••${st.tmdbKey.slice(-4)}` : null,
+    language: st.language || process.env.METADATA_LANGUAGE || 'en-US',
+    autoMatch: st.autoMatch !== false,
+    providers: metadata.available(),
+  };
+};
+route('GET', '/api/settings', async (req, res) => json(res, 200, settingsView()), 'admin');
+route('PATCH', '/api/settings', async (req, res) => {
+  const body = await readBody(req);
+  const st = store.data.settings;
+  if (body.tmdbKey !== undefined) {
+    const key = String(body.tmdbKey || '').trim();
+    if (key) {
+      const t = await metadata.tmdb.test(key);
+      if (!t.ok) throw new HttpError(400, t.error);
+      st.tmdbKey = key;
+    } else delete st.tmdbKey;
+  }
+  if (body.language !== undefined) {
+    if (!/^[a-z]{2}(-[A-Z]{2})?$/.test(body.language)) throw new HttpError(400, 'Language must look like en-US');
+    st.language = body.language;
+  }
+  if (body.autoMatch !== undefined) st.autoMatch = !!body.autoMatch;
+  store.save();
+  json(res, 200, settingsView());
+}, 'admin');
+route('POST', '/api/settings/test-tmdb', async (req, res) => {
+  const body = await readBody(req);
+  json(res, 200, await metadata.tmdb.test(body.tmdbKey ? String(body.tmdbKey).trim() : undefined));
+}, 'admin');
+
+// --- metadata: search, match, edit (admin) ---
+// :id is a movie, episode or show id.
+function getTarget(id, user) {
+  const r = matcher.resolve(id);
+  if (!canSeeLibrary(user, r.target.libraryId)) throw new HttpError(404, 'Not found');
+  return r;
+}
+const afterMetaChange = (id, user) => {
+  const { target, kind } = getTarget(id, user);
+  return kind === 'show' ? lib.showDetail(store, user, target) : lib.itemDetail(store, user, target);
+};
+
+route('GET', '/api/metadata/search', async (req, res, p, url) => {
+  const kind = url.searchParams.get('kind') === 'show' ? 'show' : 'movie';
+  const q = (url.searchParams.get('q') || '').trim();
+  if (!q) throw new HttpError(400, 'Enter a title to search for');
+  const year = Number(url.searchParams.get('year')) || null;
+  json(res, 200, { results: await matcher.search(kind, q, year, url.searchParams.get('provider') || null) });
+}, 'admin');
+
+route('GET', '/api/meta/:id', async (req, res, { id }, url, user) => {
+  const { target, kind } = getTarget(id, user);
+  json(res, 200, { ...matcher.describe(target, kind), providers: metadata.available().filter((pr) => pr.enabled && pr.kinds.includes(kind === 'episode' ? 'show' : kind)) });
+}, 'admin');
+
+route('PATCH', '/api/meta/:id', async (req, res, { id }, url, user) => {
+  const { target, kind } = getTarget(id, user);
+  matcher.edit(target, kind, await readBody(req));
+  json(res, 200, afterMetaChange(id, user));
+}, 'admin');
+
+route('POST', '/api/meta/:id/match', async (req, res, { id }, url, user) => {
+  const { target, kind } = getTarget(id, user);
+  const body = await readBody(req);
+  await matcher.apply(target, kind, String(body.provider || ''), String(body.id || ''));
+  json(res, 200, afterMetaChange(id, user));
+}, 'admin');
+
+route('POST', '/api/meta/:id/refresh', async (req, res, { id }, url, user) => {
+  const { target, kind } = getTarget(id, user);
+  await matcher.refresh(target, kind);
+  json(res, 200, afterMetaChange(id, user));
+}, 'admin');
+
+route('POST', '/api/meta/:id/unmatch', async (req, res, { id }, url, user) => {
+  const { target, kind } = getTarget(id, user);
+  matcher.unmatch(target, kind);
+  json(res, 200, afterMetaChange(id, user));
+}, 'admin');
+
+route('GET', '/api/meta/:id/images', async (req, res, { id }, url, user) => {
+  const { target, kind } = getTarget(id, user);
+  json(res, 200, await matcher.providerImages(target, kind).catch((err) => { throw new HttpError(502, err.message); }));
+}, 'admin');
+
+// Set artwork: JSON {url} to download, or the raw image bytes as the request body.
+route('PUT', '/api/meta/:id/art/:kind', async (req, res, { id, kind: artKind }, url, user) => {
+  const { target, kind } = getTarget(id, user);
+  const type = String(req.headers['content-type'] || '');
+  try {
+    if (type.startsWith('image/')) await matcher.setArt(target, kind, artKind, { buffer: await readRaw(req, metadata.MAX_IMAGE) });
+    else await matcher.setArt(target, kind, artKind, { url: (await readBody(req)).url });
+  } catch (err) { throw err.status ? err : new HttpError(400, err.message); }
+  json(res, 200, afterMetaChange(id, user));
+}, 'admin');
+
+route('DELETE', '/api/meta/:id/art/:kind', async (req, res, { id, kind: artKind }, url, user) => {
+  const { target, kind } = getTarget(id, user);
+  matcher.resetArt(target, kind, artKind);
+  json(res, 200, afterMetaChange(id, user));
+}, 'admin');
+
+// --- my list + continue watching ---
+route('GET', '/api/watchlist', async (req, res, p, url, user) => json(res, 200, lib.watchlist(store, user)));
+route('PUT', '/api/watchlist/:id', async (req, res, { id }, url, user) => { getTarget(id, user); lib.setWatchlist(store, user, id, true); json(res, 200, { ok: true }); });
+route('DELETE', '/api/watchlist/:id', async (req, res, { id }, url, user) => { lib.setWatchlist(store, user, id, false); json(res, 200, { ok: true }); });
+route('POST', '/api/continue/:id/hide', async (req, res, { id }, url, user) => { getTarget(id, user); lib.hideFromContinue(store, user, id); json(res, 200, { ok: true }); });
+
 // --- downloads (yt-dlp) ---
 const jobView = (j) => ({ ...j, dest: undefined });
 const ownJobs = (user) => downloader.jobs.filter((j) => user.role === 'admin' || j.userId === user.id);
@@ -551,7 +678,7 @@ async function main() {
   applyAutoLibraries();
   server.listen(PORT, HOST, () => {
     console.log(`Marquee is running at http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
-    console.log(`Data directory: ${DATA_DIR}${metadata.enabled() ? ' · TMDB metadata enabled' : ''}`);
+    console.log(`Data directory: ${DATA_DIR} · metadata: ${metadata.available().filter((p) => p.enabled).map((p) => p.name).join(', ') || 'off'}`);
     if (!auth.hasUsers()) console.log('First run: open the web UI to create the admin account.');
     downloader.checkTool().then((v) => console.log(v ? `yt-dlp ${v} available for downloads` : 'yt-dlp not found: video downloads disabled'));
   });

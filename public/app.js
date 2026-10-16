@@ -64,7 +64,9 @@ function toast(msg, error = false) {
   const el = document.createElement('div');
   el.className = `toast${error ? ' error' : ''}`;
   el.textContent = msg;
-  $('#toast-root').append(el);
+  const root = $('#toast-root');
+  root.append(el);
+  while (root.children.length > 2) root.firstElementChild.remove();
   setTimeout(() => el.remove(), 3500);
 }
 // Image fallback: swap broken artwork for a text placeholder.
@@ -102,6 +104,7 @@ function renderSidebar() {
   const icon = (t) => (t === 'show' ? '📺' : '🎬');
   $('#sidebar').innerHTML = html`
     <a href="#/" class="${path === '/' ? 'active' : ''}">🏠 Home</a>
+    <a href="#/watchlist" class="${path === '/watchlist' ? 'active' : ''}">♡ My List</a>
     <div class="section">Libraries</div>
     ${state.libraries.map((l) => html`
       <a href="#/library/${l.id}" class="${path === `/library/${l.id}` ? 'active' : ''}">${icon(l.type)} ${l.name}<span class="count">${l.count}</span></a>`)}
@@ -132,6 +135,12 @@ async function pollStatus() {
     if (s.scanning || prev?.scanning) await refreshLibraries();
     const after = state.libraries.reduce((n, l) => n + l.count, 0);
     const finished = prev?.scanning && !s.scanning;
+    if (s.scanning && !prev?.scanning) state.scanBaseline = before;
+    if (finished && state.scanBaseline != null) {
+      const added = after - state.scanBaseline;
+      toast(added > 0 ? `Scan complete — ${added} new title${added === 1 ? '' : 's'} added` : 'Library scan complete');
+      state.scanBaseline = null;
+    }
     const { path } = parseHash();
     if ((finished || after !== before) && !player && (path === '/' || path.startsWith('/library/') || path === '/settings')) router();
   } catch { /* server unreachable; try again later */ }
@@ -152,18 +161,21 @@ function posterCard(x) {
   let badge = '';
   if (x.type === 'show' && x.unwatchedCount > 0) badge = html`<span class="badge" title="Unwatched episodes">${x.unwatchedCount}</span>`;
   else if ((x.type === 'show' && x.episodeCount && !x.unwatchedCount) || x.progress?.watched) badge = html`<span class="badge check" title="Watched">✓</span>`;
+  knownItems.set(x.id, x);
   return html`
     <div class="card">
       <div class="art">
-        <a class="cover" href="${hrefFor(x)}"><img loading="lazy" src="/api/art/poster/${x.id}" alt="${x.title}"></a>
+        <a class="cover" href="${hrefFor(x)}"><img loading="lazy" src="${artUrl('poster', x)}" alt="${x.title}"></a>
         ${badge}${progressBar(x)}
         <button class="play-hover" data-play="${x.type === 'show' ? `show:${x.id}` : x.id}" aria-label="Play ${x.title}">▶</button>
+        <button class="card-menu" data-menu="${x.id}" aria-label="More options for ${x.title}" title="More">⋯</button>
       </div>
       <a href="${hrefFor(x)}"><div class="title" title="${x.title}">${x.title}</div><div class="sub">${sub}</div></a>
     </div>`;
 }
 
-function wideCard(x) {
+function wideCard(x, ctx = '') {
+  knownItems.set(x.id, x);
   const isEp = x.type === 'episode';
   const kind = isEp ? 'thumb' : 'backdrop';
   const title = isEp ? x.showTitle : x.title;
@@ -171,9 +183,10 @@ function wideCard(x) {
   return html`
     <div class="card wide">
       <div class="art">
-        <a class="cover" href="${hrefFor(x)}"><img loading="lazy" src="/api/art/${kind}/${x.id}" alt="${title}"></a>
+        <a class="cover" href="${hrefFor(x)}"><img loading="lazy" src="${artUrl(kind, x)}" alt="${title}"></a>
         ${x.progress?.watched ? html`<span class="badge check">✓</span>` : ''}${progressBar(x)}
         <button class="play-hover" data-play="${x.id}" aria-label="Play">▶</button>
+        <button class="card-menu" data-menu="${x.id}" data-ctx="${ctx}" aria-label="More options" title="More">⋯</button>
       </div>
       <a href="${hrefFor(x)}"><div class="title" title="${title}">${title}</div><div class="sub" title="${sub}">${sub}</div></a>
     </div>`;
@@ -211,32 +224,54 @@ async function viewHome({ seq }) {
   }
   setView(seq, homeData.hubs.map((hub) => html`
     <section class="hub">
-      <div class="hub-head"><h2>${hub.title}</h2>${hub.libraryId ? html`<a href="#/library/${hub.libraryId}">See all ›</a>` : ''}</div>
-      <div class="shelf ${hub.style}">${hub.items.map((x) => (hub.style === 'wide' ? wideCard(x) : posterCard(x)))}</div>
+      <div class="hub-head"><h2>${hub.title}</h2>${hub.libraryId ? html`<a href="#/library/${hub.libraryId}">See all ›</a>` : hub.link ? html`<a href="${hub.link}">See all ›</a>` : ''}</div>
+      <div class="shelf ${hub.style}">${hub.items.map((x) => (hub.style === 'wide' ? wideCard(x, hub.key) : posterCard(x)))}</div>
     </section>`));
 }
 
-async function viewLibrary({ params: [id], seq }) {
+async function viewLibrary({ params: [id], query, seq }) {
   const data = await api(`/api/libraries/${id}/items`);
   const lib = data.library;
-  const prefs = store.get(`lib:${id}`, { sort: 'title', filter: 'all' });
+  const prefs = { sort: 'title', filter: 'all', size: 150, ...store.get(`lib:${id}`, {}) };
+  // Genre and text filters live in the URL so they survive back/forward and can be linked to.
+  let genre = query.get('genre') || '';
+  let text = '';
+  const titleKey = (x) => sortTitle(x.sortTitle || x.title);
   const sorters = {
-    title: (a, b) => sortTitle(a.title).localeCompare(sortTitle(b.title), undefined, { numeric: true }),
+    title: (a, b) => titleKey(a).localeCompare(titleKey(b), undefined, { numeric: true }),
     added: (a, b) => (b.lastAddedAt || b.addedAt) - (a.lastAddedAt || a.addedAt),
     year: (a, b) => (b.year || 0) - (a.year || 0),
     rating: (a, b) => (b.rating || 0) - (a.rating || 0),
     duration: (a, b) => (b.duration || 0) - (a.duration || 0),
   };
+  const genres = [...new Set(data.items.flatMap((x) => x.genres || []))].sort((a, b) => a.localeCompare(b));
   const unwatched = (x) => (x.type === 'show' ? x.unwatchedCount > 0 : !x.progress?.watched);
+  let current = [];
   const render = () => {
-    const list = data.items.filter((x) => prefs.filter === 'all' || unwatched(x)).sort(sorters[prefs.sort] || sorters.title);
-    $('#lib-count').textContent = `${list.length}`;
-    $('#lib-grid').innerHTML = list.length ? list.map((x) => posterCard(x).s).join('')
-      : html`<div class="empty" style="grid-column:1/-1">${data.items.length ? 'Nothing matches this filter.' : state.status?.scanning ? 'Scanning…' : 'This library is empty.'}</div>`.s;
+    const t = text.trim().toLowerCase();
+    current = data.items
+      .filter((x) => prefs.filter === 'all' || unwatched(x))
+      .filter((x) => !genre || (x.genres || []).includes(genre))
+      .filter((x) => !t || x.title.toLowerCase().includes(t))
+      .sort(sorters[prefs.sort] || sorters.title);
+    $('#lib-count').textContent = `${current.length}`;
+    const grid = $('#lib-grid');
+    grid.style.setProperty('--card-w', `${prefs.size}px`);
+    grid.innerHTML = current.length ? current.map((x) => posterCard(x).s).join('')
+      : html`<div class="empty" style="grid-column:1/-1">${data.items.length ? 'Nothing matches these filters.' : state.status?.scanning ? 'Scanning…' : 'This library is empty.'}</div>`.s;
+    // A–Z jump bar only makes sense when sorted by title.
+    const jump = $('#lib-jump');
+    jump.hidden = prefs.sort !== 'title' || current.length < 20;
+    if (!jump.hidden) {
+      const letters = new Set(current.map((x) => { const c = titleKey(x)[0]?.toUpperCase() || '#'; return /[A-Z]/.test(c) ? c : '#'; }));
+      jump.innerHTML = ['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((c) => html`<button data-letter="${c}" ${letters.has(c) ? '' : 'disabled'}>${c}</button>`.s).join('');
+    }
   };
   if (!setView(seq, html`
     <div class="toolbar">
       <h1>${lib.name}<span class="count" id="lib-count"></span></h1>
+      <input class="input lib-filter-text" id="lib-text" type="search" placeholder="Filter…" aria-label="Filter by title">
+      ${genres.length ? html`<select id="lib-genre" aria-label="Genre"><option value="">All genres</option>${genres.map((g) => html`<option ${g === genre ? 'selected' : ''}>${g}</option>`)}</select>` : ''}
       <div class="seg" id="lib-filter">
         <button data-f="all" class="${prefs.filter === 'all' ? 'on' : ''}">All</button>
         <button data-f="unwatched" class="${prefs.filter === 'unwatched' ? 'on' : ''}">Unwatched</button>
@@ -245,23 +280,75 @@ async function viewLibrary({ params: [id], seq }) {
         ${[['title', 'Title'], ['added', 'Date added'], ['year', 'Year'], ['rating', 'Rating'], ...(lib.type === 'movie' ? [['duration', 'Duration']] : [])]
           .map(([k, label]) => html`<option value="${k}" ${prefs.sort === k ? 'selected' : ''}>${label}</option>`)}
       </select>
+      <input type="range" id="lib-size" min="110" max="230" step="10" value="${prefs.size}" title="Poster size" aria-label="Poster size">
+      <button class="btn small" id="lib-shuffle" title="Play something random from this view">⤮ Shuffle</button>
       ${state.user.role === 'admin' ? html`<button class="btn small" id="lib-scan">↻ Scan</button>` : ''}
     </div>
-    <div class="grid" id="lib-grid"></div>`)) return;
+    ${genre ? html`<div class="filter-note">Showing <b>${genre}</b> · <a href="#/library/${id}">clear</a></div>` : ''}
+    <div class="lib-wrap"><div class="grid sized" id="lib-grid"></div><nav class="jump" id="lib-jump" aria-label="Jump to letter" hidden></nav></div>`)) return;
   render();
-  $('#lib-sort').onchange = (e) => { prefs.sort = e.target.value; store.set(`lib:${id}`, prefs); render(); };
+  const save = () => store.set(`lib:${id}`, prefs);
+  $('#lib-sort').onchange = (e) => { prefs.sort = e.target.value; save(); render(); };
+  $('#lib-size').oninput = (e) => { prefs.size = Number(e.target.value); save(); $('#lib-grid').style.setProperty('--card-w', `${prefs.size}px`); };
+  $('#lib-text').oninput = (e) => { text = e.target.value; render(); };
+  if ($('#lib-genre')) $('#lib-genre').onchange = (e) => { location.hash = e.target.value ? `#/library/${id}?genre=${encodeURIComponent(e.target.value)}` : `#/library/${id}`; };
   $('#lib-filter').onclick = (e) => {
     const f = e.target.dataset.f; if (!f) return;
-    prefs.filter = f; store.set(`lib:${id}`, prefs);
+    prefs.filter = f; save();
     $$('#lib-filter button').forEach((b) => b.classList.toggle('on', b.dataset.f === f));
     render();
+  };
+  $('#lib-jump').onclick = (e) => {
+    const c = e.target.dataset.letter; if (!c) return;
+    const idx = current.findIndex((x) => { const f = titleKey(x)[0]?.toUpperCase() || '#'; return c === '#' ? !/[A-Z]/.test(f) : f === c; });
+    $$('#lib-grid .card')[idx]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  $('#lib-shuffle').onclick = async () => {
+    const pool = current.filter(unwatched).length ? current.filter(unwatched) : current;
+    if (!pool.length) return toast('Nothing to play', true);
+    const pickOne = pool[Math.floor(Math.random() * pool.length)];
+    if (pickOne.type !== 'show') { location.hash = `#/play/${pickOne.id}`; return; }
+    const show = await api(`/api/shows/${pickOne.id}`);
+    const eps = show.seasons.flatMap((x) => x.episodes);
+    const fresh = eps.filter((x) => !x.progress?.watched);
+    const ep = (fresh.length ? fresh : eps)[Math.floor(Math.random() * (fresh.length || eps.length))];
+    if (ep) location.hash = `#/play/${ep.id}?t=0`;
   };
   if ($('#lib-scan')) $('#lib-scan').onclick = async () => { await api(`/api/libraries/${id}/scan`, { method: 'POST' }); toast(`Scanning ${lib.name}…`); pollStatus(); };
 }
 
-function backdrop(id) {
-  return html`<div class="backdrop"><img src="/api/art/backdrop/${id}" alt="" onerror="this.remove()"></div>`;
+function backdrop(x) {
+  return html`<div class="backdrop"><img src="${artUrl('backdrop', x)}" alt="" onerror="this.remove()"></div>`;
 }
+
+// Buttons shared by movie, show and episode pages: My List, Edit (admins), and the ⋯ menu.
+function detailActions(x) {
+  knownItems.set(x.id, x);
+  return html`
+    ${x.type !== 'episode' ? html`<button class="btn icon-only ${x.inWatchlist ? 'on' : ''}" id="list-toggle" title="${x.inWatchlist ? 'Remove from My List' : 'Add to My List'}">${x.inWatchlist ? '♥' : '♡'} My List</button>` : ''}
+    ${state.user.role === 'admin' ? html`<button class="btn" id="edit-btn">✎ Edit</button>` : ''}
+    <button class="btn" data-menu="${x.id}" aria-label="More options">⋯</button>`;
+}
+function bindDetailActions(x) {
+  if ($('#list-toggle')) $('#list-toggle').onclick = () => toggleWatchlist(x).catch((err) => toast(err.message, true));
+  if ($('#edit-btn')) $('#edit-btn').onclick = () => openEditor(x.id).catch((err) => toast(err.message, true));
+}
+function genreChips(x) {
+  return x.genres.length ? html`<div class="row">${x.genres.map((g) => html`<a class="chip link" href="#/library/${x.libraryId}?genre=${encodeURIComponent(g)}">${g}</a>`)}</div>` : '';
+}
+function castList(x) {
+  return x.cast?.length ? html`<div class="cast"><h3>Cast</h3><div class="cast-list">${x.cast.map((c) => html`
+    <div class="cast-member"><span class="cast-initial">${c.name.slice(0, 1)}</span><span><b>${c.name}</b>${c.character ? html`<br><span class="muted">${c.character}</span>` : ''}</span></div>`)}</div></div>` : '';
+}
+function matchNote(x) {
+  if (state.user.role !== 'admin' || !x.match) return '';
+  if (x.match.notFound) return html`<p class="match-note">No online match was found. <button class="link-btn" data-fix-match="${x.type === 'episode' ? x.showId : x.id}">Find a match…</button></p>`;
+  return '';
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-fix-match]');
+  if (b) openMatcher(b.dataset.fixMatch).catch((err) => toast(err.message, true));
+});
 
 async function viewShow({ params: [id], query, seq }) {
   const show = await api(`/api/shows/${id}`);
@@ -271,10 +358,10 @@ async function viewShow({ params: [id], query, seq }) {
   const up = show.upNext;
   const upLabel = up ? `${up.progress?.position && !up.progress.watched ? 'Resume' : 'Play'} ${epLabel(up)}` : null;
 
-  const episodeRow = (e) => html`
+  const episodeRow = (e) => { knownItems.set(e.id, e); return html`
     <div class="episode">
       <div class="art">
-        <a href="#/item/${e.id}"><img loading="lazy" src="/api/art/thumb/${e.id}" alt="${e.title}"></a>
+        <a href="#/item/${e.id}"><img loading="lazy" src="${artUrl('thumb', e)}" alt="${e.title}"></a>
         ${progressBar(e)}
         <button class="play-hover" data-play="${e.id}" aria-label="Play">▶</button>
       </div>
@@ -283,8 +370,11 @@ async function viewShow({ params: [id], query, seq }) {
         <div class="muted" style="font-size:13px">${[epLabel(e), fmtDuration(e.duration)].filter(Boolean).join(' · ')}</div>
         ${e.overview ? html`<div class="ep-overview">${e.overview}</div>` : ''}
       </a>
-      <button class="watch-toggle ${e.progress?.watched ? 'on' : ''}" data-watch="${e.id}" title="${e.progress?.watched ? 'Mark unwatched' : 'Mark watched'}">✓</button>
-    </div>`;
+      <div class="ep-actions">
+        <button class="watch-toggle ${e.progress?.watched ? 'on' : ''}" data-watch="${e.id}" title="${e.progress?.watched ? 'Mark unwatched' : 'Mark watched'}">✓</button>
+        <button class="card-menu static" data-menu="${e.id}" aria-label="More options">⋯</button>
+      </div>
+    </div>`; };
 
   const renderSeason = () => {
     const season = show.seasons.find((s) => seasonKey(s) === current);
@@ -305,9 +395,9 @@ async function viewShow({ params: [id], query, seq }) {
   const allWatched = show.unwatchedCount === 0;
   if (!setView(seq, html`
     <div class="detail">
-      ${backdrop(id)}
+      ${backdrop(show)}
       <div class="detail-body">
-        <div class="poster"><img src="/api/art/poster/${id}" alt="${show.title}"></div>
+        <div class="poster"><img src="${artUrl('poster', show)}" alt="${show.title}"></div>
         <div class="info">
           <h1>${show.title}</h1>
           <div class="meta-line">
@@ -317,18 +407,22 @@ async function viewShow({ params: [id], query, seq }) {
             ${show.unwatchedCount ? html`<span>${show.unwatchedCount} unwatched</span>` : ''}
             ${show.rating ? html`<span>★ ${show.rating}</span>` : ''}
           </div>
-          ${show.genres.length ? html`<div class="row">${show.genres.map((g) => html`<span class="chip">${g}</span>`)}</div>` : ''}
+          ${genreChips(show)}
           ${show.overview ? html`<p class="overview">${show.overview}</p>` : ''}
+          ${matchNote(show)}
           <div class="row actions">
             ${up ? html`<button class="btn primary" data-play="${up.id}">▶ ${upLabel}</button>` : ''}
             <button class="btn" id="show-watch">${allWatched ? 'Mark unwatched' : 'Mark all watched'}</button>
+            ${detailActions(show)}
           </div>
+          ${castList(show)}
         </div>
       </div>
     </div>
     <div class="seasons-nav">${show.seasons.map((s) => html`<button class="btn small" data-season="${seasonKey(s)}">${s.title}</button>`)}</div>
     <div id="season-body"></div>`)) return;
 
+  bindDetailActions(show);
   if (current != null) renderSeason();
   $('.seasons-nav').onclick = (e) => {
     const b = e.target.closest('[data-season]'); if (!b) return;
@@ -354,9 +448,9 @@ async function viewItem({ params: [id], seq }) {
   const res = resLabel(v);
   if (!setView(seq, html`
     <div class="detail">
-      ${backdrop(id)}
+      ${backdrop(it)}
       <div class="detail-body">
-        <div class="poster ${isEp ? 'wide' : ''}"><img src="/api/art/${isEp ? 'thumb' : 'poster'}/${id}" alt="${it.title}"></div>
+        <div class="poster ${isEp ? 'wide' : ''}"><img src="${artUrl(isEp ? 'thumb' : 'poster', it)}" alt="${it.title}"></div>
         <div class="info">
           ${isEp ? html`<div class="eyebrow"><a href="#/show/${it.showId}?season=${it.season}">${it.showTitle}</a> · ${epLabel(it)}</div>` : ''}
           <h1>${it.title}</h1>
@@ -370,19 +464,22 @@ async function viewItem({ params: [id], seq }) {
             <span class="chip" title="${it.directPlay ? 'Your browser can play this file as-is' : 'Converted on the fly by the server'}">${it.directPlay ? 'Direct Play' : 'Transcode'}</span>
             ${p?.watched ? html`<span class="chip" style="color:var(--accent)">✓ Watched</span>` : ''}
           </div>
-          ${it.genres.length ? html`<div class="row">${it.genres.map((g) => html`<span class="chip">${g}</span>`)}</div>` : ''}
+          ${genreChips(it)}
+          ${matchNote(it)}
           <div class="row actions">
             ${it.media ? html`
               <button class="btn primary" data-play="${id}" ${resumable ? '' : 'data-t="0"'}>▶ ${resumable ? `Resume from ${fmtClock(p.position)}` : 'Play'}</button>
               ${resumable ? html`<button class="btn" data-play="${id}" data-t="0">Play from start</button>` : ''}` : html`<span class="error-box">This file could not be read by ffprobe.</span>`}
             <button class="btn" id="item-watch">${p?.watched ? 'Mark unwatched' : 'Mark watched'}</button>
-            <a class="btn" href="/api/items/${id}/stream?download=1" download>⤓ Download</a>
+            <a class="btn" href="/api/items/${id}/stream?download=1" download title="Download the original file">⤓</a>
+            ${detailActions(it)}
           </div>
           ${resumable ? html`<div class="resume-note">${fmtClock(it.duration - p.position)} remaining</div>` : ''}
           ${it.overview ? html`<p class="overview">${it.overview}</p>` : ''}
           ${isEp && (it.prev || it.next) ? html`<div class="row" style="margin:12px 0">
             ${it.prev ? html`<a class="btn small" href="#/item/${it.prev.id}">‹ ${epLabel(it.prev)}</a>` : ''}
             ${it.next ? html`<a class="btn small" href="#/item/${it.next.id}">${epLabel(it.next)} ›</a>` : ''}</div>` : ''}
+          ${castList(it)}
           <dl class="tech">
             <dt>File</dt><dd>${it.file || it.fileName}</dd>
             <dt>Size</dt><dd>${fmtSize(it.size)}</dd>
@@ -396,6 +493,7 @@ async function viewItem({ params: [id], seq }) {
         </div>
       </div>
     </div>`)) return;
+  bindDetailActions(it);
   $('#item-watch').onclick = async () => {
     await api(`/api/items/${id}/watched`, { method: 'POST', body: { watched: !p?.watched } });
     router();
@@ -420,7 +518,7 @@ async function viewSearch({ query, seq }) {
 async function viewSettings({ query, seq }) {
   view.onclick = null;
   if (state.user.role !== 'admin') { location.replace('#/account'); return; }
-  const [, s, users] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users')]);
+  const [, s, users, metaSettings] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'), api('/api/settings')]);
   state.status = s;
   const libs = state.libraries;
   if (!setView(seq, html`
@@ -441,18 +539,18 @@ async function viewSettings({ query, seq }) {
         </div>
         <div class="row">
           <button class="btn small" data-act="scan">↻ Scan</button>
-          ${s.tmdb ? html`<button class="btn small" data-act="meta">Refresh metadata</button>` : ''}
+          ${metaSettings.providers.some((p) => p.enabled && p.kinds.includes(l.type)) ? html`<button class="btn small" data-act="meta" title="Look up every title again (your edits are kept)">Refresh metadata</button>` : ''}
           <button class="btn small" data-act="edit">Edit</button>
           <button class="btn small danger" data-act="delete">Delete</button>
         </div>
       </div>`) : html`<div class="panel muted">No libraries yet. Add one to get started.</div>`}
+    ${metadataSection(metaSettings)}
     ${usersSection(users)}
     <h2 style="margin:28px 0 12px">Server</h2>
     <div class="panel">
       <dl class="kv">
         <dt>Version</dt><dd>${s.name} ${s.version}</dd>
         <dt>Web address</dt><dd><code>${location.origin}</code>${/^(localhost|127\.)/.test(location.hostname) ? html` <span class="muted">— from phones, TVs and other computers, use this PC's name or IP address instead of “localhost”</span>` : ''}</dd>
-        <dt>Online metadata</dt><dd>${s.tmdb ? 'TMDB enabled' : html`Off — start the server with <code>TMDB_API_KEY=…</code> to fetch posters, summaries and ratings`}</dd>
         <dt>Active streams</dt><dd>${s.activeTranscodes} transcoding</dd>
         <dt>Video downloader</dt><dd>${s.downloader.available ? html`yt-dlp ${s.downloader.version} — <a href="#/downloads">Downloads</a>` : 'yt-dlp not installed'}</dd>
         <dt>Data folder</dt><dd><code>${s.dataDir}</code></dd>
@@ -461,6 +559,7 @@ async function viewSettings({ query, seq }) {
 
   $('#add-lib').onclick = () => showLibraryForm();
   bindUsersSection(users);
+  bindMetadataSection();
   if ($('#scan-all')) $('#scan-all').onclick = async () => { await api('/api/scan', { method: 'POST' }); toast('Scanning all libraries…'); pollStatus(); };
   if (query.get('add')) showLibraryForm();
   view.onclick = async (e) => {
@@ -631,6 +730,8 @@ class Player {
           ${it.subtitles.length ? html`<select data-a="subs" title="Subtitles (c)"><option value="">Subtitles off</option>${it.subtitles.map((s) => html`<option value="${s.id}" ${s.id === this.subId ? 'selected' : ''}>${s.label}</option>`)}</select>` : ''}
           <button class="p-btn" data-a="mute" title="Mute (m)">🔊</button>
           <input type="range" class="p-volume" min="0" max="1" step="0.05" aria-label="Volume">
+          <select data-a="speed" class="p-speed" title="Playback speed (&lt; &gt;)">${[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((r) => html`<option value="${r}" ${r === 1 ? 'selected' : ''}>${r === 1 ? 'Normal' : `${r}×`}</option>`)}</select>
+          ${document.pictureInPictureEnabled ? html`<button class="p-btn p-hide-sm" data-a="pip" title="Picture-in-picture (p)">⧉</button>` : ''}
           ${it.next ? html`<button class="p-btn" data-a="next" title="Next episode">⏭</button>` : ''}
           <button class="p-btn" data-a="fs" title="Fullscreen (f)">⛶</button>
         </div>
@@ -778,20 +879,44 @@ class Player {
     this.report(true);
     if (!this.item.next) return setTimeout(() => this.close(), 800);
     const n = this.item.next;
+    const auto = store.get('autoplayNext', true);
     let left = 10;
     const box = document.createElement('div');
     box.className = 'p-upnext';
-    box.innerHTML = html`<div class="muted">Up next in <b id="un-count">${left}</b>s</div>
-      <img src="/api/art/thumb/${n.id}" alt="">
+    box.innerHTML = html`<div class="muted">${auto ? html`Up next in <b id="un-count">${left}</b>s` : 'Up next'}</div>
+      <img src="${artUrl('thumb', n)}" alt="">
       <div><b>${epLabel(n)}</b> — ${n.title}</div>
       <div class="row"><button class="btn primary small" data-a="next">▶ Play now</button><button class="btn small" data-a="cancel-next">Cancel</button></div>`.s;
     this.root.append(box);
     this.root.classList.remove('idle');
+    if (!auto) return;
     this.upNextTimer = setInterval(() => {
       left--;
       const c = $('#un-count', box); if (c) c.textContent = left;
       if (left <= 0) { clearInterval(this.upNextTimer); this.playNext(); }
     }, 1000);
+  }
+
+  setSpeed(rate) {
+    // defaultPlaybackRate survives the source reloads that seeking in a transcode causes.
+    this.v.defaultPlaybackRate = rate;
+    this.v.playbackRate = rate;
+    const sel = $('[data-a=speed]', this.root);
+    if (sel) sel.value = String(rate);
+  }
+
+  stepSpeed(dir) {
+    const rates = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+    const i = rates.indexOf(this.v.playbackRate);
+    const next = rates[Math.max(0, Math.min(rates.length - 1, (i === -1 ? 2 : i) + dir))];
+    this.setSpeed(next);
+    toast(`Speed: ${next === 1 ? 'normal' : `${next}×`}`);
+  }
+
+  togglePip() {
+    if (!document.pictureInPictureEnabled) return;
+    if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
+    else this.v.requestPictureInPicture().catch(() => {});
   }
 
   toggleFullscreen() {
@@ -843,10 +968,12 @@ class Player {
       else if (a === 'fs') this.toggleFullscreen();
       else if (a === 'next') this.playNext();
       else if (a === 'cancel-next') { clearInterval(this.upNextTimer); $('.p-upnext', this.root)?.remove(); }
+      else if (a === 'pip') this.togglePip();
     });
     this.root.addEventListener('change', (e) => {
       const a = e.target.dataset.a;
       if (a === 'subs') { this.subId = e.target.value || null; store.set('subsOn', !!this.subId); this.applySubs(); }
+      if (a === 'speed') this.setSpeed(Number(e.target.value));
       if (a === 'audio') { this.audio = Number(e.target.value); if (this.mode === 'direct') this.mode = 'transcode'; this.load(this.time); }
     });
     $('.p-volume', this.root).addEventListener('input', (e) => { v.volume = Number(e.target.value); v.muted = v.volume === 0; });
@@ -882,6 +1009,9 @@ class Player {
         m: () => { v.muted = !v.muted; }, f: () => this.toggleFullscreen(),
         c: () => { const sel = $('[data-a=subs]', this.root); if (!sel) return; sel.value = this.subId ? '' : (this.pickDefaultSub() || ''); sel.dispatchEvent(new Event('change', { bubbles: true })); },
         Escape: () => { if (!document.fullscreenElement) this.close(); },
+        n: () => { if (this.item.next) this.playNext(); },
+        p: () => this.togglePip(),
+        '<': () => this.stepSpeed(-1), '>': () => this.stepSpeed(1),
       }[k];
       if (handled) { e.preventDefault(); handled(); this.showControls(); }
     };
@@ -895,6 +1025,7 @@ class Player {
     clearTimeout(this.idleTimer);
     document.removeEventListener('keydown', this.onKey);
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    if (document.pictureInPictureElement === this.v) document.exitPictureInPicture().catch(() => {});
     this.v.pause();
     this.v.removeAttribute('src'); // stops the download and lets the server kill ffmpeg
     this.v.load();
@@ -920,7 +1051,12 @@ const routes = [
   [/^\/settings$/, viewSettings],
   [/^\/account$/, viewAccount],
   [/^\/downloads$/, viewDownloads],
+  [/^\/watchlist$/, viewWatchlist],
 ];
+
+// Scroll position per page, so "back" returns to where you were in a long library.
+const scrollMemo = new Map();
+let lastPath = null;
 
 async function router() {
   if (!state.user) return;
@@ -932,6 +1068,9 @@ async function router() {
   if (path !== '/search' && !isPlay) $('#search-input').value = '';
   renderSidebar();
   const seq = ++renderSeq;
+  const changedPage = path !== lastPath;
+  if (changedPage && lastPath && !lastPath.startsWith('/play/')) scrollMemo.set(lastPath, window.scrollY);
+  if (!isPlay) lastPath = path;
   const match = routes.find(([re]) => re.test(path));
   if (!match) return setView(seq, html`<div class="empty"><h2>Page not found</h2><a class="btn" href="#/">Go home</a></div>`);
   if (!isPlay) {
@@ -945,6 +1084,9 @@ async function router() {
   }
   try {
     await match[1]({ params: match[0].exec(path).slice(1), query, seq });
+    if (!isPlay && changedPage && seq === renderSeq && scrollMemo.has(path)) {
+      requestAnimationFrame(() => window.scrollTo(0, scrollMemo.get(path)));
+    }
   } catch (err) {
     if (isPlay) { toast(err.message, true); return; }
     setView(seq, html`<div class="empty"><h2>Something went wrong</h2><p class="error-box" style="display:inline-block">${err.message}</p><br><a class="btn" href="#/">Go home</a></div>`);

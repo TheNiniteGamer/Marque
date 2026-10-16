@@ -68,10 +68,14 @@ still listed in `.env`.
 | **Libraries** | Movie and TV Show libraries, each combining one or more folders, which can be on different drives. Add, edit and remove them in Settings with a built-in folder picker. |
 | **Scanning** | Probes new or changed files with `ffprobe`, removes deleted ones, and rescans periodically. If a drive is offline, its items and watch history are kept. |
 | **Filename matching** | `Movie (Year).ext`, release-style names like `Movie.2019.1080p.BluRay.x264`, `Show/Season 01/Show - S01E02 - Title.ext`, `1x02`, `S01E01-E02`, Specials folders. |
-| **Artwork & metadata** | Local `poster.jpg` / `fanart.jpg` / `<name>-poster.jpg`, or a frame from the video. Optional **TMDB** posters, summaries, genres, ratings and episode titles. |
-| **Browsing** | Home screen with Continue Watching and Recently Added, poster grids with sort and an Unwatched filter, show pages with seasons, and live search (press `/`). |
+| **Online metadata** | Posters, backgrounds, summaries, genres, ratings, cast and episode titles. TV shows use **TVmaze** (no key needed). Movies and TV can also use **TMDB**: paste a free API key in *Settings → Metadata*. Pick the metadata language there too. New items are matched automatically. |
+| **Fix match / refresh** | When a title is matched wrong: *⋯ → Fix match…*, search, and pick the right result from a list with posters. *Refresh metadata* and *Unmatch* are in the same menu. |
+| **Edit anything** | Change the title, sort title, year, tagline, summary and genres of a movie, show or episode. Set a poster or background by **uploading an image**, pasting a URL, or choosing from the matched source's alternatives. Your edits always win: refreshes and rescans never overwrite them, and each field can be reset to automatic. |
+| **Artwork** | Local `poster.jpg` / `fanart.jpg` / `<name>-poster.jpg`, online artwork, your own uploads, or a frame grabbed from the video. |
+| **Browsing** | Home screen with Continue Watching, My List and Recently Added. Library grids with sort, genre filter, title filter, an Unwatched filter, adjustable poster size, an A–Z jump bar and **Shuffle**. Show pages with seasons, cast lists, clickable genres, and live search (press `/`). The scroll position is kept when you go back. |
+| **My List & menus** | A **⋯** menu on every poster: play, mark watched/unwatched, add to **My List** (a per-user watchlist), remove from Continue Watching, and, for admins, edit / fix match / refresh. |
 | **Streaming** | **Direct Play** with instant seeking when the browser supports the file. Otherwise ffmpeg converts it **on the fly**, copying the video when possible so only the audio is converted. Falls back automatically if direct play fails. |
-| **Player** | Seek bar with hover time, skip, volume, fullscreen, keyboard shortcuts, audio track choice, subtitles (sidecar `.srt`/`.vtt` or embedded), and an Up Next countdown. |
+| **Player** | Seek bar with hover time, skip, volume, **playback speed**, **picture-in-picture**, fullscreen, keyboard shortcuts, audio track choice, subtitles (sidecar `.srt`/`.vtt` or embedded), and an Up Next countdown. Autoplay and default subtitles can be set per browser under *Account*. |
 | **YouTube downloader** | Paste a video or playlist link, pick a library and quality. Saves an MP4 that plays directly, the thumbnail as its poster, and English subtitles when available, then adds it to the library. Has a queue with progress, cancel and retry, plus **Update yt-dlp** for when YouTube changes. |
 
 Only download videos you have the right to save. Respect the site's terms and copyright.
@@ -115,7 +119,9 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `AUTO_LIBRARIES` | — | Libraries to set up from config: `Name:movie\|show:/path1,/path2;…`. Checked on every start, so new folders are added. |
 | `MEDIA_LABELS` | — | Display names for container folders: `/media/movies=D:/Movies\|…` (set by Docker Compose) |
 | `SCAN_INTERVAL` | `30` | Minutes between automatic rescans (`0` disables) |
-| `TMDB_API_KEY` / `TMDB_TOKEN` | — | Enables online metadata (free key from themoviedb.org) |
+| `TMDB_API_KEY` / `TMDB_TOKEN` | — | TMDB key from the environment (easier: set it in *Settings → Metadata*) |
+| `METADATA_LANGUAGE` | `en-US` | Default metadata language (also settable in *Settings → Metadata*) |
+| `TVMAZE_DISABLED` | — | Set to `1` to stop using TVmaze |
 | `TRANSCODE_PRESET` | `veryfast` | x264 preset used when video must be re-encoded |
 | `YTDLP_PATH` | `yt-dlp` | Location of yt-dlp |
 | `DOWNLOAD_CONCURRENCY` | `1` | Downloads that run at the same time |
@@ -134,10 +140,14 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 - On Linux hosts (not needed on Windows), the container runs as uid 999. Make sure that user can
   write to your YouTube folder (`chown 999 /path/to/youtube`).
 
-## Keyboard shortcuts (player)
+## Keyboard shortcuts
 
-`Space`/`K` play/pause · `←`/`J` back 10 s · `→`/`L` forward 30 s · `↑`/`↓` volume · `M` mute ·
-`F` fullscreen · `C` toggle subtitles · `Esc` close
+Press `?` anywhere for the full list.
+
+- **Anywhere:** `/` search · `g` then `h` go home · `g` then `l` My List
+- **Player:** `Space`/`K` play/pause · `←`/`J` back 10 s · `→`/`L` forward 30 s · `↑`/`↓` volume ·
+  `M` mute · `F` fullscreen · `C` subtitles · `N` next episode · `<`/`>` speed ·
+  `P` picture-in-picture · `Esc` close
 
 ## Architecture
 
@@ -149,10 +159,12 @@ lib/parse.js        filename → title/year/show/season/episode, sidecar subs, l
 lib/scanner.js      folder walking, ffprobe, show grouping, TMDB enrichment
 lib/media.js        ffprobe/ffmpeg: probe, thumbnails, direct-play check, live transcode, seek points
 lib/library.js      per-user API shaping: hubs, continue watching / up next, search, watch state
-lib/metadata.js     optional TMDB client
+lib/metadata.js     metadata providers (TMDB, TVmaze), image downloads
+lib/matcher.js      matching, refresh/unmatch, user edits and custom artwork (edits > metadata > file name)
 lib/subtitles.js    SRT→VTT, cue time-shifting
 lib/store.js        JSON-file database with atomic writes
-public/             single-page web client (vanilla JS): app.js (browse/play), manage.js (accounts, downloads)
+public/             single-page web client (vanilla JS): app.js (browse/play), manage.js (accounts, downloads),
+                    extras.js (menus, edit/match dialogs, My List, metadata settings, shortcuts)
 Dockerfile, docker-compose.yml, *.bat   container image and Windows helpers
 ```
 

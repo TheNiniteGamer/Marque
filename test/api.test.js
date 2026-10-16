@@ -59,7 +59,7 @@ test.before(async () => {
   clip(path.join(ROOT, 'TV', 'Some Show', 'Season 01', 'Some Show - S01E01.mp4'));
   server = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', DATA_DIR: path.join(ROOT, 'data'), SCAN_INTERVAL: '0',
-      YTDLP_PATH: YTDLP, NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost', TMDB_API_KEY: '', TMDB_TOKEN: '' },
+      YTDLP_PATH: YTDLP, TVMAZE_DISABLED: '1', NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost', TMDB_API_KEY: '', TMDB_TOKEN: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   server.stderr.on('data', (d) => process.env.DEBUG && process.stderr.write(d));
