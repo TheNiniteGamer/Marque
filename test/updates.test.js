@@ -24,7 +24,7 @@ const github = http.createServer((req, res) => {
   if (req.url === `/repos/me/marquee/compare/${OLD}...main`) {
     return send(200, { status: 'ahead', ahead_by: 2, commits: [
       { sha: 'b'.repeat(40), html_url: 'https://github.com/me/marquee/commit/bbb', commit: { message: 'Older change', committer: { date: '2026-09-01T00:00:00Z' } } },
-      { sha: NEW, html_url: 'https://github.com/me/marquee/commit/ccc', commit: { message: 'Newest change\n\nDetails', committer: { date: '2026-10-01T00:00:00Z' } } },
+      { sha: NEW, html_url: 'https://github.com/me/marquee/commit/ccc', commit: { message: 'Newest change\n\nDetails\n\nUpdate-Type: significant', committer: { date: '2026-10-01T00:00:00Z' } } },
     ] });
   }
   send(404, { message: 'Not Found' });
@@ -62,7 +62,11 @@ test('an older build sees the new changes, newest first', async () => {
   assert.equal(r.check.status, 'available');
   assert.equal(r.check.behindBy, 2);
   assert.deepEqual(r.check.changes.map((c) => c.message), ['Newest change', 'Older change']);
-  assert.equal((await admin('GET', '/api/status')).data.updateAvailable, true);
+  assert.deepEqual(r.check.changes.map((c) => c.significant), [true, false], 'the "Update-Type: significant" marker is picked up');
+  assert.equal(r.check.significant, true);
+  const status = (await admin('GET', '/api/status')).data;
+  assert.equal(status.updateAvailable, true);
+  assert.equal(status.significantUpdate, true);
 });
 
 test('the latest build is up to date', async () => {

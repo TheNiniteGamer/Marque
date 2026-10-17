@@ -139,6 +139,10 @@ Marquee checks GitHub for new versions twice a day. Admins see a green dot on th
 update is available. **Settings → Updates** shows what's new, and has **Check now** and
 **Update now** buttons.
 
+Big releases are labelled **Significant update** in Settings → Updates, and listed in
+[CHANGELOG.md](CHANGELOG.md). For maintainers: a commit is marked by an `Update-Type: significant`
+line in its message, or a subject starting with `[Significant]`.
+
 **Update now** needs the *update helper*, a small background task on the server PC. The app runs
 inside Docker and can't rebuild itself, so the helper does it. The first time you run
 `start-marquee.bat`, it asks whether to turn the helper on; answer **Y**.

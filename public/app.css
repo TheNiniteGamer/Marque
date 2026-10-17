@@ -415,6 +415,8 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .upd-state { font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 8px; }
 .upd-state.ok { color: #46a758; }
 .upd-state.new { color: var(--accent); }
+.sig-tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); vertical-align: 1px; }
+.changes li.significant { font-weight: 600; }
 .upd-state.bad { color: var(--danger); font-weight: 400; font-size: 14px; }
 .upd-state .spin { width: 14px; height: 14px; border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
 .changes ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; display: grid; gap: 3px; }

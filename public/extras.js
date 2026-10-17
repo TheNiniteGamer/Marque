@@ -406,7 +406,12 @@ function updatesSection(u) {
   if (updating) summary = html`<div class="upd-state busy"><span class="spin"></span> ${h.message || 'Updating…'}</div>`;
   else if (!c) summary = html`<div class="upd-state">Not checked yet.</div>`;
   else if (c.status === 'current') summary = html`<div class="upd-state ok">✓ Marquee is up to date</div>`;
-  else if (c.status === 'available') summary = html`<div class="upd-state new">${c.behindBy} update${c.behindBy === 1 ? '' : 's'} available</div>`;
+  else if (c.status === 'available') {
+    summary = c.significant
+      ? html`<div class="upd-state new">★ Significant update available <span class="muted" style="font-weight:400">(${c.behindBy} change${c.behindBy === 1 ? '' : 's'})</span></div>
+          <div class="muted" style="font-size:13px">This update adds major new features. Read the notes below; a backup is a good idea before updating.</div>`
+      : html`<div class="upd-state new">${c.behindBy} update${c.behindBy === 1 ? '' : 's'} available</div>`;
+  }
   else if (c.status === 'error') summary = html`<div class="upd-state bad">Couldn't check for updates: ${c.error}</div>`;
   else summary = html`<div class="upd-state">Can't tell which version is installed${b.install === 'docker' ? ' (it was probably set up from a ZIP download). Running an update once fixes this.' : '.'}
     ${c.latest ? html`<br><span class="muted">Latest version: ${shortSha(c.latest.sha)} — ${c.latest.message}</span>` : ''}</div>`;
@@ -441,7 +446,7 @@ function updatesSection(u) {
         </div>
       </div>
       ${c?.status === 'available' && c.changes.length ? html`<div class="changes"><b>What's new</b>
-        <ul>${c.changes.map((x) => html`<li><a href="${x.url || '#'}" target="_blank" rel="noopener"><code>${x.sha}</code></a> ${x.message}
+        <ul>${c.changes.map((x) => html`<li class="${x.significant ? 'significant' : ''}"><a href="${x.url || '#'}" target="_blank" rel="noopener"><code>${x.sha}</code></a> ${x.significant ? html`<span class="sig-tag">Significant update</span> ` : ''}${x.message}
           ${x.date ? html`<span class="muted">· ${new Date(x.date).toLocaleDateString()}</span>` : ''}</li>`)}</ul></div>` : ''}
       ${updating || h.state === 'failed' ? html`<pre class="upd-log ${h.state === 'failed' ? 'bad' : ''}">${h.state === 'failed' ? `Update failed: ${h.message}\n\n` : ''}${(h.log || []).join('\n')}</pre>` : ''}
       ${h.state === 'done' && h.finishedAt ? html`<div class="muted" style="font-size:13px">Last update finished ${fmtDate(h.finishedAt)} — ${h.message}.</div>` : ''}
@@ -522,9 +527,11 @@ function noteUpdateAvailable(status) {
   $('#user-menu')?.classList.toggle('has-update', on);
   const link = $('.sidebar a[data-nav="settings"]');
   if (link) link.classList.toggle('has-update', on);
+  const menuLink = $('#user-pop .upd-link');
+  if (menuLink) menuLink.textContent = status?.significantUpdate ? 'Significant update available' : 'Update available';
   if (on && !sessionStorage.getItem('marquee:update-toast')) {
     try { sessionStorage.setItem('marquee:update-toast', '1'); } catch { /* ignore */ }
-    toast('A Marquee update is available — see Settings → Updates');
+    toast(status.significantUpdate ? 'A significant Marquee update is available — see Settings → Updates' : 'A Marquee update is available — see Settings → Updates');
   }
   if (status?.updating && state.user?.role === 'admin') watchUpdate();
 }

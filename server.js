@@ -384,7 +384,7 @@ route('GET', '/api/status', async (req, res, p, url, user) => json(res, 200, {
   name: 'Marquee', version: require('./package.json').version, hostname: os.hostname(),
   metadataProviders: metadata.available(), ...scanner.status(), activeTranscodes: transcodes.size + hls.active,
   downloader: downloader.status(),
-  ...(user.role === 'admin' ? { dataDir: DATA_DIR, mediaRoot: MEDIA_ROOT, updateAvailable: updater.updateAvailable(), updating: updater.helper().state === 'updating' } : {}),
+  ...(user.role === 'admin' ? { dataDir: DATA_DIR, mediaRoot: MEDIA_ROOT, updateAvailable: updater.updateAvailable(), significantUpdate: updater.significantUpdate(), updating: updater.helper().state === 'updating' } : {}),
 }));
 
 route('GET', '/api/libraries', async (req, res, p, url, user) =>
