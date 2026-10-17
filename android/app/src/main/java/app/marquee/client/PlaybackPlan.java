@@ -67,6 +67,31 @@ public final class PlaybackPlan {
         return true;
     }
 
+    /**
+     * Streaming quality: the user's choice from the web app's Account page if they made one;
+     * otherwise the original file at home and adaptive streaming when connected from outside.
+     */
+    public static String defaultQuality(String pref, String host) {
+        if (pref != null && !pref.isEmpty()) return pref;
+        String h = host == null ? "" : host.toLowerCase(Locale.ROOT);
+        boolean home = h.equals("localhost") || h.startsWith("127.") || h.startsWith("10.") || h.startsWith("192.168.")
+            || h.matches("172\\.(1[6-9]|2\\d|3[01])\\..*") || h.endsWith(".local") || h.startsWith("[") || !h.contains(".");
+        return home ? "original" : "auto";
+    }
+
+    /** Adaptive-streaming address (relative to the server) for a quality other than "original". */
+    public static String hlsPath(String itemId, String sid, int audio, String quality, String token) {
+        StringBuilder b = new StringBuilder("/api/items/").append(itemId).append("/hls/master.m3u8?sid=").append(sid).append("&audio=").append(audio);
+        if (!"auto".equals(quality)) b.append("&q=").append(quality);
+        if (token != null && !token.isEmpty()) b.append("&mt=").append(token); // tokens are URL-safe already
+        return b.toString();
+    }
+
+    /** Whether to offer "Skip Intro" at time t (hidden in the last second so it doesn't flash). */
+    public static boolean inIntro(double t, double start, double end) {
+        return end > start && t >= start && t < end - 1;
+    }
+
     /** "1:02:03" / "4:05" */
     public static String clock(double seconds) {
         long s = Math.max(0, (long) seconds);

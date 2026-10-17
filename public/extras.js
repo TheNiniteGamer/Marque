@@ -664,3 +664,58 @@ if (sessionStorage.getItem('marquee:restored')) {
   sessionStorage.removeItem('marquee:restored');
   setTimeout(() => toast('Backup restored'), 800);
 }
+
+// ---------- settings: transcoding, casting and skip intro ----------
+function transcodingSection(t, intro, settings) {
+  const why = t.results.filter((r) => !r.ok);
+  return html`
+    <h2 style="margin:28px 0 12px" id="transcoding">Transcoding &amp; streaming</h2>
+    <div class="panel form" style="max-width:none" id="tc-panel">
+      <div class="upd-state ${t.active !== 'software' ? 'ok' : ''}">${t.checking ? 'Checking graphics cards…' : html`Converting video with: <b>${t.activeName}</b>`}</div>
+      <label>Video converter
+        <select id="tc-hw">${t.options.map((o) => html`<option value="${o.id}" ${o.id === t.setting ? 'selected' : ''}>${o.name}</option>`)}</select></label>
+      ${why.length ? html`<details class="muted" style="font-size:13px"><summary>Why isn't a graphics card being used?</summary>
+        <ul>${why.map((r) => html`<li><b>${r.name}:</b> ${r.error}</li>`)}</ul>
+        <div>A graphics card has to be passed through to Docker first: set <code>GPU=nvidia</code> (or <code>intel</code> / <code>amd</code> on Linux hosts) in the <code>.env</code> file and run <b>start-marquee.bat</b> again. See the README.</div></details>` : ''}
+      <div class="row"><button class="btn small" id="tc-test">Test again</button>
+        <span class="muted" style="font-size:13px">Videos your browser can already play are never converted.</span></div>
+      <label>Address for cast devices <span class="muted" style="font-weight:400">(optional)</span>
+        <input class="input" id="tc-cast" placeholder="${t.castUrlFromEnv || 'e.g. http://192.168.1.20:32500'}" value="${t.castUrl}"></label>
+      <div class="muted" style="font-size:13px;margin-top:-6px">Chromecasts and TVs fetch the video from Marquee themselves, so they need an address that works on your network —
+        this PC's IP address and port. Only needed when you open Marquee as “localhost”. Casting works from Chrome or Edge on pages opened as <code>localhost</code> or over HTTPS.</div>
+      <div class="row"><button class="btn small primary" id="tc-save-cast">Save address</button></div>
+    </div>
+    <h2 style="margin:28px 0 12px" id="intro">Skip intro</h2>
+    <div class="panel form" style="max-width:none">
+      <label class="check"><input type="checkbox" id="intro-on" ${settings.introDetection ? 'checked' : ''}> Find TV show intros automatically after scans</label>
+      <div class="muted" style="font-size:14px">${intro.running && intro.current
+        ? `Looking at ${intro.current.show}, season ${intro.current.season} (${intro.current.done}/${intro.current.total})${intro.queued ? ` · ${intro.queued} more season(s) waiting` : ''}…`
+        : `${intro.found} of ${intro.episodes} episodes have a detected intro (${intro.checked} checked).`}
+        Episodes in the same season are compared to find the theme song they share.</div>
+      <div class="row"><button class="btn small" id="intro-run">Find intros now</button><button class="btn small" id="intro-redo">Redo all</button></div>
+    </div>`;
+}
+
+function bindTranscodingSection() {
+  const save = async (body, msg) => {
+    try { await api('/api/transcoding', { method: 'PATCH', body }); toast(msg); } catch (err) { toast(err.message, true); }
+    router();
+  };
+  $('#tc-hw').onchange = (e) => { e.target.disabled = true; toast('Testing…'); save({ hwaccel: e.target.value }, 'Saved'); };
+  $('#tc-test').onclick = async (e) => {
+    e.target.disabled = true; e.target.textContent = 'Testing…';
+    try { const r = await api('/api/transcoding/test', { method: 'POST' }); toast(`Using: ${r.activeName}`); } catch (err) { toast(err.message, true); }
+    router();
+  };
+  $('#tc-save-cast').onclick = () => save({ castUrl: $('#tc-cast').value }, 'Saved');
+  $('#intro-on').onchange = async (e) => {
+    try { await api('/api/settings', { method: 'PATCH', body: { introDetection: e.target.checked } }); toast('Saved'); } catch (err) { toast(err.message, true); }
+  };
+  const run = (force) => async () => {
+    if (force && !confirm('Look for intros in every episode again? This can take a while for big libraries.')) return;
+    try { await api('/api/intro/detect', { method: 'POST', body: { force } }); toast('Looking for intros…'); } catch (err) { toast(err.message, true); }
+    setTimeout(router, 1500);
+  };
+  $('#intro-run').onclick = run(false);
+  $('#intro-redo').onclick = run(true);
+}

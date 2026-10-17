@@ -71,4 +71,17 @@ final class Net {
             if (c != null) c.disconnect();
         }
     }
+
+    static void delete(String url) {
+        HttpURLConnection c = null;
+        try {
+            c = open(url, 10000);
+            c.setRequestMethod("DELETE");
+            c.getResponseCode();
+        } catch (IOException ignored) {
+            // Best effort: the server also stops idle streams on its own.
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
 }

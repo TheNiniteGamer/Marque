@@ -95,6 +95,10 @@ async function viewAccount({ seq }) {
       <h2>Playback</h2>
       <label class="check"><input type="checkbox" data-pref="autoplayNext" ${store.get('autoplayNext', true) ? 'checked' : ''}> Play the next episode automatically</label>
       <label class="check"><input type="checkbox" data-pref="subsOn" ${store.get('subsOn', false) ? 'checked' : ''}> Turn on subtitles by default</label>
+      <label class="check"><input type="checkbox" data-pref="autoSkipIntro" ${store.get('autoSkipIntro', false) ? 'checked' : ''}> Skip intros automatically</label>
+      <label>Streaming quality
+        <select data-pref="quality">${[['', 'Automatic (original at home, adaptive when away)'], ['original', 'Original'], ['auto', 'Adaptive (adjusts to your connection)'],
+          ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']].map(([v, l]) => html`<option value="${v}" ${(store.get('quality', '') || '') === v ? 'selected' : ''}>${l}</option>`)}</select></label>
       <p class="muted" style="margin:0;font-size:13px">These are saved in this browser.</p>
     </div>
     ${window.MarqueeAndroid ? '' : html`<div class="panel">
@@ -114,7 +118,7 @@ async function viewAccount({ seq }) {
       <p class="muted" style="margin:0;font-size:13px">Changing your password signs you out on your other devices.</p>
     </form>`)) return;
   $('#acct-signout').onclick = signOut;
-  $('#prefs').onchange = (e) => { const k = e.target.dataset.pref; if (k) { store.set(k, e.target.checked); toast('Saved'); } };
+  $('#prefs').onchange = (e) => { const k = e.target.dataset.pref; if (k) { store.set(k, e.target.type === 'checkbox' ? e.target.checked : e.target.value); toast('Saved'); } };
   $('#pw-form').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target.elements;

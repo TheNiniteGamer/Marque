@@ -125,4 +125,29 @@ public class LogicTest {
         assertEquals(1, cues.size());
         assertEquals(500, cues.get(0).startMs);
     }
+
+    // ---------- quality / adaptive streaming / skip intro ----------
+    @Test public void qualityDefaultsToOriginalAtHomeAndAdaptiveAway() {
+        assertEquals("original", PlaybackPlan.defaultQuality("", "192.168.1.20"));
+        assertEquals("original", PlaybackPlan.defaultQuality(null, "my-pc"));
+        assertEquals("original", PlaybackPlan.defaultQuality("", "172.20.0.4"));
+        assertEquals("auto", PlaybackPlan.defaultQuality("", "marquee.tail1234.ts.net"));
+        assertEquals("auto", PlaybackPlan.defaultQuality("", "172.40.1.1"));
+        assertEquals("an explicit choice wins", "720p", PlaybackPlan.defaultQuality("720p", "192.168.1.20"));
+    }
+
+    @Test public void adaptiveStreamAddress() {
+        assertEquals("/api/items/abc/hls/master.m3u8?sid=s1&audio=0&mt=t.o.k.en",
+            PlaybackPlan.hlsPath("abc", "s1", 0, "auto", "t.o.k.en"));
+        assertEquals("/api/items/abc/hls/master.m3u8?sid=s1&audio=2&q=480p",
+            PlaybackPlan.hlsPath("abc", "s1", 2, "480p", null));
+    }
+
+    @Test public void skipIntroWindow() {
+        assertFalse(PlaybackPlan.inIntro(4.9, 5, 35));
+        assertTrue(PlaybackPlan.inIntro(5, 5, 35));
+        assertTrue(PlaybackPlan.inIntro(33.9, 5, 35));
+        assertFalse("hidden in the last second", PlaybackPlan.inIntro(34.5, 5, 35));
+        assertFalse("no intro", PlaybackPlan.inIntro(10, 0, 0));
+    }
 }

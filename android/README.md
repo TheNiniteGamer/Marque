@@ -8,8 +8,11 @@ A small Android app (Android 8.0+) for watching your Marquee server on a phone o
 - **Videos:** play in **Android's native player**. Files your phone can decode (MP4/MKV/WebM with
   H.264, HEVC, VP9…) play directly, with no work for the server. Anything else is converted by the
   server on the fly, and the app switches automatically if direct playback fails.
-- **Player:** picture-in-picture, subtitles, audio-track choice, playback speed, resume, and the next
-  episode. Progress syncs with your account.
+- **Player:** picture-in-picture, subtitles, audio-track choice, playback speed, resume, the next
+  episode, and **Skip Intro**. Progress syncs with your account.
+- **Quality:** Original, Auto (adaptive streaming, the default away from home) or a fixed
+  1080p–360p, from the quality button in the player. The default and automatic intro skipping
+  follow the choices on the web app's *Account* page.
 
 ## Install
 

@@ -4,11 +4,13 @@ FROM node:22-bookworm-slim AS node
 FROM ubuntu:24.04
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 
-# ffmpeg: probing, thumbnails, transcoding, merging downloads
+# ffmpeg: probing, thumbnails, transcoding, merging downloads (its NVIDIA encoder loads the
+#   driver the NVIDIA container runtime passes in; the VA drivers cover Intel and AMD graphics)
 # python3: runs yt-dlp; tini: forwards signals and reaps child processes
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      ffmpeg python3 tini ca-certificates tzdata wget \
+      ffmpeg python3 tini ca-certificates tzdata wget mesa-va-drivers \
+      $(if [ "$(dpkg --print-architecture)" = amd64 ]; then echo intel-media-va-driver; fi) \
  && rm -rf /var/lib/apt/lists/*
 
 # Latest yt-dlp release (sites change often, so it is not taken from the distro).
@@ -22,7 +24,7 @@ COPY public ./public
 
 # /data holds the database, thumbnails and caches; media folders are mounted under /media.
 # yt-dlp is owned by the app user so "Update yt-dlp" in the web UI can replace it.
-RUN useradd --system --create-home --uid 999 marquee \
+RUN useradd --system --create-home --uid 999 --groups video marquee \
  && mkdir -p /data /media \
  && chown -R marquee:marquee /data /media /usr/local/bin/yt-dlp
 

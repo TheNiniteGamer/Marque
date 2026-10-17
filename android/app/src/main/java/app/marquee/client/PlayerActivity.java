@@ -18,6 +18,7 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
@@ -38,7 +39,8 @@ import java.util.concurrent.Executors;
 
 /**
  * Native video player. Plays files directly when the phone can decode them, otherwise asks the
- * server to convert them on the fly (same /transcode endpoint the web player uses).
+ * server to convert them on the fly (same /transcode endpoint the web player uses). A lower quality
+ * can be chosen, which plays the server's adaptive (HLS) stream through Android's own player.
  */
 public class PlayerActivity extends Activity {
     static final String EXTRA_REQUEST = "request";
@@ -52,11 +54,18 @@ public class PlayerActivity extends Activity {
     private ProgressBar spinner;
     private SeekBar seek;
     private TextView title, subtitle, time, subs;
-    private ImageButton playPause, next, audioBtn;
+    private ImageButton playPause, next, audioBtn, qualityBtn;
+    private Button skipIntro;
 
     private String base;
     private JSONObject item;
     private boolean direct;
+    private boolean hls;           // playing the adaptive stream (quality other than "original")
+    private String quality = "original";
+    private String qualityPref;
+    private JSONObject playback;   // signed link + streaming session from /playback
+    private JSONObject intro;
+    private boolean autoSkipIntro, autoSkipped;
     private double offset;       // seconds: where a converted stream starts in the real timeline
     private double pendingSeek;  // seconds: seek to this once a direct stream is ready
     private double duration;
@@ -93,6 +102,10 @@ public class PlayerActivity extends Activity {
         playPause = findViewById(R.id.play_pause);
         next = findViewById(R.id.next);
         audioBtn = findViewById(R.id.audio);
+        qualityBtn = findViewById(R.id.quality);
+        skipIntro = findViewById(R.id.skip_intro);
+        qualityBtn.setOnClickListener(v -> chooseQuality());
+        skipIntro.setOnClickListener(v -> { if (intro != null) seekTo(intro.optDouble("end")); skipIntro.setVisibility(View.GONE); });
 
         findViewById(R.id.back).setOnClickListener(v -> finish());
         findViewById(R.id.root).setOnClickListener(v -> setControls(controls.getVisibility() != View.VISIBLE));
@@ -121,6 +134,8 @@ public class PlayerActivity extends Activity {
             JSONObject req = new JSONObject(getIntent().getStringExtra(EXTRA_REQUEST));
             autoplayNext = req.optBoolean("autoplayNext", true);
             subsOn = req.optBoolean("subsOn", false);
+            autoSkipIntro = req.optBoolean("autoSkipIntro", false);
+            qualityPref = req.optString("quality", "");
             load(req.getString("id"), req.optDouble("start", 0));
         } catch (Exception e) {
             finish();
@@ -146,15 +161,22 @@ public class PlayerActivity extends Activity {
         io.execute(() -> {
             try {
                 JSONObject it = Net.getJson(base + "/api/items/" + id);
-                runOnUiThread(() -> begin(it, start));
+                JSONObject pb = null;
+                try { pb = Net.getJson(base + "/api/items/" + id + "/playback"); } catch (Exception ignored) { } // older servers
+                final JSONObject p = pb;
+                runOnUiThread(() -> begin(it, p, start));
             } catch (Exception e) {
                 runOnUiThread(() -> fail(e.getMessage()));
             }
         });
     }
 
-    private void begin(JSONObject it, double start) {
+    private void begin(JSONObject it, JSONObject pb, double start) {
         item = it;
+        playback = pb;
+        intro = it.optJSONObject("intro");
+        autoSkipped = false;
+        skipIntro.setVisibility(View.GONE);
         duration = it.optDouble("duration", 0);
         seek.setMax((int) Math.max(1, duration));
         boolean isEp = "episode".equals(it.optString("type"));
@@ -171,6 +193,11 @@ public class PlayerActivity extends Activity {
         String aCodec = audio != null && audio.length() > 0 ? audio.optJSONObject(0).optString("codec", null) : null;
         direct = media != null && PlaybackPlan.canDirectPlay(it.optString("fileName"),
             v != null ? v.optString("codec", null) : null, v != null ? v.optString("profile", null) : null, aCodec, decoders());
+        JSONArray qs = qualities();
+        qualityBtn.setVisibility(qs.length() > 0 ? View.VISIBLE : View.GONE);
+        quality = qs.length() > 0 ? PlaybackPlan.defaultQuality(qualityPref, Uri.parse(base).getHost()) : "original";
+        if (!"original".equals(quality) && !"auto".equals(quality) && !hasQuality(qs, quality)) quality = qs.optJSONObject(0).optString("id");
+        hls = !"original".equals(quality);
 
         subId = null;
         cues = new ArrayList<>();
@@ -191,6 +218,19 @@ public class PlayerActivity extends Activity {
         setControls(true);
     }
 
+    private JSONArray qualities() {
+        JSONArray qs = playback != null ? playback.optJSONArray("qualities") : null;
+        return qs != null ? qs : new JSONArray();
+    }
+
+    private static boolean hasQuality(JSONArray qs, String id) {
+        for (int i = 0; i < qs.length(); i++) if (id.equals(qs.optJSONObject(i).optString("id"))) return true;
+        return false;
+    }
+
+    /** Positions in direct and adaptive streams are the file's own; a converted stream restarts instead. */
+    private boolean seekable() { return direct || hls; }
+
     private static String epLabel(JSONObject it) {
         if (it.isNull("season") && it.isNull("episode")) return "";
         return " · S" + it.optInt("season") + " · E" + it.optInt("episode");
@@ -210,7 +250,12 @@ public class PlayerActivity extends Activity {
         t = Math.max(0, duration > 0 ? Math.min(t, duration - 2) : t);
         spinner.setVisibility(View.VISIBLE);
         String id = item.optString("id");
-        if (direct) {
+        if (hls) {
+            offset = 0;
+            pendingSeek = t;
+            String url = base + PlaybackPlan.hlsPath(id, playback.optString("sid"), audioIndex, quality, playback.optString("token"));
+            video.setVideoURI(Uri.parse(url), Net.headers(url));
+        } else if (direct) {
             offset = 0;
             pendingSeek = t;
             String url = base + "/api/items/" + id + "/stream";
@@ -236,8 +281,8 @@ public class PlayerActivity extends Activity {
     private void onPrepared(MediaPlayer m) {
         mp = m;
         applySpeed();
-        if (direct && pendingSeek > 0) video.seekTo((int) (pendingSeek * 1000));
-        if (direct && audioIndex > 0) selectDirectAudio(audioIndex);
+        if (seekable() && pendingSeek > 0) video.seekTo((int) (pendingSeek * 1000));
+        if (direct && !hls && audioIndex > 0) selectDirectAudio(audioIndex);
         video.start();
         spinner.setVisibility(View.GONE);
         updatePlayIcon();
@@ -245,6 +290,14 @@ public class PlayerActivity extends Activity {
     }
 
     private boolean onPlaybackError() {
+        if (hls && item != null) {
+            Toast.makeText(this, R.string.adaptive_failed, Toast.LENGTH_SHORT).show();
+            double at = now();
+            hls = false;
+            quality = "original";
+            open(at);
+            return true;
+        }
         if (direct && item != null) {
             // The phone couldn't play the original file: let the server convert it.
             Toast.makeText(this, R.string.switching_to_convert, Toast.LENGTH_SHORT).show();
@@ -270,7 +323,7 @@ public class PlayerActivity extends Activity {
     private void seekTo(double t) {
         if (item == null) return;
         t = Math.max(0, duration > 0 ? Math.min(t, duration - 1) : t);
-        if (direct) video.seekTo((int) (t * 1000));
+        if (seekable()) video.seekTo((int) (t * 1000));
         else open(t); // a converted stream can only start over from a new position
     }
 
@@ -291,10 +344,23 @@ public class PlayerActivity extends Activity {
             time.setText(label(t));
         }
         int buffered = video.getBufferPercentage();
-        if (direct && duration > 0) seek.setSecondaryProgress((int) (duration * buffered / 100));
+        if (seekable() && duration > 0) seek.setSecondaryProgress((int) (duration * buffered / 100));
         subs.setText(cues.isEmpty() ? "" : Vtt.textAt(cues, (long) (t * 1000)));
+        updateIntro(t);
         updatePlayIcon();
         if (video.isPlaying() && System.currentTimeMillis() - lastReport > 10000) report();
+    }
+
+    // "Skip Intro" while the theme song plays, or skip it automatically once if the user asked for that.
+    private void updateIntro(double t) {
+        boolean in = intro != null && PlaybackPlan.inIntro(t, intro.optDouble("start", 0), intro.optDouble("end", 0));
+        if (in && autoSkipIntro && !autoSkipped && video.isPlaying()) {
+            autoSkipped = true;
+            seekTo(intro.optDouble("end"));
+            Toast.makeText(this, R.string.intro_skipped, Toast.LENGTH_SHORT).show();
+            in = false;
+        }
+        skipIntro.setVisibility(in ? View.VISIBLE : View.GONE);
     }
 
     private String label(double t) { return PlaybackPlan.clock(t) + " / " + PlaybackPlan.clock(duration); }
@@ -412,8 +478,31 @@ public class PlayerActivity extends Activity {
         new AlertDialog.Builder(this).setTitle(R.string.audio).setSingleChoiceItems(labels, audioIndex, (d, which) -> {
             d.dismiss();
             audioIndex = which;
-            if (direct) selectDirectAudio(which);
+            if (direct && !hls) selectDirectAudio(which);
             else open(now());
+        }).show();
+    }
+
+    private void chooseQuality() {
+        JSONArray qs = qualities();
+        if (qs.length() == 0) return;
+        String[] ids = new String[qs.length() + 2];
+        String[] labels = new String[ids.length];
+        ids[0] = "original"; labels[0] = getString(R.string.quality_original);
+        ids[1] = "auto"; labels[1] = getString(R.string.quality_auto);
+        int checked = 0;
+        for (int i = 0; i < qs.length(); i++) {
+            ids[i + 2] = qs.optJSONObject(i).optString("id");
+            labels[i + 2] = qs.optJSONObject(i).optString("label");
+        }
+        for (int i = 0; i < ids.length; i++) if (ids[i].equals(quality)) checked = i;
+        new AlertDialog.Builder(this).setTitle(R.string.quality).setSingleChoiceItems(labels, checked, (d, which) -> {
+            d.dismiss();
+            if (ids[which].equals(quality)) return;
+            double at = now();
+            quality = ids[which];
+            hls = !"original".equals(quality);
+            open(at);
         }).show();
     }
 
@@ -519,6 +608,11 @@ public class PlayerActivity extends Activity {
         ui.removeCallbacksAndMessages(null);
         if (item != null && video.getCurrentPosition() > 0) report();
         video.stopPlayback();
+        // Stop the server's conversion right away instead of waiting for it to time out.
+        if (playback != null && hls) {
+            final String url = base + "/api/hls/" + playback.optString("sid");
+            new Thread(() -> Net.delete(url)).start();
+        }
         io.shutdown();
         super.onDestroy();
     }

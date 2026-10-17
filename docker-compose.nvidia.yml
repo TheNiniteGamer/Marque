@@ -1,0 +1,18 @@
+# NVIDIA graphics card for video conversion (NVENC). Used when GPU=nvidia is set in .env
+# (marquee.ps1 adds this file), or run:  docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d
+#
+# Windows: Docker Desktop with the WSL 2 backend and a current NVIDIA driver is all you need.
+# Linux: install the NVIDIA Container Toolkit (https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/).
+services:
+  marquee:
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      # "video" is the part that includes the hardware encoder.
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, video]

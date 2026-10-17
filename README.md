@@ -105,6 +105,34 @@ another drive or a synced folder (OneDrive/Dropbox) for extra safety.
   be undone.
 - **Kept forever:** backups you make yourself are never deleted automatically.
 
+### Graphics card (faster video conversion)
+
+Videos your browser can't play as they are get converted while you watch. A graphics card does
+this much faster than the CPU, and can handle several viewers at once.
+1. In `.env`, set `GPU=nvidia` (an NVIDIA card on Windows or Linux), or `GPU=intel` / `GPU=amd`
+   (built-in graphics, **Linux hosts only**: Docker Desktop on Windows can't pass these through).
+2. Run `start-marquee.bat` again.
+3. *Settings → Transcoding* shows which converter is in use, and why a card isn't used if it
+   couldn't start. Marquee tests each card with a short encode at start-up, and falls back to the
+   CPU on its own if the card fails during playback.
+
+On Windows, NVIDIA needs Docker Desktop's WSL 2 backend (the default) and a current NVIDIA
+driver; nothing needs to be installed inside WSL. Without Docker, ffmpeg needs to be built with
+NVENC / VAAPI / QSV support. Set `HWACCEL=nvenc|vaapi|qsv|software` to force a choice.
+
+### Casting to a TV
+
+- **Chromecast / Google TV:** the cast button appears in the player in **Chrome or Edge**, when
+  Marquee is opened as `http://localhost:32500` on the server PC or over HTTPS (Tailscale /
+  Cloudflare). Google only allows casting from secure pages, so it doesn't appear on plain
+  `http://192.168…` addresses.
+- The TV fetches the video from Marquee itself, so it needs an address it can reach.
+  `start-marquee.bat` passes this PC's network address automatically. If casting doesn't start,
+  set it in *Settings → Transcoding*, e.g. `http://192.168.1.20:32500`. A Tailscale address only
+  works for casting with `TAILSCALE_PUBLIC=true`, because the TV isn't on your tailnet.
+- **AirPlay:** Safari on Mac, iPhone and iPad shows its AirPlay button in the player.
+- Casting uses a signed link that lasts 12 hours and only opens that one video.
+
 ### Updating
 
 Marquee checks GitHub for new versions twice a day. Admins see a green dot on their avatar when an
@@ -139,6 +167,10 @@ never gets access to Docker itself.
 | **Browsing** | Home screen with Continue Watching, My List and Recently Added. Library grids with sort, genre filter, title filter, an Unwatched filter, adjustable poster size, an A–Z jump bar and **Shuffle**. Show pages with seasons, cast lists, clickable genres, and live search (press `/`). The scroll position is kept when you go back. |
 | **My List & menus** | A **⋯** menu on every poster: play, mark watched/unwatched, add to **My List** (a per-user watchlist), remove from Continue Watching, and, for admins, edit / fix match / refresh. |
 | **Streaming** | **Direct Play** with instant seeking when the browser supports the file. Otherwise ffmpeg converts it **on the fly**, copying the video when possible so only the audio is converted. Falls back automatically if direct play fails. |
+| **Quality / adaptive streaming** | Pick **Original**, **Auto** or a fixed 1080p / 720p / 480p / 360p in the player. *Auto* uses HLS adaptive streaming, which switches quality to suit the connection. It is the default when you're away from home. Segments are made on demand, so seeking anywhere starts within seconds. |
+| **Graphics card conversion** | NVIDIA (NVENC), Intel Quick Sync and Intel/AMD VAAPI, detected automatically, with fallback to the CPU. |
+| **Skip intro** | Theme songs are found automatically by comparing the audio of episodes in a season. A **Skip Intro** button appears during the intro (`S`), or turn on automatic skipping under *Account*. |
+| **Casting** | Chromecast / Google TV from Chrome and Edge, AirPlay from Safari. Includes subtitles, resume position and next episode. |
 | **Player** | Seek bar with hover time, skip, volume, **playback speed**, **picture-in-picture**, fullscreen, keyboard shortcuts, audio track choice, subtitles (sidecar `.srt`/`.vtt` or embedded), and an Up Next countdown. Autoplay and default subtitles can be set per browser under *Account*. |
 | **YouTube downloader** | Paste a video or playlist link, pick a library and quality. Saves an MP4 that plays directly, the thumbnail as its poster, and English subtitles when available, then adds it to the library. Has a queue with progress, cancel and retry, plus **Update yt-dlp** for when YouTube changes. |
 
@@ -187,6 +219,13 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `METADATA_LANGUAGE` | `en-US` | Default metadata language (also settable in *Settings → Metadata*) |
 | `TVMAZE_DISABLED` | — | Set to `1` to stop using TVmaze |
 | `TRANSCODE_PRESET` | `veryfast` | x264 preset used when video must be re-encoded |
+| `HWACCEL` | `auto` | Video converter: `auto`, `software`, `nvenc`, `qsv`, `vaapi` (also in *Settings → Transcoding*) |
+| `GPU` | — | `.env` only: `nvidia`, `intel` or `amd` passes the graphics card into Docker |
+| `VAAPI_DEVICE` | `/dev/dri/renderD128` | Graphics device for VAAPI / Quick Sync |
+| `TRANSCODE_DIR` | system temp folder | Where adaptive-streaming segments are written while you watch |
+| `HLS_MAX_SESSIONS` | `6` | Adaptive streams converted at the same time |
+| `CAST_URL` | — | Address cast devices use to reach Marquee |
+| `INTRO_SCAN_SECONDS` | `600` | How much of each episode's start is searched for the intro |
 | `YTDLP_PATH` | `yt-dlp` | Location of yt-dlp |
 | `DOWNLOAD_CONCURRENCY` | `1` | Downloads that run at the same time |
 | `FFMPEG_PATH` / `FFPROBE_PATH` | `ffmpeg` / `ffprobe` | Custom binary locations |
@@ -216,7 +255,7 @@ Press `?` anywhere for the full list.
 - **Anywhere:** `/` search · `g` then `h` go home · `g` then `l` My List
 - **Player:** `Space`/`K` play/pause · `←`/`J` back 10 s · `→`/`L` forward 30 s · `↑`/`↓` volume ·
   `M` mute · `F` fullscreen · `C` subtitles · `N` next episode · `<`/`>` speed ·
-  `P` picture-in-picture · `Esc` close
+  `P` picture-in-picture · `S` skip intro · `Esc` close
 
 ## Architecture
 
@@ -227,13 +266,18 @@ lib/downloader.js   yt-dlp job queue (progress parsing, cancel/retry, self-updat
 lib/parse.js        filename → title/year/show/season/episode, sidecar subs, local art
 lib/scanner.js      folder walking, ffprobe, show grouping, TMDB enrichment
 lib/media.js        ffprobe/ffmpeg: probe, thumbnails, direct-play check, live transcode, seek points
+lib/hwaccel.js      encoder choice (NVENC / QSV / VAAPI / x264), start-up tests, fallback
+lib/hls.js          adaptive streaming: VOD playlists, on-demand segment conversion per session
+lib/intro.js        skip-intro detection (Chromaprint audio fingerprints compared across a season)
+lib/tokens.js       signed, expiring playback links for cast devices and native players
 lib/library.js      per-user API shaping: hubs, continue watching / up next, search, watch state
 lib/metadata.js     metadata providers (TMDB, TVmaze), image downloads
 lib/matcher.js      matching, refresh/unmatch, user edits and custom artwork (edits > metadata > file name)
 lib/subtitles.js    SRT→VTT, cue time-shifting
 lib/store.js        JSON-file database with atomic writes
 public/             single-page web client (vanilla JS): app.js (browse/play), manage.js (accounts, downloads),
-                    extras.js (menus, edit/match dialogs, My List, metadata settings, shortcuts)
+                    extras.js (menus, edit/match dialogs, My List, settings panels, shortcuts), cast.js (Google Cast),
+                    vendor/hls.js (Apache-2.0, for adaptive streaming in browsers without native HLS)
 Dockerfile, docker-compose.yml, *.bat   container image and Windows helpers
 ```
 
@@ -248,5 +292,6 @@ isn't installed.
 
 ## Not yet supported
 
-Music and photo libraries, hardware-accelerated transcoding, image-based subtitles (PGS/VobSub),
-adaptive (HLS) streaming, and parental content ratings.
+Music and photo libraries, image-based subtitles (PGS/VobSub), and parental content ratings.
+Hardware conversion and casting are tested here only against ffmpeg and a simulated Cast SDK, so
+please report problems with specific graphics cards or TVs.

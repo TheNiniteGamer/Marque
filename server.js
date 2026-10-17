@@ -5,6 +5,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const { pipeline } = require('node:stream');
 const { Store, randomId } = require('./lib/store');
@@ -18,6 +19,10 @@ const metadata = require('./lib/metadata');
 const { Matcher } = require('./lib/matcher');
 const { Updater } = require('./lib/updates');
 const { Backups } = require('./lib/backup');
+const { HwAccel } = require('./lib/hwaccel');
+const hlsLib = require('./lib/hls');
+const { MediaTokens } = require('./lib/tokens');
+const { IntroDetector } = require('./lib/intro');
 
 const PORT = Number(process.env.PORT) || 32500;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -48,6 +53,11 @@ metadata.configure(() => store.data.settings);
 const matcher = new Matcher(store, path.join(DATA_DIR, 'images'));
 const scanner = new Scanner(store, DATA_DIR, matcher);
 const updater = new Updater(store, __dirname);
+const hwaccel = new HwAccel(store);
+const hls = new hlsLib.HlsManager(path.resolve(process.env.TRANSCODE_DIR || path.join(os.tmpdir(), `marquee-transcode-${PORT}`)), hwaccel);
+const tokens = new MediaTokens(store);
+const intro = new IntroDetector(store, DATA_DIR);
+scanner.on('done', (libraryId) => intro.enqueue({ libraryId }));
 const backups = new Backups(store, {
   dataDir: DATA_DIR,
   dir: path.resolve(process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups')),
@@ -268,6 +278,29 @@ function noteRemoteOrigin(req) {
   store.save();
 }
 
+// A signed playback link stands in for the login cookie, but only for its own item (and that
+// item's show artwork). Library access is still checked by the route as usual.
+function mediaTokenUser(token, id) {
+  const t = tokens.verify(token);
+  if (!t) return null;
+  const item = store.data.items[t.itemId];
+  if (!item || (id !== t.itemId && id !== item.showId)) return null;
+  return auth.byId(t.userId);
+}
+
+// Addresses a Chromecast on the network could use to reach Marquee. An admin-set address wins;
+// otherwise the browser falls back to the address it is using (unless that is "localhost").
+function castAddresses() {
+  const configured = (store.data.settings.castUrl || process.env.CAST_URL || '').replace(/\/+$/, '') || null;
+  const lan = [];
+  if (!fs.existsSync('/.dockerenv')) {
+    for (const list of Object.values(os.networkInterfaces())) {
+      for (const a of list || []) if (a.family === 'IPv4' && !a.internal && isPrivateIp(a.address)) lan.push(`http://${a.address}:${PORT}`);
+    }
+  }
+  return { configured, public: store.data.remoteSeen?.origin || null, lan };
+}
+
 // ---------- routes ----------
 // access: 'public' (no login), 'user' (any logged-in user), 'admin', 'download' (admin or users allowed to download)
 const routes = [];
@@ -349,7 +382,7 @@ route('DELETE', '/api/users/:id', async (req, res, { id }, url, me) => {
 // --- server + libraries ---
 route('GET', '/api/status', async (req, res, p, url, user) => json(res, 200, {
   name: 'Marquee', version: require('./package.json').version, hostname: os.hostname(),
-  metadataProviders: metadata.available(), ...scanner.status(), activeTranscodes: transcodes.size,
+  metadataProviders: metadata.available(), ...scanner.status(), activeTranscodes: transcodes.size + hls.active,
   downloader: downloader.status(),
   ...(user.role === 'admin' ? { dataDir: DATA_DIR, mediaRoot: MEDIA_ROOT, updateAvailable: updater.updateAvailable(), updating: updater.helper().state === 'updating' } : {}),
 }));
@@ -437,34 +470,100 @@ route('GET', '/api/items/:id/stream', async (req, res, { id }, url, user) => {
   const headers = url.searchParams.has('download')
     ? { 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(item.file))}` } : {};
   sendFile(req, res, item.file, { type: url.searchParams.has('download') ? 'application/octet-stream' : media.mimeFor(item.file), headers });
-});
+}, 'media');
 
 route('GET', '/api/items/:id/seekpoint', async (req, res, { id }, url, user) => {
   const item = getItem(id, user);
   const t = Math.max(0, Number(url.searchParams.get('t')) || 0);
   // Request the transcode with `t`; the stream's first frame will be at `start` (<= t).
   json(res, 200, { t, start: await media.seekPoint(item, t) });
-});
+}, 'media');
 
 route('GET', '/api/items/:id/transcode', async (req, res, { id }, url, user) => {
   const item = getItem(id, user);
   if (!fs.existsSync(item.file)) throw new HttpError(404, 'File not found on disk');
   const start = Math.max(0, Number(url.searchParams.get('start')) || 0);
   const audioIndex = Math.max(0, Number(url.searchParams.get('audio')) || 0);
-  const proc = media.transcode(item, { start, audioIndex });
-  transcodes.add(proc);
-  let stderr = '';
-  proc.stderr.on('data', (d) => { stderr = (stderr + d).slice(-2000); });
-  proc.on('close', (code, signal) => {
-    transcodes.delete(proc);
-    if (code && !signal) console.warn(`[transcode] ${path.basename(item.file)} exited ${code}: ${stderr.trim()}`);
+  let finished = false;
+  const run = (encoder) => {
+    const proc = media.transcode(item, { start, audioIndex, encoder });
+    transcodes.add(proc);
+    let stderr = '';
+    let sent = false;
+    proc.stderr.on('data', (d) => { stderr = (stderr + d).slice(-2000); });
+    const stop = () => { if (proc.exitCode === null) proc.kill('SIGKILL'); };
+    const onClose = () => { finished = true; stop(); };
+    res.once('close', onClose);
+    // Headers go out with the first bytes, so a graphics-card encoder that can't start can be
+    // swapped for the CPU before the player sees anything.
+    proc.stdout.once('data', (first) => {
+      sent = true;
+      res.writeHead(200, { 'Content-Type': 'video/mp4', 'Cache-Control': 'no-store', 'X-Transcode-Start': String(start), 'X-Encoder': encoder });
+      res.write(first);
+      pipeline(proc.stdout, res, () => stop());
+    });
+    proc.on('close', (code, signal) => {
+      transcodes.delete(proc);
+      res.off('close', onClose);
+      if (finished) return;
+      if (!sent && code && encoder !== 'software') {
+        hwaccel.reportFailure(encoder, stderr.trim().split('\n').pop());
+        return run('software');
+      }
+      if (code && !signal) console.warn(`[transcode] ${path.basename(item.file)} exited ${code}: ${stderr.trim()}`);
+      if (!sent && !res.headersSent) json(res, 500, { error: 'The server could not convert this video' });
+    });
+  };
+  run(hwaccel.active);
+}, 'media');
+
+// Everything a player needs to stream an item without the login cookie: a signed link token, a
+// fresh adaptive-streaming session id, the qualities on offer, and where cast devices can reach us.
+route('GET', '/api/items/:id/playback', async (req, res, { id }, url, user) => {
+  const item = getItem(id, user);
+  json(res, 200, {
+    token: tokens.create(item.id, user.id),
+    sid: crypto.randomBytes(12).toString('base64url'),
+    directPlay: media.canDirectPlay(item),
+    qualities: item.media?.video ? hlsLib.qualitiesFor(item).map(({ id: q, label, height, bitrate }) => ({ id: q, label, height, bitrate })) : [],
+    intro: item.intro?.end ? { start: item.intro.start, end: item.intro.end } : null,
+    cast: castAddresses(),
   });
-  const stop = () => { if (proc.exitCode === null) proc.kill('SIGKILL'); };
-  req.on('close', stop);
-  res.on('close', stop);
-  res.writeHead(200, { 'Content-Type': 'video/mp4', 'Cache-Control': 'no-store', 'X-Transcode-Start': String(start) });
-  pipeline(proc.stdout, res, () => stop());
 });
+
+// --- adaptive streaming (HLS) ---
+// ?sid=<session>&audio=<track>&q=<quality, to offer just one>&mt=<token>
+const hlsQuery = (url) => {
+  const q = new URLSearchParams();
+  for (const k of ['sid', 'audio', 'mt']) if (url.searchParams.get(k)) q.set(k, url.searchParams.get(k));
+  return `?${q}`;
+};
+const hlsItem = (id, user) => {
+  const item = getItem(id, user);
+  if (!item.media?.video || !item.media.duration) throw new HttpError(400, 'This file cannot be streamed');
+  if (!fs.existsSync(item.file)) throw new HttpError(404, 'File not found on disk');
+  return item;
+};
+const M3U8 = { 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-cache' };
+route('GET', '/api/items/:id/hls/master.m3u8', async (req, res, { id }, url, user) => {
+  const item = hlsItem(id, user);
+  const body = hlsLib.masterPlaylist(item, { only: url.searchParams.get('q') || null, query: hlsQuery(url) });
+  res.writeHead(200, M3U8); res.end(body);
+}, 'media');
+route('GET', '/api/items/:id/hls/:quality/index.m3u8', async (req, res, { id, quality }, url, user) => {
+  const body = hlsLib.mediaPlaylist(hlsItem(id, user), quality, { query: hlsQuery(url) });
+  res.writeHead(200, M3U8); res.end(body);
+}, 'media');
+route('GET', '/api/items/:id/hls/:quality/:segment', async (req, res, { id, quality, segment }, url, user) => {
+  const m = /^seg-(\d+)\.ts$/.exec(segment);
+  if (!m) throw new HttpError(404, 'Not found');
+  const file = await hls.segment(hlsItem(id, user), {
+    quality, sid: url.searchParams.get('sid'), audio: Math.max(0, Number(url.searchParams.get('audio')) || 0),
+  }, Number(m[1]));
+  sendFile(req, res, file, { type: 'video/mp2t', headers: { 'Cache-Control': 'no-cache' } });
+}, 'media');
+// The player closed: stop converting right away instead of waiting for the idle timeout.
+route('DELETE', '/api/hls/:sid', async (req, res, { sid }) => { hls.end(sid); json(res, 200, { ok: true }); });
 
 route('GET', '/api/items/:id/subtitles/:sub', async (req, res, { id, sub }, url, user) => {
   const item = getItem(id, user);
@@ -472,14 +571,14 @@ route('GET', '/api/items/:id/subtitles/:sub', async (req, res, { id, sub }, url,
   const vtt = subs.shiftVtt(await subtitleVtt(item, sub), offset);
   res.writeHead(200, { 'Content-Type': 'text/vtt; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(vtt);
-});
+}, 'media');
 
 route('GET', '/api/art/:kind/:id', async (req, res, { kind, id }, url, user) => {
   if (!['poster', 'backdrop', 'thumb'].includes(kind)) throw new HttpError(404, 'Unknown art kind');
   const file = await resolveArt(kind, id, user);
   if (!file) throw new HttpError(404, 'No artwork');
   sendFile(req, res, file, { headers: { 'Cache-Control': 'private, max-age=3600' } });
-});
+}, 'media');
 
 // --- settings (admin) ---
 const settingsView = () => {
@@ -490,6 +589,7 @@ const settingsView = () => {
     language: st.language || process.env.METADATA_LANGUAGE || 'en-US',
     autoMatch: st.autoMatch !== false,
     updateCheck: st.updateCheck !== false,
+    introDetection: st.introDetection !== false,
     providers: metadata.available(),
   };
 };
@@ -511,6 +611,10 @@ route('PATCH', '/api/settings', async (req, res) => {
   }
   if (body.autoMatch !== undefined) st.autoMatch = !!body.autoMatch;
   if (body.updateCheck !== undefined) st.updateCheck = !!body.updateCheck;
+  if (body.introDetection !== undefined) {
+    st.introDetection = !!body.introDetection;
+    if (st.introDetection) setImmediate(() => intro.enqueue());
+  }
   store.save();
   json(res, 200, settingsView());
 }, 'admin');
@@ -592,6 +696,35 @@ route('DELETE', '/api/meta/:id/art/:kind', async (req, res, { id, kind: artKind 
 }, 'admin');
 
 // --- updates (admin) ---
+// --- transcoding + skip intro (admin) ---
+const transcodingView = () => ({ ...hwaccel.status(), checking: !!hwaccel.checking, sessions: hls.status(), castUrl: store.data.settings.castUrl || '', castUrlFromEnv: process.env.CAST_URL || null });
+route('GET', '/api/transcoding', async (req, res) => json(res, 200, transcodingView()), 'admin');
+route('PATCH', '/api/transcoding', async (req, res) => {
+  const body = await readBody(req);
+  const st = store.data.settings;
+  if (body.castUrl !== undefined) {
+    const u = String(body.castUrl || '').trim().replace(/\/+$/, '');
+    if (u && !/^https?:\/\/[^/\s]+$/i.test(u)) throw new HttpError(400, 'Enter an address like http://192.168.1.20:32500');
+    if (u) st.castUrl = u; else delete st.castUrl;
+  }
+  let redetect = false;
+  if (body.hwaccel !== undefined) {
+    if (!['auto', ...Object.keys(require('./lib/hwaccel').KINDS)].includes(body.hwaccel)) throw new HttpError(400, 'Unknown encoder');
+    st.hwaccel = body.hwaccel;
+    redetect = true;
+  }
+  store.save();
+  if (redetect) await hwaccel.detect();
+  json(res, 200, transcodingView());
+}, 'admin');
+route('POST', '/api/transcoding/test', async (req, res) => { await hwaccel.detect(); json(res, 200, transcodingView()); }, 'admin');
+route('GET', '/api/intro', async (req, res) => json(res, 200, intro.status()), 'admin');
+route('POST', '/api/intro/detect', async (req, res) => {
+  const body = await readBody(req);
+  intro.enqueue({ libraryId: body.libraryId || null, force: !!body.force });
+  json(res, 202, intro.status());
+}, 'admin');
+
 route('GET', '/api/updates', async (req, res) => json(res, 200, updater.status()), 'admin');
 route('POST', '/api/updates/check', async (req, res) => { await updater.check(); json(res, 200, updater.status()); }, 'admin');
 route('POST', '/api/updates/apply', async (req, res, p, url, user) => { updater.requestUpdate(user); json(res, 202, updater.status()); }, 'admin');
@@ -690,17 +823,30 @@ const server = http.createServer(async (req, res) => {
   noteRemoteOrigin(req);
   try {
     if (url.pathname.startsWith('/api/')) {
+      if (req.method === 'OPTIONS') {
+        // CORS preflight from cast receivers fetching playback files with a signed link.
+        res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, HEAD', 'Access-Control-Allow-Headers': 'Range, Content-Type', 'Access-Control-Max-Age': '86400' });
+        return res.end();
+      }
       const method = req.method === 'HEAD' ? 'GET' : req.method;
       for (const r of routes) {
         const m = r.method === method && r.re.exec(url.pathname);
         if (!m) continue;
-        const user = auth.authenticate(req);
+        const params = Object.fromEntries(Object.entries(m.groups || {}).map(([k, v]) => [k, decodeURIComponent(v)]));
+        let user = auth.authenticate(req);
+        if (r.access === 'media') {
+          // Playback files also open with a signed link (Chromecast, AirPlay, the Android player).
+          if (!user && url.searchParams.has('mt')) user = mediaTokenUser(url.searchParams.get('mt'), params.id);
+          if (url.searchParams.has('mt')) {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+          }
+        }
         if (r.access !== 'public') {
           if (!user) throw Object.assign(new HttpError(401, 'Please sign in'), { setupRequired: !auth.hasUsers() });
           if (r.access === 'admin' && user.role !== 'admin') throw new HttpError(403, 'Admins only');
           if (r.access === 'download' && !canDownload(user)) throw new HttpError(403, 'You are not allowed to download videos');
         }
-        const params = Object.fromEntries(Object.entries(m.groups || {}).map(([k, v]) => [k, decodeURIComponent(v)]));
         return await r.handler(req, res, params, url, user);
       }
       throw new HttpError(404, 'Not found');
@@ -767,6 +913,7 @@ async function main() {
     process.exit(1);
   }
   applyAutoLibraries();
+  hwaccel.detect();
   server.listen(PORT, HOST, () => {
     console.log(`Marquee is running at http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
     console.log(`Data directory: ${DATA_DIR} · metadata: ${metadata.available().filter((p) => p.enabled).map((p) => p.name).join(', ') || 'off'}`);
@@ -781,6 +928,7 @@ async function main() {
 
 function shutdown() {
   for (const p of transcodes) p.kill('SIGKILL');
+  hls.stopAll();
   for (const p of downloader.procs.values()) p.kill('SIGTERM'); // interrupted downloads are requeued on next start
   store.flush();
   process.exit(0);

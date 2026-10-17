@@ -60,6 +60,30 @@ function Set-RemoteProfiles {
 }
 Set-RemoteProfiles
 
+# A graphics card for video conversion (GPU=nvidia, intel or amd in .env) adds its compose file.
+function Set-GpuFiles {
+  $files = @('docker-compose.yml')
+  switch ((Get-Setting 'GPU' '').ToLower()) {
+    'nvidia' { $files += 'docker-compose.nvidia.yml' }
+    'intel' { $files += 'docker-compose.intel-amd.yml' }
+    'amd' { $files += 'docker-compose.intel-amd.yml' }
+  }
+  $env:COMPOSE_PATH_SEPARATOR = ';'
+  $env:COMPOSE_FILE = ($files -join ';')
+}
+Set-GpuFiles
+
+# Chromecasts need an address on the home network; pass this PC's unless .env sets CAST_URL.
+function Set-CastUrl {
+  if ($DotEnv['CAST_URL']) { return }
+  try {
+    $ip = Get-NetIPConfiguration -ErrorAction Stop | Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' } |
+      Select-Object -First 1 | ForEach-Object { $_.IPv4Address.IPAddress } | Select-Object -First 1
+    if ($ip) { $env:CAST_URL = "http://${ip}:$Port" }
+  } catch { }
+}
+Set-CastUrl
+
 # ---------------------------------------------------------------- status shared with the web page
 $script:Log = New-Object System.Collections.ArrayList
 function Write-Utf8([string]$path, [string]$text) {
@@ -169,6 +193,8 @@ function Start-Marquee {
     $script:DotEnv = Read-DotEnv
     $script:Port = Get-Setting 'MARQUEE_PORT' '32500'
     Set-RemoteProfiles
+    Set-GpuFiles
+    Set-CastUrl
   }
   Say 'Building and starting Marquee (the first time takes a few minutes)...'
   Invoke-Compose @('up', '-d', '--build') 'Starting Marquee'

@@ -520,8 +520,8 @@ async function viewSearch({ query, seq }) {
 async function viewSettings({ query, seq }) {
   view.onclick = null;
   if (state.user.role !== 'admin') { location.replace('#/account'); return; }
-  const [, s, users, metaSettings, updates, remote, backupInfo] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'),
-    api('/api/settings'), api('/api/updates'), api('/api/remote'), api('/api/backups')]);
+  const [, s, users, metaSettings, updates, remote, backupInfo, transcoding, introInfo] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'),
+    api('/api/settings'), api('/api/updates'), api('/api/remote'), api('/api/backups'), api('/api/transcoding'), api('/api/intro')]);
   state.status = s;
   const libs = state.libraries;
   if (!setView(seq, html`
@@ -551,6 +551,7 @@ async function viewSettings({ query, seq }) {
     ${metadataSection(metaSettings)}
     ${usersSection(users)}
     ${remoteSection(remote)}
+    ${transcodingSection(transcoding, introInfo, metaSettings)}
     ${backupsSection(backupInfo)}
     ${updates.check?.status === 'available' || updates.helper.state === 'updating' ? '' : updatesSection(updates)}
     <h2 style="margin:28px 0 12px">Server</h2>
@@ -570,6 +571,7 @@ async function viewSettings({ query, seq }) {
   bindUpdatesSection(updates);
   bindRemoteSection();
   bindBackupsSection();
+  bindTranscodingSection();
   if (query.get('section')) $(`#${query.get('section')}`)?.scrollIntoView({ block: 'start' });
   if ($('#scan-all')) $('#scan-all').onclick = async () => { await api('/api/scan', { method: 'POST' }); toast('Scanning all libraries…'); pollStatus(); };
   if (query.get('add')) showLibraryForm();
@@ -703,37 +705,70 @@ async function viewPlay({ params: [id], query }) {
   if (!query.has('t') && item.progress && !item.progress.watched && item.progress.position > 15) start = item.progress.position;
   // Inside the Android app, videos open in the phone's native player.
   if (window.MarqueeAndroid?.play) {
-    window.MarqueeAndroid.play(JSON.stringify({ id: item.id, start, autoplayNext: store.get('autoplayNext', true), subsOn: store.get('subsOn', false) }));
+    window.MarqueeAndroid.play(JSON.stringify({ id: item.id, start, autoplayNext: store.get('autoplayNext', true), subsOn: store.get('subsOn', false),
+      autoSkipIntro: store.get('autoSkipIntro', false), quality: store.get('quality', '') }));
     if (state.inAppNav) history.back(); else location.replace(`#/item/${item.id}`);
     return;
   }
   player = new Player(item, start);
 }
 
+const loadedScripts = new Map();
+function loadScript(src) {
+  if (!loadedScripts.has(src)) {
+    loadedScripts.set(src, new Promise((resolve) => {
+      const s = document.createElement('script');
+      s.src = src; s.onload = () => resolve(true); s.onerror = () => resolve(false);
+      document.head.append(s);
+    }));
+  }
+  return loadedScripts.get(src);
+}
+
+// On the home network the original file is best; from outside, adaptive streaming copes with
+// slower connections. Users can pick a fixed choice on the Account page or in the player.
+function defaultQuality() {
+  const q = store.get('quality', '');
+  if (q) return q;
+  const h = location.hostname;
+  const home = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1)/.test(h) || h.endsWith('.local') || !h.includes('.');
+  return home ? 'original' : 'auto';
+}
+
 class Player {
   constructor(item, start) {
     this.item = item;
     this.duration = item.duration || 0;
+    this.quality = defaultQuality();
     this.mode = item.directPlay ? 'direct' : 'transcode';
     this.offset = 0;
     this.audio = 0;
     this.subId = store.get('subsOn', false) ? this.pickDefaultSub() : null;
     this.lastReported = -1;
     this.dragging = false;
+    this.pb = null;          // signed links + streaming session from /playback
+    this.hls = null;
+    this.casting = false;
+    this.castTime = 0;
 
     const it = item;
     const subtitle = it.type === 'episode' ? [it.showTitle, epLabel(it)].filter(Boolean).join(' · ') : it.year;
     this.root = document.createElement('div');
     this.root.className = 'player';
     this.root.innerHTML = html`
-      <video playsinline preload="auto" crossorigin="anonymous"></video>
+      <video playsinline preload="auto" crossorigin="anonymous" x-webkit-airplay="allow"></video>
       <div class="p-subs" aria-live="off"></div>
       <div class="p-spinner"></div>
+      <div class="p-cast-msg" hidden><div class="p-cast-icon">📺</div><div>Playing on <b class="p-cast-name"></b></div>
+        <button class="btn small" data-a="cast-stop">Stop casting</button></div>
+      <button class="btn p-skip" data-a="skip-intro" hidden>Skip Intro ⏭</button>
       <div class="p-top">
         <button class="p-btn" data-a="close" title="Back (Esc)">←</button>
         <div class="p-title">${it.title}<small>${subtitle}</small></div>
         <span class="p-spacer"></span>
         <span class="p-badge" id="p-mode"></span>
+        <button class="p-btn" data-a="airplay" title="AirPlay" hidden>⇪</button>
+        <button class="p-btn" data-a="cast" title="Cast to a TV" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M1 18v3h3a3 3 0 0 0-3-3zm0-4v2a5 5 0 0 1 5 5h2a7 7 0 0 0-7-7zm0-4v2a9 9 0 0 1 9 9h2A11 11 0 0 0 1 10zm20-7H3a2 2 0 0 0-2 2v3h2V5h18v14h-7v2h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/></svg></button>
       </div>
       <div class="p-bottom">
         <div class="p-seek"><div class="p-buffer"></div><input type="range" class="p-range" min="0" step="0.1" value="0" aria-label="Seek"><div class="p-hover-time" hidden></div></div>
@@ -745,6 +780,7 @@ class Player {
           <span class="p-spacer"></span>
           ${it.audioTracks.length > 1 ? html`<select data-a="audio" class="p-hide-sm" title="Audio">${it.audioTracks.map((t) => html`<option value="${t.index}">${t.label}</option>`)}</select>` : ''}
           ${it.subtitles.length ? html`<select data-a="subs" title="Subtitles (c)"><option value="">Subtitles off</option>${it.subtitles.map((s) => html`<option value="${s.id}" ${s.id === this.subId ? 'selected' : ''}>${s.label}</option>`)}</select>` : ''}
+          <select data-a="quality" title="Quality" hidden></select>
           <button class="p-btn" data-a="mute" title="Mute (m)">🔊</button>
           <input type="range" class="p-volume" min="0" max="1" step="0.05" aria-label="Volume">
           <select data-a="speed" class="p-speed" title="Playback speed (&lt; &gt;)">${[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((r) => html`<option value="${r}" ${r === 1 ? 'selected' : ''}>${r === 1 ? 'Normal' : `${r}×`}</option>`)}</select>
@@ -761,9 +797,41 @@ class Player {
     this.v.muted = store.get('muted', false);
     $('.p-volume', this.root).value = this.v.volume;
     this.bind();
-    this.load(start);
+    this.spinner(true);
+    this.init(start);
     this.reportTimer = setInterval(() => this.report(), 10_000);
     document.title = `${it.type === 'episode' ? `${it.showTitle} - ` : ''}${it.title} · Marquee`;
+  }
+
+  async init(start) {
+    try { this.pb = await api(`/api/items/${this.item.id}/playback`); } catch { this.pb = null; }
+    if (!this.root.isConnected) return;
+    const qs = this.pb?.qualities || [];
+    // Adaptive streams are H.264 + AAC; a browser without H.264 (some Linux builds) can't use them.
+    const h264 = window.MediaSource?.isTypeSupported?.('video/mp4; codecs="avc1.640028,mp4a.40.2"');
+    this.canHls = qs.length > 0 && (this.nativeHls() || (h264 && await loadScript('/vendor/hls.light.min.js') && window.Hls?.isSupported()));
+    if (!this.root.isConnected) return;
+    if (this.canHls) {
+      const sel = $('[data-a=quality]', this.root);
+      sel.innerHTML = html`<option value="original">Original</option><option value="auto">Auto</option>${qs.map((q) => html`<option value="${q.id}">${q.label}</option>`)}`.s;
+      if (!['original', 'auto', ...qs.map((q) => q.id)].includes(this.quality)) {
+        // A fixed quality above this video's resolution: use the best one it has.
+        this.quality = /^\d+p$/.test(this.quality) ? qs[0].id : 'original';
+      }
+      sel.value = this.quality;
+      sel.hidden = false;
+    } else this.quality = 'original';
+    this.setModeFromQuality();
+    this.setupRemote();
+    if (Cast.state() === 'CONNECTED') this.startCasting(start);
+    else this.load(start);
+  }
+
+  nativeHls() { return !!this.v.canPlayType('application/vnd.apple.mpegurl') && !/Android/.test(navigator.userAgent); }
+
+  setModeFromQuality() {
+    if (this.quality !== 'original' && this.canHls) this.mode = 'hls';
+    else this.mode = this.item.directPlay && this.audio === 0 && !this.directFailed ? 'direct' : 'transcode';
   }
 
   pickDefaultSub() {
@@ -772,19 +840,42 @@ class Player {
     return (subs.find((s) => s.lang && s.lang.toLowerCase().startsWith(lang)) || subs[0])?.id || null;
   }
 
-  get time() { return this.offset + (this.v.currentTime || 0); }
-  get total() { return this.mode === 'direct' && Number.isFinite(this.v.duration) && this.v.duration > 0 ? this.v.duration : this.duration; }
+  // Signed links work without the login cookie, which AirPlay and cast devices don't have.
+  tok(sep = '?') { return this.pb?.token ? `${sep}mt=${encodeURIComponent(this.pb.token)}` : ''; }
+
+  hlsUrl({ sid = this.pb.sid, quality = this.quality } = {}) {
+    return `/api/items/${this.item.id}/hls/master.m3u8?sid=${sid}&audio=${this.audio}${quality !== 'auto' ? `&q=${quality}` : ''}${this.tok('&')}`;
+  }
+
+  get time() {
+    if (this.casting) return this.castTime;
+    // Until the new source has loaded, the position is where we asked it to start.
+    if (this.pendingStart != null && this.v.readyState < 1) return this.pendingStart;
+    return this.offset + (this.v.currentTime || 0);
+  }
+  get total() {
+    return this.mode !== 'transcode' && !this.casting && Number.isFinite(this.v.duration) && this.v.duration > 0 ? this.v.duration : this.duration;
+  }
+
+  destroyHls() { if (this.hls) { this.hls.destroy(); this.hls = null; } }
 
   load(t) {
     t = Math.max(0, this.duration ? Math.min(t, this.duration - 2) : t);
     this.spinner(true);
+    this.pendingStart = t;
+    if (this.mode !== 'hls') this.destroyHls();
     if (this.mode === 'direct') {
       this.offset = 0;
       const seekTo = () => { this.v.currentTime = t; };
       if (!this.v.src.includes('/stream')) {
-        this.v.src = `/api/items/${this.item.id}/stream`;
+        this.v.src = `/api/items/${this.item.id}/stream${this.tok()}`;
         this.v.addEventListener('loadedmetadata', seekTo, { once: true });
       } else seekTo();
+      this.applySubs();
+      this.v.play().catch(() => this.spinner(false));
+    } else if (this.mode === 'hls') {
+      this.offset = 0;
+      this.loadHls(t);
     } else {
       // Copied video streams can only start on a keyframe; ask where the stream will really begin.
       const seq = (this.loadSeq = (this.loadSeq || 0) + 1);
@@ -794,22 +885,86 @@ class Player {
       api(`/api/items/${this.item.id}/seekpoint?t=${req}`).catch(() => ({ start: t })).then(({ start }) => {
         if (seq !== this.loadSeq || !this.root.isConnected) return;
         this.offset = start;
-        this.v.src = `/api/items/${this.item.id}/transcode?start=${req}&audio=${this.audio}`;
+        this.v.src = `/api/items/${this.item.id}/transcode?start=${req}&audio=${this.audio}${this.tok('&')}`;
         this.applySubs();
         this.v.play().catch(() => this.spinner(false));
       });
     }
-    $('#p-mode', this.root).textContent = this.mode === 'direct' ? 'Direct Play' : 'Transcoding';
-    if (this.mode === 'direct') {
-      this.applySubs();
-      this.v.play().catch(() => this.spinner(false));
-    }
+    this.updateBadge();
     this.updateTime();
+  }
+
+  loadHls(t) {
+    this.destroyHls();
+    const src = this.hlsUrl();
+    if (window.Hls?.isSupported() && !this.nativeHls()) {
+      const Hls = window.Hls;
+      const slow = { maxTimeToFirstByteMs: 60_000, maxLoadTimeMs: 120_000, timeoutRetry: { maxNumRetry: 2, retryDelayMs: 0, maxRetryDelayMs: 0 }, errorRetry: { maxNumRetry: 4, retryDelayMs: 1000, maxRetryDelayMs: 8000 } };
+      const hls = (this.hls = new Hls({ startPosition: t, maxBufferLength: 40, backBufferLength: 60, fragLoadPolicy: { default: slow }, enableWorker: true }));
+      this.hlsRecoveries = 0;
+      hls.on(Hls.Events.ERROR, (ev, d) => {
+        if (!d.fatal || hls !== this.hls) return;
+        if (this.hlsRecoveries++ < 2 && hls.levels?.length) {
+          if (d.type === Hls.ErrorTypes.MEDIA_ERROR) return hls.recoverMediaError();
+          if (d.type === Hls.ErrorTypes.NETWORK_ERROR) return hls.startLoad();
+        }
+        this.hlsFailed(d.details);
+      });
+      hls.on(Hls.Events.LEVEL_SWITCHED, () => this.updateBadge());
+      hls.loadSource(src);
+      hls.attachMedia(this.v);
+    } else {
+      // Safari plays HLS itself (and can AirPlay it).
+      this.v.src = src;
+      this.v.addEventListener('loadedmetadata', () => { if (t > 0) this.v.currentTime = t; }, { once: true });
+    }
+    this.applySubs();
+    this.v.play().catch(() => this.spinner(false));
+  }
+
+  hlsFailed(why) {
+    console.warn('Adaptive streaming failed:', why);
+    const t = this.time;
+    this.destroyHls();
+    toast('Adaptive streaming failed — switching to Original quality');
+    this.quality = 'original';
+    const sel = $('[data-a=quality]', this.root); if (sel) sel.value = 'original';
+    this.setModeFromQuality();
+    this.load(t);
+  }
+
+  setQuality(q) {
+    const t = this.time;
+    const wasPaused = this.v.paused;
+    this.quality = q;
+    store.set('quality', q);
+    this.setModeFromQuality();
+    if (this.casting) { this.startCasting(t); return; }
+    this.v.removeAttribute('src');
+    this.load(t);
+    if (wasPaused) this.v.addEventListener('playing', () => this.v.pause(), { once: true });
+  }
+
+  updateBadge() {
+    const el = $('#p-mode', this.root);
+    if (!el) return;
+    if (this.mode === 'hls') {
+      const lvl = this.hls?.levels?.[this.hls.currentLevel];
+      const name = lvl ? `${lvl.height}p` : this.quality === 'auto' ? '' : this.quality;
+      el.textContent = this.quality === 'auto' ? `Auto${name ? ` · ${name}` : ''}` : `Converting · ${name}`;
+    } else el.textContent = this.mode === 'direct' ? 'Direct Play' : 'Transcoding';
   }
 
   seek(t) {
     t = Math.max(0, Math.min(t, this.total || t));
-    if (this.mode === 'direct') { this.v.currentTime = t; return; }
+    if (this.casting) {
+      Cast.player.currentTime = t;
+      Cast.controller.seek();
+      this.castTime = t;
+      this.updateTime();
+      return;
+    }
+    if (this.mode !== 'transcode') { this.v.currentTime = t; return; }
     // Within what the current transcode has already buffered? Seek locally instead of restarting ffmpeg.
     const b = this.v.buffered;
     const local = t - this.offset;
@@ -818,6 +973,8 @@ class Player {
     this.load(t);
     if (wasPaused) this.v.addEventListener('playing', () => this.v.pause(), { once: true });
   }
+
+  subUrl(id, offset = 0) { return `/api/items/${this.item.id}/subtitles/${id}?offset=${offset.toFixed(2)}${this.tok('&')}`; }
 
   applySubs() {
     $$('track', this.v).forEach((t) => t.remove());
@@ -829,7 +986,7 @@ class Player {
     track.kind = 'subtitles';
     track.label = sub?.label || 'Subtitles';
     if (sub?.lang) track.srclang = sub.lang;
-    track.src = `/api/items/${this.item.id}/subtitles/${this.subId}?offset=${this.offset.toFixed(2)}`;
+    track.src = this.subUrl(this.subId, this.offset);
     track.default = true;
     this.v.append(track);
     // Cues are rendered in our own overlay (track mode "hidden") so they can move clear of the controls.
@@ -844,7 +1001,7 @@ class Player {
     });
   }
 
-  spinner(on) { $('.p-spinner', this.root).hidden = !on; }
+  spinner(on) { $('.p-spinner', this.root).hidden = !on || this.casting; }
 
   updateTime() {
     const t = this.time, total = this.total;
@@ -854,6 +1011,21 @@ class Player {
       this.range.style.setProperty('--pct', `${pct(t, total)}%`);
     }
     $('.p-time', this.root).textContent = `${fmtClock(this.dragging ? Number(this.range.value) : t)} / ${fmtClock(total)}`;
+    this.updateIntro(t);
+  }
+
+  // "Skip Intro" while the detected theme song plays (or skip it automatically, once).
+  updateIntro(t) {
+    const intro = this.item.intro;
+    const btn = $('[data-a=skip-intro]', this.root);
+    const inIntro = !!intro && t >= intro.start && t < intro.end - 1;
+    if (inIntro && store.get('autoSkipIntro', false) && !this.autoSkipped && (this.casting || !this.v.paused)) {
+      this.autoSkipped = true;
+      this.seek(intro.end);
+      toast('Skipped the intro');
+      return;
+    }
+    btn.hidden = !inIntro;
   }
 
   updateBuffer() {
@@ -868,19 +1040,132 @@ class Player {
   showControls() {
     this.root.classList.remove('idle');
     clearTimeout(this.idleTimer);
-    if (!this.v.paused) this.idleTimer = setTimeout(() => this.root.classList.add('idle'), 3000);
+    if (!this.paused) this.idleTimer = setTimeout(() => this.root.classList.add('idle'), 3000);
   }
 
-  toggle() { if (this.v.paused) this.v.play().catch(() => {}); else this.v.pause(); }
+  get paused() { return this.casting ? !!Cast.player?.isPaused : this.v.paused; }
+
+  toggle() {
+    if (this.casting) return Cast.controller.playOrPause();
+    if (this.v.paused) this.v.play().catch(() => {}); else this.v.pause();
+  }
 
   report(force = false) {
     const t = this.time;
-    if (!force && (this.v.paused || Math.abs(t - this.lastReported) < 2)) return;
+    if (!force && (this.paused || Math.abs(t - this.lastReported) < 2)) return;
+    if (this.casting && t <= 0) return;
     this.lastReported = t;
     fetch(`/api/items/${this.item.id}/progress`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
       body: JSON.stringify({ position: t }),
     }).catch(() => {});
+  }
+
+  // ---- casting (Chromecast) and AirPlay ----
+  setupRemote() {
+    if (window.WebKitPlaybackTargetAvailabilityEvent) {
+      this.v.addEventListener('webkitplaybacktargetavailabilitychanged', (e) => { $('[data-a=airplay]', this.root).hidden = e.availability !== 'available'; });
+    }
+    if (!Cast.supported()) return;
+    Cast.load().then((ok) => {
+      if (!ok || !this.root.isConnected) return;
+      const btn = $('[data-a=cast]', this.root);
+      const refresh = (state) => {
+        btn.hidden = state === 'NO_DEVICES_AVAILABLE' || !state;
+        btn.classList.toggle('on', state === 'CONNECTED');
+        // Disconnected from the TV (or the TV stopped): carry on here.
+        if (this.casting && state !== 'CONNECTED') this.stopCasting(false);
+      };
+      this.offCast = Cast.on(refresh);
+      refresh(Cast.state());
+    });
+  }
+
+  // Where the TV can reach Marquee: the admin's setting, else this page's address unless it is
+  // "localhost" (meaningless to a TV), else this computer's network address.
+  castBase() {
+    const c = this.pb?.cast || {};
+    if (c.configured) return c.configured;
+    if (!/^(localhost|127\.|\[::1\])/.test(location.hostname)) return location.origin;
+    return c.lan?.[0] || null;
+  }
+
+  async castClicked() {
+    if (Cast.state() === 'CONNECTED' && this.casting) { Cast.disconnect(); return; }
+    if (!(await Cast.connect())) return;
+    this.startCasting(this.time);
+  }
+
+  async startCasting(t) {
+    const base = this.castBase();
+    if (!base || !this.pb) {
+      toast('Your TV can’t reach “localhost”. Set the address for cast devices in Settings → Transcoding.', true);
+      return this.load(t);
+    }
+    const it = this.item;
+    // MP4 files TVs can play are sent as they are; everything else as adaptive streaming.
+    const direct = it.directPlay && this.audio === 0 && /\.(mp4|m4v)$/i.test(it.fileName || '') && (this.quality === 'original' || !this.canHls);
+    const media = direct
+      ? { url: `${base}/api/items/${it.id}/stream${this.tok()}`, contentType: 'video/mp4' }
+      : { url: base + this.hlsUrl({ sid: `${this.pb.sid}c`, quality: this.quality === 'original' || !/^\d+p$/.test(this.quality) ? 'auto' : this.quality }), contentType: 'application/x-mpegURL', hls: true };
+    if (!direct && !this.pb.qualities.length) { toast('This video can’t be cast', true); return this.load(t); }
+    this.v.pause();
+    this.destroyHls();
+    this.v.removeAttribute('src');
+    this.v.load();
+    this.casting = true;
+    this.castTime = t;
+    this.root.classList.add('casting');
+    $('.p-cast-msg', this.root).hidden = false;
+    $('.p-cast-name', this.root).textContent = Cast.deviceName();
+    $('#p-mode', this.root).textContent = `Casting${media.hls ? '' : ' · Original'}`;
+    $('[data-a=toggle]', this.root).textContent = '❚❚';
+    this.spinner(false);
+    this.bindCastEvents();
+    try {
+      await Cast.play({
+        ...media, title: it.title, subtitle: it.type === 'episode' ? [it.showTitle, epLabel(it)].filter(Boolean).join(' · ') : it.year,
+        image: `${base}/api/art/backdrop/${it.id}${this.tok()}`, duration: this.duration, startTime: t,
+        subtitles: it.subtitles.map((s) => ({ id: s.id, label: s.label, lang: s.lang, url: base + this.subUrl(s.id) })), activeSub: this.subId,
+      });
+    } catch (err) {
+      toast(`Casting failed${err?.code ? ` (${err.code})` : ''}`, true);
+      this.stopCasting(false);
+    }
+  }
+
+  bindCastEvents() {
+    if (this.castBound) return;
+    this.castBound = true;
+    const T = window.cast.framework.RemotePlayerEventType;
+    this.castHandlers = {
+      [T.CURRENT_TIME_CHANGED]: () => { if (!this.casting) return; this.castTime = Cast.player.currentTime || 0; this.updateTime(); },
+      [T.IS_PAUSED_CHANGED]: () => { if (!this.casting) return; $('[data-a=toggle]', this.root).textContent = Cast.player.isPaused ? '▶' : '❚❚'; this.report(true); this.showControls(); },
+      [T.PLAYER_STATE_CHANGED]: () => {
+        if (!this.casting) return;
+        // IDLE after playing to the end: same as reaching the end locally.
+        if (Cast.player.playerState === 'IDLE' && this.duration && this.castTime > this.duration - 5) { this.castFinished = true; this.onEnded(); }
+      },
+    };
+    for (const [ev, fn] of Object.entries(this.castHandlers)) Cast.controller.addEventListener(ev, fn);
+  }
+
+  unbindCastEvents() {
+    if (!this.castBound) return;
+    for (const [ev, fn] of Object.entries(this.castHandlers)) Cast.controller.removeEventListener(ev, fn);
+    this.castBound = false;
+  }
+
+  stopCasting(disconnect = true) {
+    if (!this.casting) return;
+    this.report(true);
+    const t = this.castTime;
+    this.casting = false;
+    this.unbindCastEvents();
+    this.root.classList.remove('casting');
+    $('.p-cast-msg', this.root).hidden = true;
+    if (disconnect) Cast.disconnect();
+    if (!this.castFinished && this.root.isConnected) { this.v.removeAttribute('src'); this.load(t); }
   }
 
   close() {
@@ -895,6 +1180,7 @@ class Player {
   onEnded() {
     this.report(true);
     if (!this.item.next) return setTimeout(() => this.close(), 800);
+    if ($('.p-upnext', this.root)) return;
     const n = this.item.next;
     const auto = store.get('autoplayNext', true);
     let left = 10;
@@ -931,7 +1217,7 @@ class Player {
   }
 
   togglePip() {
-    if (!document.pictureInPictureEnabled) return;
+    if (!document.pictureInPictureEnabled || this.casting) return;
     if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
     else this.v.requestPictureInPicture().catch(() => {});
   }
@@ -943,27 +1229,33 @@ class Player {
 
   bind() {
     const v = this.v;
-    v.addEventListener('timeupdate', () => this.updateTime());
+    v.addEventListener('timeupdate', () => { if (!this.casting) this.updateTime(); });
+    v.addEventListener('loadedmetadata', () => { if (this.mode === 'transcode') this.pendingStart = null; });
+    v.addEventListener('seeked', () => { this.pendingStart = null; });
+    v.addEventListener('playing', () => { this.pendingStart = null; });
     v.addEventListener('progress', () => this.updateBuffer());
     v.addEventListener('waiting', () => this.spinner(true));
     v.addEventListener('seeking', () => this.spinner(true));
     for (const ev of ['playing', 'canplay', 'seeked', 'pause']) v.addEventListener(ev, () => { if (ev !== 'pause' || v.readyState >= 3) this.spinner(false); });
     v.addEventListener('play', () => { $('[data-a=toggle]', this.root).textContent = '❚❚'; this.showControls(); });
-    v.addEventListener('pause', () => { $('[data-a=toggle]', this.root).textContent = '▶'; this.showControls(); this.report(true); });
-    v.addEventListener('ended', () => this.onEnded());
+    v.addEventListener('pause', () => { if (this.casting) return; $('[data-a=toggle]', this.root).textContent = '▶'; this.showControls(); this.report(true); });
+    v.addEventListener('ended', () => { if (!this.casting) this.onEnded(); });
     v.addEventListener('volumechange', () => {
       store.set('volume', v.volume); store.set('muted', v.muted);
       $('[data-a=mute]', this.root).textContent = v.muted || v.volume === 0 ? '🔇' : '🔊';
       $('.p-volume', this.root).value = v.muted ? 0 : v.volume;
     });
     v.addEventListener('error', () => {
-      if (!v.error || !v.getAttribute('src')) return;
+      if (!v.error || !v.getAttribute('src') || this.casting) return;
       if (this.mode === 'direct') {
         // Browser refused the original file: fall back to server-side transcoding.
         toast('Direct play failed — switching to transcoding');
         const t = this.time;
+        this.directFailed = true;
         this.mode = 'transcode';
         this.load(t);
+      } else if (this.mode === 'hls') {
+        this.hlsFailed(v.error.message || `media error ${v.error.code}`);
       } else {
         this.spinner(false);
         const msg = document.createElement('div');
@@ -986,12 +1278,25 @@ class Player {
       else if (a === 'next') this.playNext();
       else if (a === 'cancel-next') { clearInterval(this.upNextTimer); $('.p-upnext', this.root)?.remove(); }
       else if (a === 'pip') this.togglePip();
+      else if (a === 'skip-intro' && this.item.intro) { this.seek(this.item.intro.end); $('[data-a=skip-intro]', this.root).hidden = true; }
+      else if (a === 'cast') this.castClicked();
+      else if (a === 'cast-stop') this.stopCasting(true);
+      else if (a === 'airplay') v.webkitShowPlaybackTargetPicker?.();
     });
     this.root.addEventListener('change', (e) => {
       const a = e.target.dataset.a;
-      if (a === 'subs') { this.subId = e.target.value || null; store.set('subsOn', !!this.subId); this.applySubs(); }
+      if (a === 'subs') {
+        this.subId = e.target.value || null; store.set('subsOn', !!this.subId);
+        if (this.casting) Cast.setSubtitle(this.item.subtitles.findIndex((s) => s.id === this.subId));
+        else this.applySubs();
+      }
       if (a === 'speed') this.setSpeed(Number(e.target.value));
-      if (a === 'audio') { this.audio = Number(e.target.value); if (this.mode === 'direct') this.mode = 'transcode'; this.load(this.time); }
+      if (a === 'quality') this.setQuality(e.target.value);
+      if (a === 'audio') {
+        this.audio = Number(e.target.value);
+        this.setModeFromQuality();
+        if (this.casting) this.startCasting(this.time); else this.load(this.time);
+      }
     });
     $('.p-volume', this.root).addEventListener('input', (e) => { v.volume = Number(e.target.value); v.muted = v.volume === 0; });
 
@@ -1025,6 +1330,7 @@ class Player {
         ArrowDown: () => { v.volume = Math.max(0, v.volume - 0.05); },
         m: () => { v.muted = !v.muted; }, f: () => this.toggleFullscreen(),
         c: () => { const sel = $('[data-a=subs]', this.root); if (!sel) return; sel.value = this.subId ? '' : (this.pickDefaultSub() || ''); sel.dispatchEvent(new Event('change', { bubbles: true })); },
+        s: () => { const b = $('[data-a=skip-intro]', this.root); if (b && !b.hidden) b.click(); },
         Escape: () => { if (!document.fullscreenElement) this.close(); },
         n: () => { if (this.item.next) this.playNext(); },
         p: () => this.togglePip(),
@@ -1041,11 +1347,20 @@ class Player {
     clearInterval(this.upNextTimer);
     clearTimeout(this.idleTimer);
     document.removeEventListener('keydown', this.onKey);
+    this.offCast?.();
+    if (this.casting) {
+      // Leaving the player stops the video on the TV but stays connected, so the next one casts too.
+      this.unbindCastEvents();
+      if (!this.castFinished) Cast.controller?.stop();
+      this.casting = false;
+    }
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     if (document.pictureInPictureElement === this.v) document.exitPictureInPicture().catch(() => {});
+    this.destroyHls();
     this.v.pause();
     this.v.removeAttribute('src'); // stops the download and lets the server kill ffmpeg
     this.v.load();
+    if (this.pb?.sid && this.quality !== 'original') fetch(`/api/hls/${this.pb.sid}`, { method: 'DELETE', keepalive: true }).catch(() => {});
     this.root.remove();
     document.title = 'Marquee';
   }

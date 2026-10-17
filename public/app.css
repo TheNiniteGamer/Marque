@@ -440,3 +440,15 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 @media (max-width: 640px) { .bk-row { grid-template-columns: 1fr auto; } .bk-row .muted { display: none; } .bk-actions { grid-column: 1 / -1; justify-content: flex-start; } }
 .bk-keep { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
 .bk-keep .input { width: 70px; }
+
+/* skip intro + casting */
+.p-skip { position: absolute; right: 24px; bottom: 110px; z-index: 3; background: rgba(20,22,26,.9); border: 1px solid rgba(255,255,255,.35); font-weight: 600; padding: 10px 18px; }
+.p-skip:hover { background: #fff; color: #000; }
+.player .p-btn.on { color: var(--accent); }
+.p-cast-msg { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; text-align: center; background: #000; font-size: 18px; }
+.p-cast-msg[hidden] { display: none; }
+.p-cast-icon { font-size: 64px; }
+.player.casting video { visibility: hidden; }
+.player.casting.idle { cursor: default; }
+.player.casting.idle .p-top, .player.casting.idle .p-bottom { opacity: 1; pointer-events: auto; }
+@media (max-width: 640px) { .p-skip { bottom: 130px; right: 12px; } }

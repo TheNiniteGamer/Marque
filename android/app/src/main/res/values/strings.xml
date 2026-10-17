@@ -33,4 +33,10 @@
     <string name="normal">Normal</string>
     <string name="audio">Audio</string>
     <string name="back">Back</string>
+    <string name="skip_intro">Skip Intro</string>
+    <string name="intro_skipped">Skipped the intro</string>
+    <string name="quality">Quality</string>
+    <string name="quality_original">Original</string>
+    <string name="quality_auto">Auto (adjusts to your connection)</string>
+    <string name="adaptive_failed">Adaptive streaming didn\'t work on this phone — playing the original instead.</string>
 </resources>

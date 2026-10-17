@@ -1,0 +1,13 @@
+# Intel or AMD graphics for video conversion (VAAPI / Quick Sync). Used when GPU=intel or GPU=amd
+# is set in .env, or run:  docker compose -f docker-compose.yml -f docker-compose.intel-amd.yml up -d
+#
+# Linux hosts only: Docker Desktop on Windows and macOS can't pass these graphics chips to containers
+# (on Windows, an NVIDIA card is the only option).
+services:
+  marquee:
+    devices:
+      - /dev/dri:/dev/dri
+    # The device files belong to the host's "render" group; its number differs between systems.
+    # Find it with:  getent group render   and set RENDER_GID in .env if it isn't 105.
+    group_add:
+      - "${RENDER_GID:-105}"
