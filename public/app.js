@@ -520,7 +520,8 @@ async function viewSearch({ query, seq }) {
 async function viewSettings({ query, seq }) {
   view.onclick = null;
   if (state.user.role !== 'admin') { location.replace('#/account'); return; }
-  const [, s, users, metaSettings, updates] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'), api('/api/settings'), api('/api/updates')]);
+  const [, s, users, metaSettings, updates, remote, backupInfo] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'),
+    api('/api/settings'), api('/api/updates'), api('/api/remote'), api('/api/backups')]);
   state.status = s;
   const libs = state.libraries;
   if (!setView(seq, html`
@@ -549,6 +550,8 @@ async function viewSettings({ query, seq }) {
     ${updates.check?.status === 'available' || updates.helper.state === 'updating' ? updatesSection(updates) : ''}
     ${metadataSection(metaSettings)}
     ${usersSection(users)}
+    ${remoteSection(remote)}
+    ${backupsSection(backupInfo)}
     ${updates.check?.status === 'available' || updates.helper.state === 'updating' ? '' : updatesSection(updates)}
     <h2 style="margin:28px 0 12px">Server</h2>
     <div class="panel">
@@ -565,7 +568,9 @@ async function viewSettings({ query, seq }) {
   bindUsersSection(users);
   bindMetadataSection();
   bindUpdatesSection(updates);
-  if (query.get('section') === 'updates') $('#updates')?.scrollIntoView({ block: 'start' });
+  bindRemoteSection();
+  bindBackupsSection();
+  if (query.get('section')) $(`#${query.get('section')}`)?.scrollIntoView({ block: 'start' });
   if ($('#scan-all')) $('#scan-all').onclick = async () => { await api('/api/scan', { method: 'POST' }); toast('Scanning all libraries…'); pollStatus(); };
   if (query.get('add')) showLibraryForm();
   view.onclick = async (e) => {

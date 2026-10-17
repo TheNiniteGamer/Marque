@@ -50,6 +50,16 @@ $Repo = Get-Setting 'MARQUEE_REPO' 'TheNiniteGamer/Marque'
 $Branch = Get-Setting 'MARQUEE_BRANCH' 'main'
 $Port = Get-Setting 'MARQUEE_PORT' '32500'
 
+# Remote access helpers are switched on just by filling in their key in .env.
+function Set-RemoteProfiles {
+  $profiles = @()
+  if ($DotEnv['TS_AUTHKEY']) { $profiles += 'tailscale' }
+  if ($DotEnv['CLOUDFLARE_TUNNEL_TOKEN']) { $profiles += 'cloudflare' }
+  if ($DotEnv['COMPOSE_PROFILES']) { $profiles = @($DotEnv['COMPOSE_PROFILES'] -split ',') }
+  $env:COMPOSE_PROFILES = ($profiles -join ',')
+}
+Set-RemoteProfiles
+
 # ---------------------------------------------------------------- status shared with the web page
 $script:Log = New-Object System.Collections.ArrayList
 function Write-Utf8([string]$path, [string]$text) {
@@ -158,6 +168,7 @@ function Start-Marquee {
     }
     $script:DotEnv = Read-DotEnv
     $script:Port = Get-Setting 'MARQUEE_PORT' '32500'
+    Set-RemoteProfiles
   }
   Say 'Building and starting Marquee (the first time takes a few minutes)...'
   Invoke-Compose @('up', '-d', '--build') 'Starting Marquee'
@@ -168,6 +179,12 @@ function Start-Marquee {
   Write-Host "  Marquee is running:  http://localhost:$Port"
   Write-Host "  Other devices on your network:  http://$($env:COMPUTERNAME):$Port"
   Write-Host '  (allow Docker through Windows Firewall if your phone/TV cannot connect)'
+  if ($env:COMPOSE_PROFILES -match 'tailscale') {
+    Write-Host "  Away from home:  https://$(Get-Setting 'TS_HOSTNAME' 'marquee').<your-tailnet>.ts.net  (see Settings > Remote access)"
+  }
+  if ($env:COMPOSE_PROFILES -match 'cloudflare') {
+    Write-Host '  Away from home:  the public hostname you set up for your Cloudflare Tunnel'
+  }
   Write-Host ''
   Offer-Helper
 }

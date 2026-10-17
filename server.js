@@ -17,6 +17,7 @@ const lib = require('./lib/library');
 const metadata = require('./lib/metadata');
 const { Matcher } = require('./lib/matcher');
 const { Updater } = require('./lib/updates');
+const { Backups } = require('./lib/backup');
 
 const PORT = Number(process.env.PORT) || 32500;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -47,6 +48,13 @@ metadata.configure(() => store.data.settings);
 const matcher = new Matcher(store, path.join(DATA_DIR, 'images'));
 const scanner = new Scanner(store, DATA_DIR, matcher);
 const updater = new Updater(store, __dirname);
+const backups = new Backups(store, {
+  dataDir: DATA_DIR,
+  dir: path.resolve(process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups')),
+  label: process.env.BACKUP_LABEL || null,
+  isBusy: () => scanner.status().scanning,
+  onRestored: () => { auth.prune(); scanner.enqueueAll(); },
+});
 const auth = new Auth(store);
 const downloader = new Downloader(store, { onFinished: (job) => scanner.enqueue(job.libraryId) });
 const transcodes = new Set();
@@ -225,7 +233,40 @@ async function subtitleVtt(item, subId) {
   throw new HttpError(404, 'Subtitle not found');
 }
 
-const clientIp = (req) => req.socket.remoteAddress || 'unknown';
+// Private / local addresses: the home network, this machine, Docker networks, and Tailscale (100.64.0.0/10).
+function isPrivateIp(ip) {
+  const a = String(ip || '').replace(/^::ffff:/, '');
+  if (a === '::1' || a === '127.0.0.1' || a.startsWith('127.')) return true;
+  if (/^(10\.|192\.168\.|169\.254\.)/.test(a)) return true;
+  const m = /^172\.(\d+)\./.exec(a); if (m && +m[1] >= 16 && +m[1] <= 31) return true;
+  const t = /^100\.(\d+)\./.exec(a); if (t && +t[1] >= 64 && +t[1] <= 127) return true;
+  return /^f[cd]/i.test(a) || /^fe80:/i.test(a);
+}
+// Behind Tailscale serve / Cloudflare Tunnel / a reverse proxy, the real visitor is the last address
+// the proxy added to X-Forwarded-For. Only trusted when the request came from a local proxy.
+const TRUST_PROXY = process.env.TRUST_PROXY !== '0';
+function clientIp(req) {
+  const direct = req.socket.remoteAddress || 'unknown';
+  const xff = req.headers['x-forwarded-for'];
+  if (TRUST_PROXY && xff && isPrivateIp(direct)) {
+    const parts = String(xff).split(',').map((x) => x.trim()).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1];
+  }
+  return direct;
+}
+const viaHttpsProxy = (req) => String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+
+// Remember the address Marquee is reached at from outside (shown in Settings → Remote access).
+function noteRemoteOrigin(req) {
+  if (!viaHttpsProxy(req)) return;
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase();
+  if (!host || /^(localhost|\d+\.\d+\.\d+\.\d+|\[)/.test(host)) return;
+  const origin = `https://${host}`;
+  const prev = store.data.remoteSeen;
+  if (prev?.origin === origin && Date.now() - prev.at < 10 * 60_000) return;
+  store.data.remoteSeen = { origin, at: Date.now(), via: host.endsWith('.ts.net') ? 'Tailscale' : 'tunnel' };
+  store.save();
+}
 
 // ---------- routes ----------
 // access: 'public' (no login), 'user' (any logged-in user), 'admin', 'download' (admin or users allowed to download)
@@ -244,6 +285,8 @@ route('GET', '/api/auth/me', async (req, res, p, url, user) => {
 
 route('POST', '/api/auth/setup', async (req, res) => {
   if (auth.hasUsers()) throw new HttpError(409, 'Setup is already complete');
+  // Before an admin exists, anyone reaching the page could claim the server; only allow that at home.
+  if (!isPrivateIp(clientIp(req))) throw new HttpError(403, 'Create the first account from your home network, then sign in from anywhere.');
   const body = await readBody(req);
   const user = await auth.createUser({ username: body.username, password: body.password, role: 'admin' });
   // Watch history recorded before accounts existed (flat itemId -> progress) belongs to the first admin.
@@ -553,6 +596,33 @@ route('GET', '/api/updates', async (req, res) => json(res, 200, updater.status()
 route('POST', '/api/updates/check', async (req, res) => { await updater.check(); json(res, 200, updater.status()); }, 'admin');
 route('POST', '/api/updates/apply', async (req, res, p, url, user) => { updater.requestUpdate(user); json(res, 202, updater.status()); }, 'admin');
 
+// --- remote access (admin) ---
+route('GET', '/api/remote', async (req, res) => json(res, 200, {
+  configured: (process.env.REMOTE_ACCESS || '').split(',').map((x) => x.trim()).filter(Boolean),
+  seen: store.data.remoteSeen || null,
+  viaRemoteNow: viaHttpsProxy(req),
+}), 'admin');
+
+// --- backups (admin) ---
+route('GET', '/api/backups', async (req, res) => json(res, 200, backups.status()), 'admin');
+route('POST', '/api/backups', async (req, res) => json(res, 201, await backups.create('manual')), 'admin');
+route('PATCH', '/api/backups/settings', async (req, res) => { backups.update(await readBody(req)); json(res, 200, backups.status()); }, 'admin');
+// A fresh backup straight to the browser (nothing is stored on the server).
+route('GET', '/api/backups/download', async (req, res) => {
+  const name = `marquee-backup-${new Date().toISOString().slice(0, 10)}.tar.gz`;
+  res.writeHead(200, { 'Content-Type': 'application/gzip', 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store' });
+  pipeline(backups.stream(), res, () => {});
+}, 'admin');
+route('GET', '/api/backups/file/:name', async (req, res, { name }) => {
+  sendFile(req, res, backups.file(name), { type: 'application/gzip', headers: { 'Content-Disposition': `attachment; filename="${name}"` } });
+}, 'admin');
+route('DELETE', '/api/backups/file/:name', async (req, res, { name }) => { backups.remove(name); json(res, 200, backups.status()); }, 'admin');
+route('POST', '/api/backups/file/:name/restore', async (req, res, { name }) => {
+  json(res, 200, await backups.restore(fs.createReadStream(backups.file(name))));
+}, 'admin');
+// Restore from an uploaded file (the raw .tar.gz as the request body).
+route('POST', '/api/backups/restore', async (req, res) => json(res, 200, await backups.restore(req)), 'admin');
+
 // --- my list + continue watching ---
 route('GET', '/api/watchlist', async (req, res, p, url, user) => json(res, 200, lib.watchlist(store, user)));
 route('PUT', '/api/watchlist/:id', async (req, res, { id }, url, user) => { getTarget(id, user); lib.setWatchlist(store, user, id, true); json(res, 200, { ok: true }); });
@@ -606,8 +676,18 @@ function serveStatic(req, res, pathname) {
   sendFile(req, res, file, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'same-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+};
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
+  if (viaHttpsProxy(req)) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
+  noteRemoteOrigin(req);
   try {
     if (url.pathname.startsWith('/api/')) {
       const method = req.method === 'HEAD' ? 'GET' : req.method;
@@ -695,6 +775,7 @@ async function main() {
   });
   scanner.enqueueAll();
   updater.startSchedule();
+  backups.startSchedule();
   if (SCAN_INTERVAL_MIN > 0) setInterval(() => scanner.enqueueAll(), SCAN_INTERVAL_MIN * 60_000).unref();
 }
 

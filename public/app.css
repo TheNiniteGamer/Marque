@@ -428,3 +428,15 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .restart-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(17,19,23,.94); display: grid; place-content: center; text-align: center; gap: 4px; padding: 20px; }
 .restart-overlay .spinner { margin: 0 auto 16px; }
 #updates { scroll-margin-top: calc(var(--topbar) + 16px); }
+
+/* ---------- remote access + backups ---------- */
+.remote-url { font-size: 15px; padding: 6px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; overflow-wrap: anywhere; }
+.bk-settings { margin-top: 4px; gap: 8px 12px; }
+.bk-settings .input { height: 32px; }
+.bk-list { display: grid; border-top: 1px solid var(--line); }
+.bk-row { display: grid; grid-template-columns: 1.4fr auto 80px auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.bk-actions { justify-content: flex-end; }
+#backups, #remote-panel { scroll-margin-top: calc(var(--topbar) + 16px); }
+@media (max-width: 640px) { .bk-row { grid-template-columns: 1fr auto; } .bk-row .muted { display: none; } .bk-actions { grid-column: 1 / -1; justify-content: flex-start; } }
+.bk-keep { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.bk-keep .input { width: 70px; }

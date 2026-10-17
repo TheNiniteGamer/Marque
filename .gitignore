@@ -6,3 +6,4 @@ media/
 *.log
 control/
 .marquee-commit
+backups/

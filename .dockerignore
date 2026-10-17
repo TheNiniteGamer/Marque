@@ -11,3 +11,6 @@ scripts
 control
 .marquee-commit
 *.ps1
+backups
+remote
+android

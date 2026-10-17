@@ -63,6 +63,48 @@ still listed in `.env`.
 
 **Changing other settings later:** edit `.env`, then run `start-marquee.bat` again.
 
+### Watching away from home
+
+Marquee is only reachable on your home network until you switch on one of these. Nothing is opened
+to the internet unless you do.
+
+**Tailscale (recommended, free).** This gives you a private HTTPS address that only your own
+devices can use, with no router setup.
+1. Create an account at [tailscale.com](https://tailscale.com). In the admin console, open
+   **DNS** and turn on **HTTPS Certificates**.
+2. Create an auth key under **Settings → Keys** and paste it into `.env` as `TS_AUTHKEY=…`.
+3. Run `start-marquee.bat`. Marquee joins your tailnet as `marquee`.
+4. Install the Tailscale app on your phone or laptop and sign in. Then open
+   `https://marquee.<your-tailnet>.ts.net`. The exact address is in the Tailscale app under
+   *Machines*, and in **Settings → Remote access** once you've used it. The Android app works with
+   it too.
+
+To let people **without** Tailscale in (e.g. family on their own devices), set
+`TAILSCALE_PUBLIC=true`. This uses Tailscale Funnel, so anyone with the link can reach your sign-in
+page. You may also need to allow Funnel in Tailscale's access controls.
+
+**Cloudflare Tunnel (for your own domain).** In Cloudflare Zero Trust, create a tunnel and add a
+public hostname pointing to `http://marquee:32500`. Paste the tunnel token into `.env` as
+`CLOUDFLARE_TUNNEL_TOKEN=…`, then run `start-marquee.bat`.
+
+Either way, the extra container starts just because its key is set in `.env`. To turn it off,
+clear the key and run `start-marquee.bat` again.
+
+### Backups
+
+Marquee backs itself up every night at 03:00 into the `backups` folder next to
+`docker-compose.yml`. You can change the folder with `BACKUP_DIR` in `.env`, and point it at
+another drive or a synced folder (OneDrive/Dropbox) for extra safety.
+- **What's in a backup:** users and passwords, watch history, My List, libraries, your edits and
+  custom artwork, downloaded posters, and settings. Your media files are not included.
+- **Format:** each backup is a `.tar.gz` you can open with 7-Zip.
+- **Settings → Backups:** change the time, how many automatic backups to keep (default 7), back up
+  now, download a backup, or restore one. You can restore from the list or by uploading a file,
+  e.g. to move Marquee to a new PC.
+- **Safety copy:** before restoring, Marquee saves a backup of how things are now, so a restore can
+  be undone.
+- **Kept forever:** backups you make yourself are never deleted automatically.
+
 ### Updating
 
 Marquee checks GitHub for new versions twice a day. Admins see a green dot on their avatar when an
@@ -156,11 +198,16 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
   your other devices.
 - Non-admin users only see the libraries shared with them. Folder paths, the folder picker and
   server settings are admin-only.
-- Marquee serves plain HTTP, which is fine on a home network. To reach it from the internet, put it
-  behind an HTTPS reverse proxy (Caddy, nginx, Cloudflare Tunnel, Tailscale…) rather than
-  forwarding the port directly.
+- Marquee serves plain HTTP, which is fine on a home network. To reach it from outside, use the
+  built-in Tailscale or Cloudflare Tunnel options (see *Watching away from home*) or another HTTPS
+  reverse proxy. Don't forward the port on your router.
+- Behind a tunnel, Marquee uses the real visitor's address (from `X-Forwarded-For`, trusted only
+  from local proxies) for sign-in rate limits. It marks cookies `Secure` and sends HSTS. The very
+  first admin account can only be created from the home network or your own Tailscale devices.
+  Set `TRUST_PROXY=0` if Marquee isn't behind a proxy you control.
+- Backups contain password hashes and your TMDB key: keep them somewhere private.
 - On Linux hosts (not needed on Windows), the container runs as uid 999. Make sure that user can
-  write to your YouTube folder (`chown 999 /path/to/youtube`).
+  write to your YouTube and backups folders (`chown 999 /path/to/youtube /path/to/backups`).
 
 ## Keyboard shortcuts
 

@@ -21,6 +21,11 @@ services:
       # Update checks look at this GitHub repository; the helper and the app talk through /control.
       MARQUEE_REPO: ${MARQUEE_REPO:-TheNiniteGamer/Marque}
       CONTROL_DIR: /control
+      # Nightly backups land in a folder you can see on your PC (BACKUP_DIR in .env).
+      BACKUP_DIR: /backups
+      BACKUP_LABEL: ${BACKUP_DIR:-./backups}
+      # Which remote-access helpers are switched on (filled in by marquee.ps1 from your .env).
+      REMOTE_ACCESS: ${COMPOSE_PROFILES:-}
       # Libraries built from the folders below. Extra drives (…_2, …_3, …_4) are only included when set
       # in .env, and folders added there later are attached to the existing library on the next start.
       AUTO_LIBRARIES: >-
@@ -37,6 +42,7 @@ services:
       - marquee-data:/data
       # Shared with the update helper on your PC (marquee.ps1 Watch).
       - ./control:/control
+      - "${BACKUP_DIR:-./backups}:/backups"
       # Your media. On Windows use forward slashes, e.g. MOVIES_DIR=D:/Movies
       - "${MOVIES_DIR:-./media/movies}:/media/movies"
       - "${MOVIES_DIR_2:-./media/unused/movies2}:/media/movies2"
@@ -49,5 +55,38 @@ services:
       # Where the YouTube downloader saves videos.
       - "${YOUTUBE_DIR:-./media/youtube}:/media/youtube"
 
+  # ---- Watching away from home (optional; switched on by filling in a key in .env) ----
+
+  # Tailscale: private HTTPS address like https://marquee.your-tailnet.ts.net for your own devices.
+  tailscale:
+    image: tailscale/tailscale:stable
+    profiles: [tailscale]
+    container_name: marquee-tailscale
+    hostname: ${TS_HOSTNAME:-marquee}
+    restart: unless-stopped
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_HOSTNAME: ${TS_HOSTNAME:-marquee}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"          # no special network permissions needed (works on Docker Desktop)
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      # TAILSCALE_PUBLIC=true also lets people without Tailscale reach it (Tailscale Funnel).
+      - ./remote/tailscale-serve${TAILSCALE_PUBLIC:+-funnel}.json:/config/serve.json:ro
+    depends_on: [marquee]
+
+  # Cloudflare Tunnel: your own domain, e.g. https://movies.example.com (needs a Cloudflare account + domain).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: [cloudflare]
+    container_name: marquee-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on: [marquee]
+
 volumes:
   marquee-data:
+  tailscale-state:

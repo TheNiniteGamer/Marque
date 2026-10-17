@@ -531,3 +531,136 @@ function noteUpdateAvailable(status) {
 async function refreshStatus() {
   try { state.status = await api('/api/status'); noteUpdateAvailable(state.status); } catch { /* ignore */ }
 }
+
+// ---------- Settings → Remote access ----------
+function remoteSection(r) {
+  const names = { tailscale: 'Tailscale', cloudflare: 'Cloudflare Tunnel' };
+  const on = r.configured.map((x) => names[x] || x);
+  let body;
+  if (r.seen) {
+    body = html`
+      <div class="upd-state ok">✓ Marquee is reachable away from home</div>
+      <div class="row" style="margin-top:6px">
+        <code class="remote-url">${r.seen.origin}</code>
+        <button class="btn small" id="copy-remote" data-url="${r.seen.origin}">Copy</button>
+      </div>
+      <div class="muted" style="font-size:13px">Via ${r.seen.via === 'Tailscale' ? 'Tailscale' : 'your tunnel'} · last used ${fmtDate(r.seen.at)}.
+        Use this address in the Android app or any browser${r.seen.via === 'Tailscale' ? ' on a device signed in to Tailscale' : ''}.</div>`;
+  } else if (on.length) {
+    body = html`
+      <div class="upd-state">${on.join(' and ')} ${on.length > 1 ? 'are' : 'is'} switched on</div>
+      <div class="muted" style="font-size:14px;margin-top:4px">${r.configured.includes('tailscale')
+        ? html`Open <code>https://marquee.&lt;your-tailnet&gt;.ts.net</code> on a phone or laptop signed in to Tailscale. The exact address is in the Tailscale app under <b>Machines</b>. Once you've used it, it will show here.`
+        : 'Open the public hostname you set up in Cloudflare. Once you have used it, it will show here.'}</div>`;
+  } else {
+    body = html`
+      <div class="upd-state">Only available at home</div>
+      <p class="muted" style="font-size:14px;margin:6px 0 0">To watch from anywhere, the easiest way is <b>Tailscale</b> (free).
+        Create an account, paste an auth key into <code>TS_AUTHKEY</code> in the <code>.env</code> file next to <code>start-marquee.bat</code>,
+        then run <b>start-marquee.bat</b> again. Your phone also needs the Tailscale app. The README has step-by-step instructions, including a Cloudflare Tunnel option.</p>`;
+  }
+  return html`
+    <h2 style="margin:28px 0 12px">Remote access</h2>
+    <div class="panel" id="remote-panel">${body}
+      ${r.viaRemoteNow ? html`<p class="muted" style="font-size:13px;margin:10px 0 0">🔒 You're connected remotely over HTTPS right now.</p>` : ''}
+    </div>`;
+}
+
+function bindRemoteSection() {
+  const b = $('#copy-remote');
+  if (b) b.onclick = () => navigator.clipboard?.writeText(b.dataset.url).then(() => toast('Address copied'), () => toast(b.dataset.url));
+}
+
+// ---------- Settings → Backups ----------
+const KIND = { auto: 'Automatic', manual: 'Manual', 'pre-restore': 'Before restore' };
+function backupsSection(b) {
+  const s = b.settings;
+  return html`
+    <h2 style="margin:28px 0 12px" id="backups">Backups</h2>
+    <div class="panel form" id="backups-panel" style="max-width:none">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div>
+          <div class="upd-state ${b.backups.length ? 'ok' : ''}">${b.backups.length ? `✓ Last backup ${fmtDate(b.backups[0].createdAt)}` : 'No backups yet'}</div>
+          <div class="muted" style="font-size:13px;margin-top:4px">Saved in <code>${b.dirLabel}</code> on the server PC.
+            Includes users, watch history, My List, libraries, your edits, artwork and settings.</div>
+        </div>
+        <div class="row">
+          <button class="btn small primary" id="bk-now">Back up now</button>
+          <a class="btn small" href="/api/backups/download" download>⤓ Download a backup</a>
+          <label class="btn small file-btn">⤒ Restore from a file…<input type="file" id="bk-upload" accept=".gz,.tgz,application/gzip" hidden></label>
+        </div>
+      </div>
+      <div class="row bk-settings">
+        <label class="check"><input type="checkbox" id="bk-auto" ${s.auto ? 'checked' : ''}> Back up automatically every day at</label>
+        <input class="input" type="time" id="bk-time" value="${s.time}" style="width:120px">
+        <span class="bk-keep muted">keep the last <input class="input" type="number" id="bk-keep" min="1" max="365" value="${s.keep}" aria-label="Number of automatic backups to keep"> automatic backups</span>
+      </div>
+      ${b.backups.length ? html`<div class="bk-list">${b.backups.map((x) => html`
+        <div class="bk-row" data-name="${x.name}">
+          <span>${fmtDate(x.createdAt)}</span><span class="chip">${KIND[x.kind] || x.kind}</span><span class="muted">${fmtSize(x.size)}</span>
+          <span class="row bk-actions">
+            <a class="btn small" href="/api/backups/file/${encodeURIComponent(x.name)}" download>Download</a>
+            <button class="btn small" data-bk="restore">Restore</button>
+            <button class="btn small danger" data-bk="delete" aria-label="Delete backup">✕</button>
+          </span>
+        </div>`)}</div>` : ''}
+    </div>`;
+}
+
+async function runRestore(doIt, label) {
+  if (!confirm(`Restore ${label}?\n\nUsers, watch history, libraries, edits and settings will be replaced by the ones in the backup. A safety backup of how things are now is made first.`)) return;
+  showRestarting();
+  $('#restart-overlay h2').textContent = 'Restoring backup…';
+  $('#restart-overlay p').textContent = 'This page will reload when it is done.';
+  try {
+    const r = await doIt();
+    sessionStorage.setItem('marquee:restored', r.restoredFrom || '1');
+    location.reload();
+  } catch (err) {
+    $('#restart-overlay')?.remove();
+    toast(err.message, true);
+  }
+}
+
+function bindBackupsSection() {
+  const patch = async (body) => {
+    try { await api('/api/backups/settings', { method: 'PATCH', body }); toast('Saved'); } catch (err) { toast(err.message, true); router(); }
+  };
+  $('#bk-auto').onchange = (e) => patch({ auto: e.target.checked });
+  $('#bk-time').onchange = (e) => patch({ time: e.target.value });
+  $('#bk-keep').onchange = (e) => patch({ keep: Number(e.target.value) });
+  $('#bk-now').onclick = async (e) => {
+    e.target.disabled = true; e.target.textContent = 'Backing up…';
+    try { const b = await api('/api/backups', { method: 'POST' }); toast(`Backup saved (${fmtSize(b.size)})`); } catch (err) { toast(err.message, true); }
+    router();
+  };
+  $('#bk-upload').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    runRestore(async () => {
+      const res = await fetch('/api/backups/restore', { method: 'POST', headers: { 'Content-Type': 'application/gzip' }, body: file });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Restore failed');
+      return data;
+    }, `the backup “${file.name}”`);
+    e.target.value = '';
+  };
+  $('#backups-panel').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-bk]');
+    if (!b) return;
+    const name = b.closest('[data-name]').dataset.name;
+    if (b.dataset.bk === 'delete') {
+      if (!confirm('Delete this backup?')) return;
+      try { await api(`/api/backups/file/${encodeURIComponent(name)}`, { method: 'DELETE' }); router(); } catch (err) { toast(err.message, true); }
+    } else {
+      const row = b.closest('[data-name]').querySelector('span').textContent;
+      runRestore(() => api(`/api/backups/file/${encodeURIComponent(name)}/restore`, { method: 'POST' }), `the backup from ${row}`);
+    }
+  });
+}
+
+// After a restore the page reloads; say what happened.
+if (sessionStorage.getItem('marquee:restored')) {
+  sessionStorage.removeItem('marquee:restored');
+  setTimeout(() => toast('Backup restored'), 800);
+}
