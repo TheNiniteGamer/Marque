@@ -78,6 +78,9 @@ function itemMenu(anchor, x, { ctx } = {}) {
     { label: '✕  Remove from this collection', hidden: !ctx?.startsWith('collection:'), onClick: async () => {
       await api(`/api/collections/${ctx.slice(11)}/members/${x.id}`, { method: 'DELETE' }); toast('Removed from the collection'); router();
     } },
+    { label: '★  Use as the collection’s cover', hidden: !ctx?.startsWith('collection:'), onClick: async () => {
+      await api(`/api/collections/${ctx.slice(11)}`, { method: 'PATCH', body: { cover: x.id } }); toast('Cover changed'); router();
+    } },
     { label: '💬  Find subtitles…', hidden: !state.status?.subtitleSearch || !['movie', 'episode'].includes(x.type), onClick: () => openSubtitleSearch(x.id, () => router()) },
     { label: '⏭  Edit intro & credits…', hidden: !admin || x.type !== 'episode', onClick: () => openIntroEditor(x.id) },
     { label: '⌕  Fix match…', hidden: !admin || x.type === 'episode' || x.type === 'extra', onClick: () => openMatcher(x.id) },
@@ -861,12 +864,45 @@ function problemsSection(p) {
 }
 
 // ---------- collections ----------
+// "Group into collections": titles that belong to a collection are shown as that collection's card
+// (in the first collection they're in). Each group keeps what the library view sorts and filters by.
+function groupByCollection(items, cols) {
+  const owner = new Map();
+  for (const c of cols) if (!c.hidden) for (const id of c.memberIds || []) if (!owner.has(id)) owner.set(id, c);
+  const out = [];
+  const groups = new Map();
+  for (const x of items) {
+    const c = owner.get(x.id);
+    if (!c) { out.push(x); continue; }
+    if (!groups.has(c.id)) {
+      const g = { type: 'collection', id: c.id, title: c.name, name: c.name, sortTitle: null, kind: c.kind, cover: c.cover, hidden: false, members: [] };
+      groups.set(c.id, g);
+      out.push(g);
+    }
+    groups.get(c.id).members.push(x);
+  }
+  for (const g of groups.values()) {
+    const m = g.members;
+    Object.assign(g, {
+      count: m.length,
+      addedAt: Math.max(...m.map((x) => x.lastAddedAt || x.addedAt || 0)),
+      year: Math.min(...m.map((x) => x.year || 9999)) === 9999 ? null : Math.min(...m.map((x) => x.year || 9999)),
+      rating: Math.max(...m.map((x) => x.rating || 0)) || null,
+      duration: m.reduce((n, x) => n + (x.duration || 0), 0),
+      genres: [...new Set(m.flatMap((x) => x.genres || []))],
+    });
+  }
+  return out;
+}
+const groupingOn = () => store.get('groupCollections', true);
+
 function collectionCard(c) {
-  return html`<div class="card">
+  return html`<div class="card ${c.hidden ? 'is-hidden' : ''}">
     <div class="art"><a class="cover" href="#/collection/${c.id}">
       ${c.cover ? html`<img loading="lazy" src="${artUrl('poster', c.cover)}" alt="${c.name}">` : html`<div class="collection-empty">▦</div>`}</a>
       <span class="badge" title="Titles in this collection">${c.count}</span></div>
-    <a href="#/collection/${c.id}"><div class="title" title="${c.name}">${c.name}</div><div class="sub">${c.kind === 'auto' ? 'From TMDB' : 'Collection'}</div></a>
+    <a href="#/collection/${c.id}"><div class="title" title="${c.name}">${c.name}</div>
+      <div class="sub">${c.hidden ? 'Hidden' : `Collection · ${c.count} title${c.count === 1 ? '' : 's'}`}</div></a>
   </div>`;
 }
 
@@ -876,53 +912,141 @@ function collectionChips(x) {
 
 async function viewCollections({ query, seq }) {
   const libraryId = query.get('library');
-  const list = await api(`/api/collections${libraryId ? `?library=${libraryId}` : ''}`);
+  const admin = state.user.role === 'admin';
+  const showHidden = admin && query.has('hidden');
+  const all = await api(`/api/collections?${libraryId ? `library=${libraryId}&` : ''}${admin ? 'hidden=1' : ''}`);
+  const list = all.filter((c) => showHidden || !c.hidden);
+  const hiddenCount = all.filter((c) => c.hidden).length;
   const lib = libraryId && state.libraries.find((l) => l.id === libraryId);
+  const base = `#/collections${libraryId ? `?library=${libraryId}` : ''}`;
   if (!setView(seq, html`
     <div class="toolbar"><h1>${lib ? `${lib.name} · ` : ''}Collections<span class="count">${list.length}</span></h1>
       ${lib ? html`<a class="btn small" href="#/library/${lib.id}">‹ Back to ${lib.name}</a>` : ''}
-      ${state.user.role === 'admin' ? html`<button class="btn small primary" id="col-new">＋ New collection</button>` : ''}</div>
-    ${list.length ? html`<div class="grid">${list.map(collectionCard)}</div>` : html`<div class="empty"><h2>No collections yet</h2>
-      <p>Film series like “The Matrix Collection” appear here automatically once two of their movies are matched with TMDB.${state.user.role === 'admin' ? ' You can also make your own with ＋ New collection, or from a movie’s ⋯ menu.' : ''}</p></div>`}`)) return;
+      ${admin && list.length > 1 ? html`<button class="btn small" id="cols-arrange">⇅ Arrange</button>` : ''}
+      ${admin && hiddenCount ? html`<a class="btn small" href="${showHidden ? base : `${base}${libraryId ? '&' : '?'}hidden`}">${showHidden ? 'Hide hidden' : `Show hidden (${hiddenCount})`}</a>` : ''}
+      ${admin ? html`<button class="btn small primary" id="col-new">＋ New collection</button>` : ''}</div>
+    <div id="cols-body">${list.length ? html`<div class="grid">${list.map(collectionCard)}</div>` : html`<div class="empty"><h2>No collections yet</h2>
+      <p>Film series like “The Matrix Collection” appear here automatically once two of their movies are matched with TMDB.${admin ? ' You can also make your own with ＋ New collection, or from a movie’s ⋯ menu.' : ''}</p></div>`}</div>`)) return;
   if ($('#col-new')) $('#col-new').onclick = async () => {
     const name = prompt('Name of the new collection');
     if (!name) return;
     try { const c = await api('/api/collections', { method: 'POST', body: { name } }); location.hash = `#/collection/${c.id}`; } catch (err) { toast(err.message, true); }
   };
+  if ($('#cols-arrange')) $('#cols-arrange').onclick = () => reorderList($('#cols-body'), {
+    items: list.map((c) => ({ id: c.id, title: c.name, sub: c.kind === 'auto' ? 'From TMDB' : `${c.count} titles`, img: c.cover ? artUrl('poster', c.cover) : null })),
+    note: 'Drag collections into the order you want them listed (for everyone), or use the arrows.',
+    // Collections not shown here (other libraries, hidden) keep their place after these.
+    save: (order) => api('/api/collection-order', { method: 'PUT', body: { order } }),
+    reset: () => api('/api/collection-order', { method: 'PUT', body: { order: null } }),
+    resetLabel: 'Back to alphabetical',
+  });
 }
 
 async function viewCollection({ params: [id], seq }) {
   const c = await api(`/api/collections/${id}`);
-  const admin = state.user.role === 'admin' && c.kind === 'manual';
+  const admin = state.user.role === 'admin';
+  const auto = c.kind === 'auto';
   if (!setView(seq, html`
     <div class="toolbar"><h1>${c.name}<span class="count">${c.count}</span></h1>
-      <span class="muted">${c.kind === 'auto' ? 'Collection from TMDB' : 'Collection'}</span>
-      ${admin ? html`<button class="btn small" id="col-rename">Rename</button><button class="btn small danger" id="col-delete">Delete</button>` : ''}</div>
-    ${c.items.length ? html`<div class="grid">${c.items.map((x) => posterCard(x, admin ? `collection:${c.id}` : ''))}</div>`
-      : html`<div class="empty"><p>This collection is empty. Use “Add to collection…” in the ⋯ menu of a movie or show.</p></div>`}`)) return;
+      <span class="muted">${auto ? `From TMDB${c.tmdbName && c.tmdbName !== c.name ? ` (“${c.tmdbName}”)` : ''}${c.changed ? ' · changed by an admin' : ''}` : 'Collection'}${c.customOrder ? ' · arranged' : ''}</span>
+      ${admin && c.items.length > 1 ? html`<button class="btn small" id="col-reorder">⇅ Reorder</button>` : ''}
+      ${admin ? html`<button class="btn small" id="col-rename">Rename</button>` : ''}
+      ${admin && auto && c.changed ? html`<button class="btn small" id="col-reset" title="Undo every change made to this TMDB collection">Reset to TMDB</button>` : ''}
+      ${admin ? html`<button class="btn small danger" id="col-delete">${auto ? (c.hidden ? 'Show again' : 'Hide') : 'Delete'}</button>` : ''}</div>
+    ${c.hidden ? html`<div class="filter-note">This collection is hidden from everyone. Use “Show again” to bring it back.</div>` : ''}
+    <div id="col-body">${c.items.length ? html`<div class="grid">${c.items.map((x) => posterCard(x, admin ? `collection:${c.id}` : ''))}</div>`
+      : html`<div class="empty"><p>This collection is empty. Use “Add to collection…” in the ⋯ menu of a movie or show.</p></div>`}</div>
+    ${admin ? html`<p class="muted" style="font-size:13px">Tip: each title's ⋯ menu here can remove it or make its poster the collection's cover.</p>` : ''}`)) return;
   if (!admin) return;
-  $('#col-rename').onclick = async () => {
-    const name = prompt('New name', c.name);
-    if (!name || name === c.name) return;
-    try { await api(`/api/collections/${id}`, { method: 'PATCH', body: { name } }); router(); } catch (err) { toast(err.message, true); }
+  const patch = async (body, msg) => { try { await api(`/api/collections/${id}`, { method: 'PATCH', body }); toast(msg); router(); } catch (err) { toast(err.message, true); } };
+  if ($('#col-reorder')) $('#col-reorder').onclick = () => reorderList($('#col-body'), {
+    items: c.items.map((x) => ({ id: x.id, title: x.title, sub: x.year || '', img: artUrl('poster', x) })),
+    note: 'Drag titles into the order you want, or use the arrows. Everyone sees this order.',
+    save: (order) => api(`/api/collections/${id}/order`, { method: 'PUT', body: { order } }),
+    reset: c.customOrder ? () => api(`/api/collections/${id}/order`, { method: 'PUT', body: { order: null } }) : null,
+    resetLabel: 'Back to release order',
+  });
+  $('#col-rename').onclick = () => {
+    const name = prompt(auto ? `New name (leave empty to use TMDB's name, “${c.tmdbName}”)` : 'New name', c.name);
+    if (name === null || name === c.name) return;
+    patch({ name }, 'Renamed');
+  };
+  if ($('#col-reset')) $('#col-reset').onclick = async () => {
+    if (!confirm('Undo every change to this collection (name, titles, order, cover, hidden) and use TMDB’s version again?')) return;
+    try { await api(`/api/collections/${id}/reset`, { method: 'POST' }); toast('Back to TMDB’s version'); router(); } catch (err) { toast(err.message, true); }
   };
   $('#col-delete').onclick = async () => {
+    if (auto) return patch({ hidden: !c.hidden }, c.hidden ? 'Shown again' : 'Hidden from everyone');
     if (!confirm(`Delete the collection “${c.name}”? The movies and shows in it are not affected.`)) return;
     await api(`/api/collections/${id}`, { method: 'DELETE' });
     toast('Collection deleted'); history.back();
   };
 }
 
-// "Add to collection…": tick the collections a movie or show should be in, or make a new one.
+// Drag-and-drop list (with ▲ ▼ for touch screens and keyboards) used to arrange collections and
+// the titles in them. items: [{ id, title, sub, img }]; save(order) / reset() return promises.
+function reorderList(container, { items, note, save, reset, resetLabel }) {
+  let order = items.map((x) => x.id);
+  const byId = new Map(items.map((x) => [x.id, x]));
+  const render = () => {
+    container.innerHTML = html`<div class="panel reorder">
+      <p class="muted" style="margin:0 0 8px">${note}</p>
+      <ol class="reorder-list">${order.map((id, i) => { const x = byId.get(id); return html`
+        <li draggable="true" data-id="${id}">
+          <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+          ${x.img ? html`<img src="${x.img}" alt="">` : html`<span class="reorder-noimg">▦</span>`}
+          <span class="reorder-title"><b>${x.title}</b> <span class="muted">${x.sub}</span></span>
+          <button class="btn small" data-move="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move ${x.title} up">▲</button>
+          <button class="btn small" data-move="1" ${i === order.length - 1 ? 'disabled' : ''} aria-label="Move ${x.title} down">▼</button>
+        </li>`; })}</ol>
+      <div class="row" style="margin-top:10px"><button class="btn primary" data-ro="save">Save order</button>
+        <button class="btn" data-ro="cancel">Cancel</button>
+        ${reset ? html`<button class="btn" data-ro="reset">${resetLabel}</button>` : ''}</div>
+    </div>`.s;
+  };
+  const done = (p, msg) => p.then(() => { toast(msg); router(); }, (err) => toast(err.message, true));
+  let dragging = null;
+  container.onclick = (e) => {
+    const mv = e.target.closest('[data-move]');
+    if (mv) {
+      const id = mv.closest('li').dataset.id;
+      const i = order.indexOf(id), j = i + Number(mv.dataset.move);
+      [order[i], order[j]] = [order[j], order[i]];
+      render();
+      $(`li[data-id="${id}"] [data-move="${mv.dataset.move}"]`, container)?.focus();
+      return;
+    }
+    const act = e.target.closest('[data-ro]')?.dataset.ro;
+    if (act === 'save') done(save(order), 'Order saved');
+    if (act === 'cancel') router();
+    if (act === 'reset') done(reset(), 'Order reset');
+  };
+  container.ondragstart = (e) => { dragging = e.target.closest('li')?.dataset.id; e.dataTransfer.effectAllowed = 'move'; };
+  container.ondragover = (e) => {
+    const li = e.target.closest('li');
+    if (!dragging || !li || li.dataset.id === dragging) return;
+    e.preventDefault();
+    // Drop before or after the row under the pointer, depending on which half it's over.
+    const r = li.getBoundingClientRect();
+    const after = e.clientY > r.top + r.height / 2;
+    order = order.filter((x) => x !== dragging);
+    order.splice(order.indexOf(li.dataset.id) + (after ? 1 : 0), 0, dragging);
+    render();
+  };
+  container.ondragend = () => { dragging = null; };
+  render();
+}
+
+// "Add to collection…": tick the collections a movie or show should be in (TMDB ones too), or make a new one.
 async function openCollectionPicker(x) {
-  const [all, detail] = await Promise.all([api('/api/collections'), api(x.type === 'show' ? `/api/shows/${x.id}` : `/api/items/${x.id}`)]);
-  const mine = all.filter((c) => c.kind === 'manual');
+  const [all, detail] = await Promise.all([api('/api/collections?hidden=1'), api(x.type === 'show' ? `/api/shows/${x.id}` : `/api/items/${x.id}`)]);
   const inIds = new Set((detail.collections || []).map((c) => c.id));
   const m = openModal({
     title: `Collections — ${x.title}`,
     body: html`<div class="form">
-      ${mine.length ? mine.map((c) => html`<label class="check"><input type="checkbox" data-col="${c.id}" ${inIds.has(c.id) ? 'checked' : ''}> ${c.name} <span class="muted">(${c.count})</span></label>`)
-        : html`<p class="muted" style="margin:0">You haven't made any collections yet.</p>`}
+      ${all.length ? all.map((c) => html`<label class="check"><input type="checkbox" data-col="${c.id}" ${inIds.has(c.id) ? 'checked' : ''}> ${c.name}
+          <span class="muted">(${c.count}${c.kind === 'auto' ? ', from TMDB' : ''}${c.hidden ? ', hidden' : ''})</span></label>`)
+        : html`<p class="muted" style="margin:0">There are no collections yet.</p>`}
       <label>New collection <span class="row"><input class="input" id="col-new-name" placeholder="e.g. Christmas movies"><button class="btn small" id="col-new-add">Add</button></span></label>
     </div>`.s,
     footer: html`<button class="btn primary" data-close>Done</button>`.s,

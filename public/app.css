@@ -492,3 +492,10 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .activity-row img { width: 160px; aspect-ratio: 16/9; object-fit: cover; border-radius: 6px; background: var(--bg-3); }
 .activity-info { display: grid; gap: 4px; min-width: 0; }
 @media (max-width: 640px) { .activity-row { grid-template-columns: 1fr; } .activity-row img { width: 100%; } }
+.reorder-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.reorder-list li { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2, transparent); cursor: grab; }
+.reorder-list img { width: 36px; aspect-ratio: 2/3; object-fit: cover; border-radius: 4px; background: var(--bg-3); }
+.reorder-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drag-handle { color: var(--muted, #888); letter-spacing: -2px; }
+.card.is-hidden { opacity: .5; }
+.reorder-noimg { width: 36px; aspect-ratio: 2/3; display: grid; place-items: center; background: var(--bg-3); border-radius: 4px; }

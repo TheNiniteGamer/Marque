@@ -158,6 +158,7 @@ function progressBar(x) {
 function hrefFor(x) { return x.type === 'show' ? `#/show/${x.id}` : `#/item/${x.id}`; }
 
 function posterCard(x, ctx = '') {
+  if (x.type === 'collection') return collectionCard(x);
   const sub = x.type === 'show'
     ? (x.seasonCount > 1 ? `${x.seasonCount} seasons` : `${x.episodeCount} episode${x.episodeCount === 1 ? '' : 's'}`)
     : x.type === 'episode' ? `${x.showTitle} · ${epLabel(x)}` : (x.year || '');
@@ -211,7 +212,9 @@ document.addEventListener('click', async (e) => {
 
 // ---------- views ----------
 async function viewHome({ seq }) {
-  const homeData = await api('/api/home');
+  const [homeData, cols] = await Promise.all([api('/api/home'), groupingOn() ? api('/api/collections').catch(() => []) : []]);
+  // Recently added titles that belong to a collection show as the collection.
+  if (cols.length) for (const hub of homeData.hubs) if (hub.libraryId) hub.items = groupByCollection(hub.items, cols);
   if (!state.libraries.length && state.user.role !== 'admin') {
     return setView(seq, html`<div class="empty"><h2>Welcome, ${state.user.username}</h2><p>No libraries have been shared with you yet. Ask the server's administrator for access.</p></div>`);
   }
@@ -252,11 +255,11 @@ async function viewLibrary({ params: [id], query, seq }) {
   let current = [];
   const render = () => {
     const t = text.trim().toLowerCase();
-    current = data.items
+    const matching = data.items
       .filter((x) => prefs.filter === 'all' || unwatched(x))
       .filter((x) => !genre || (x.genres || []).includes(genre))
-      .filter((x) => !t || x.title.toLowerCase().includes(t))
-      .sort(sorters[prefs.sort] || sorters.title);
+      .filter((x) => !t || x.title.toLowerCase().includes(t));
+    current = (cols.length && groupingOn() ? groupByCollection(matching, cols) : matching).sort(sorters[prefs.sort] || sorters.title);
     $('#lib-count').textContent = `${current.length}`;
     const grid = $('#lib-grid');
     grid.style.setProperty('--card-w', `${prefs.size}px`);
@@ -285,7 +288,9 @@ async function viewLibrary({ params: [id], query, seq }) {
       </select>
       <input type="range" id="lib-size" min="110" max="230" step="10" value="${prefs.size}" title="Poster size" aria-label="Poster size">
       <button class="btn small" id="lib-shuffle" title="Play something random from this view">⤮ Shuffle</button>
-      ${cols.length ? html`<a class="btn small" href="#/collections?library=${id}">▦ Collections (${cols.length})</a>` : ''}
+      ${cols.length ? html`<div class="seg" id="lib-group" title="Show titles that are in a collection as the collection, or every title on its own">
+        <button data-g="1" class="${groupingOn() ? 'on' : ''}">▦ Collections</button><button data-g="0" class="${groupingOn() ? '' : 'on'}">All titles</button></div>
+        <a class="btn small" href="#/collections?library=${id}">Browse collections (${cols.length})</a>` : ''}
       ${state.user.role === 'admin' ? html`<button class="btn small" id="lib-scan">↻ Scan</button>` : ''}
     </div>
     ${genre ? html`<div class="filter-note">Showing <b>${genre}</b> · <a href="#/library/${id}">clear</a></div>` : ''}
@@ -302,13 +307,20 @@ async function viewLibrary({ params: [id], query, seq }) {
     $$('#lib-filter button').forEach((b) => b.classList.toggle('on', b.dataset.f === f));
     render();
   };
+  if ($('#lib-group')) $('#lib-group').onclick = (e) => {
+    const g = e.target.dataset.g; if (g == null) return;
+    store.set('groupCollections', g === '1');
+    $$('#lib-group button').forEach((b) => b.classList.toggle('on', b.dataset.g === g));
+    render();
+  };
   $('#lib-jump').onclick = (e) => {
     const c = e.target.dataset.letter; if (!c) return;
     const idx = current.findIndex((x) => { const f = titleKey(x)[0]?.toUpperCase() || '#'; return c === '#' ? !/[A-Z]/.test(f) : f === c; });
     $$('#lib-grid .card')[idx]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   $('#lib-shuffle').onclick = async () => {
-    const pool = current.filter(unwatched).length ? current.filter(unwatched) : current;
+    const titles = current.flatMap((x) => (x.type === 'collection' ? x.members : [x]));
+    const pool = titles.filter(unwatched).length ? titles.filter(unwatched) : titles;
     if (!pool.length) return toast('Nothing to play', true);
     const pickOne = pool[Math.floor(Math.random() * pool.length)];
     if (pickOne.type !== 'show') { location.hash = `#/play/${pickOne.id}`; return; }

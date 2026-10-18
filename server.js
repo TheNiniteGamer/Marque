@@ -488,17 +488,31 @@ route('POST', '/api/shows/:id/watched', async (req, res, { id }, url, user) => {
 route('GET', '/api/items/:id', async (req, res, { id }, url, user) => json(res, 200, { ...lib.itemDetail(store, user, getItem(id, user)), collections: collections.of(store, user, id) }));
 
 // --- collections ---
-route('GET', '/api/collections', async (req, res, p, url, user) => json(res, 200, collections.list(store, user, { libraryId: url.searchParams.get('library') })));
+route('GET', '/api/collections', async (req, res, p, url, user) => json(res, 200, collections.list(store, user, { libraryId: url.searchParams.get('library'), includeHidden: url.searchParams.has('hidden') })));
+// Arrange the list of collections: { order: [ids] } or { order: null } for alphabetical.
+route('PUT', '/api/collection-order', async (req, res, p, url, user) => {
+  collections.setListOrder(store, (await readBody(req)).order ?? null);
+  json(res, 200, collections.list(store, user, { includeHidden: true }));
+}, 'admin');
 route('GET', '/api/collections/:id', async (req, res, { id }, url, user) => json(res, 200, collections.detail(store, user, id)));
 route('POST', '/api/collections', async (req, res, p, url, user) => {
   const c = collections.create(store, await readBody(req));
   json(res, 201, collections.detail(store, user, c.id));
 }, 'admin');
+// { name, cover, hidden } — works for TMDB collections too.
 route('PATCH', '/api/collections/:id', async (req, res, { id }, url, user) => {
-  collections.rename(store, id, (await readBody(req)).name);
+  collections.update(store, id, await readBody(req));
+  json(res, 200, collections.detail(store, user, id));
+}, 'admin');
+route('POST', '/api/collections/:id/reset', async (req, res, { id }, url, user) => {
+  collections.reset(store, id);
   json(res, 200, collections.detail(store, user, id));
 }, 'admin');
 route('DELETE', '/api/collections/:id', async (req, res, { id }) => { collections.remove(store, id); json(res, 200, { ok: true }); }, 'admin');
+route('PUT', '/api/collections/:id/order', async (req, res, { id }, url, user) => {
+  collections.setOrder(store, id, (await readBody(req)).order ?? null);
+  json(res, 200, collections.detail(store, user, id));
+}, 'admin');
 route('PUT', '/api/collections/:id/members/:target', async (req, res, { id, target }, url, user) => {
   collections.addMember(store, id, target);
   json(res, 200, collections.detail(store, user, id));

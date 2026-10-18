@@ -55,7 +55,6 @@ test('films from the same TMDB collection are grouped automatically', async () =
   assert.deepEqual(detail.items.map((i) => i.title), ['Alpha', 'Alpha Two'], 'oldest first');
   assert.deepEqual((await admin('GET', `/api/items/${ids.items.Alpha}`)).data.collections, [{ id: 'tmdb-900', name: 'Alpha Collection' }]);
   assert.deepEqual((await admin('GET', `/api/items/${ids.items.Solo}`)).data.collections, []);
-  assert.equal((await admin('PATCH', '/api/collections/tmdb-900', { name: 'x' })).status, 400, 'TMDB collections are read-only');
 });
 
 test('admins make their own collections; users only see what they have access to', async () => {
@@ -78,4 +77,58 @@ test('admins make their own collections; users only see what they have access to
   assert.deepEqual((await admin('GET', `/api/items/${ids.items.Alpha}`)).data.collections.map((c) => c.name).sort(), ['Alpha Collection', 'Faves']);
   assert.equal((await admin('DELETE', `/api/collections/${id}`)).status, 200);
   assert.equal((await admin('GET', `/api/collections/${id}`)).status, 404);
+});
+
+test('admins can arrange titles, pick the cover and arrange the list', async () => {
+  const id = (await admin('POST', '/api/collections', { name: 'Arranged', members: [ids.items.Alpha, ids.items['Alpha Two'], ids.items.Solo] })).data.id;
+  const titles = async (cid) => (await admin('GET', `/api/collections/${cid}`)).data.items.map((i) => i.title);
+  assert.deepEqual(await titles(id), ['Alpha', 'Alpha Two', 'Solo'], 'release order by default');
+  const set = await admin('PUT', `/api/collections/${id}/order`, { order: [ids.items.Solo, ids.items.Alpha] });
+  assert.equal(set.data.customOrder, true);
+  assert.deepEqual(set.data.items.map((i) => i.title), ['Solo', 'Alpha', 'Alpha Two'], 'titles not in the order go last');
+  assert.equal((await admin('PUT', `/api/collections/${id}/order`, { order: [ids.kids] })).status, 400, 'only its own titles');
+  assert.equal((await viewer('PUT', `/api/collections/${id}/order`, { order: [] })).status, 403);
+
+  // Cover: by default the first title; any title can be chosen.
+  assert.equal((await admin('GET', `/api/collections/${id}`)).data.cover.id, ids.items.Solo);
+  assert.equal((await admin('PATCH', `/api/collections/${id}`, { cover: ids.items['Alpha Two'] })).data.cover.id, ids.items['Alpha Two']);
+  assert.equal((await admin('PATCH', `/api/collections/${id}`, { cover: ids.kids })).status, 400);
+
+  await admin('PUT', `/api/collections/${id}/order`, { order: null });
+  assert.deepEqual(await titles(id), ['Alpha', 'Alpha Two', 'Solo']);
+
+  // The list of collections: alphabetical unless arranged.
+  const names = async () => (await admin('GET', '/api/collections')).data.map((c) => c.name);
+  assert.deepEqual(await names(), ['Alpha Collection', 'Arranged']);
+  await admin('PUT', '/api/collection-order', { order: [id] });
+  assert.deepEqual(await names(), ['Arranged', 'Alpha Collection']);
+  assert.equal((await admin('PUT', '/api/collection-order', { order: ['nope'] })).status, 400);
+  await admin('PUT', '/api/collection-order', { order: null });
+  assert.deepEqual(await names(), ['Alpha Collection', 'Arranged']);
+  await admin('DELETE', `/api/collections/${id}`);
+});
+
+test('TMDB collections can be renamed, changed, hidden and reset', async () => {
+  const get = async (c = admin) => (await c('GET', '/api/collections/tmdb-900')).data;
+  assert.equal((await admin('PATCH', '/api/collections/tmdb-900', { name: 'The Alphas' })).data.name, 'The Alphas');
+  assert.equal((await get()).tmdbName, 'Alpha Collection');
+
+  // Add a film TMDB doesn't list, take one out.
+  await admin('PUT', `/api/collections/tmdb-900/members/${ids.items.Solo}`);
+  await admin('DELETE', `/api/collections/tmdb-900/members/${ids.items.Alpha}`);
+  assert.deepEqual((await get()).items.map((i) => i.title), ['Alpha Two', 'Solo']);
+  assert.deepEqual((await admin('GET', `/api/items/${ids.items.Alpha}`)).data.collections, []);
+  assert.deepEqual((await admin('GET', `/api/items/${ids.items.Solo}`)).data.collections.map((c) => c.name), ['The Alphas']);
+
+  // Hide it: gone for everyone (admins can still list and open it to show it again).
+  await admin('DELETE', '/api/collections/tmdb-900');
+  assert.ok(!(await admin('GET', '/api/collections')).data.some((c) => c.id === 'tmdb-900'));
+  assert.equal((await admin('GET', '/api/collections?hidden=1')).data.find((c) => c.id === 'tmdb-900').hidden, true);
+  assert.deepEqual((await admin('GET', `/api/items/${ids.items.Solo}`)).data.collections, []);
+  assert.equal((await admin('PATCH', '/api/collections/tmdb-900', { hidden: false })).data.hidden, false);
+
+  // Reset: back to exactly what TMDB says.
+  const reset = (await admin('POST', '/api/collections/tmdb-900/reset')).data;
+  assert.deepEqual([reset.name, reset.changed, reset.items.map((i) => i.title)], ['Alpha Collection', false, ['Alpha', 'Alpha Two']]);
+  assert.equal((await admin('POST', `/api/collections/${'x'.repeat(12)}/reset`)).status, 400);
 });

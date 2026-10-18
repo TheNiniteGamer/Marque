@@ -101,6 +101,7 @@ async function viewAccount({ seq }) {
       <label>Streaming quality
         <select data-pref="quality">${[['', 'Automatic (original at home, adaptive when away)'], ['original', 'Original'], ['auto', 'Adaptive (adjusts to your connection)'],
           ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']].map(([v, l]) => html`<option value="${v}" ${(store.get('quality', '') || '') === v ? 'selected' : ''}>${l}</option>`)}</select></label>
+      <label class="check"><input type="checkbox" data-pref="groupCollections" ${store.get('groupCollections', true) ? 'checked' : ''}> Show movies that are in a collection as the collection (home page and libraries)</label>
       <label class="check"><input type="checkbox" data-pref="askProfile" ${store.get('askProfile', false) ? 'checked' : ''}> Ask “Who's watching?” when Marquee opens (for a shared TV or tablet)</label>
       <p class="muted" style="margin:0;font-size:13px">These are saved in this browser.</p>
     </div>

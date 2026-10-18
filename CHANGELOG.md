@@ -4,6 +4,15 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.4.1
+
+- **Collections, your way:** admins can reorder the titles in any collection (drag and drop, or
+  ▲ ▼), arrange the list of collections, pick a collection's cover, and override TMDB
+  collections too: rename them, add or remove titles, hide them, or reset them to TMDB's version.
+- **Collections on the home page and in libraries:** movies in a collection now appear as the
+  collection's card, so adding a film to a collection brings the collection to Recently Added.
+  Choose *All titles* in a library (or the setting under Account) to show every movie on its own.
+
 ## 0.4.0 — Significant update
 
 - **Up Next at the credits:** end credits are found automatically, like intros, and the next
