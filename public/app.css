@@ -559,3 +559,14 @@ body.selecting #view { padding-bottom: 110px; }
 .series-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .series-row > input[type=checkbox] { accent-color: var(--accent); width: 18px; height: 18px; margin-top: 9px; }
 .col-section + .col-section { margin-top: 28px; }
+
+/* ---------- matches that need a check ---------- */
+.recheck-row { align-items: center; gap: 8px; margin: 10px 0 4px; flex-wrap: wrap; }
+.problems li.review-row { list-style: none; margin: 0 0 0 -18px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.review-now { margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.review-cands { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.review-cand { display: flex; gap: 8px; align-items: center; text-align: left; padding: 6px 10px 6px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-3); cursor: pointer; font-size: 13px; max-width: 260px; }
+.review-cand:hover { border-color: var(--accent); }
+.review-cand img, .review-noimg { width: 34px; height: 51px; object-fit: cover; border-radius: 4px; flex: none; }
+.review-noimg { display: grid; place-items: center; background: var(--bg-2); color: var(--muted); }
+.review-more { margin-top: 6px; font-size: 13px; }

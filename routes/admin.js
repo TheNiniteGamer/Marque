@@ -7,7 +7,7 @@ module.exports = function register(app) {
     logs, fs, os, pipeline, lib, metadata, hlsLib, findProblems,
     ENCODER_NAMES, store, matcher, updater, hwaccel, hls, opensubs, activity,
     maintenance, intro, backups, auth, transcodes, HttpError, json, readBody,
-    readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route,
+    readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary,
   } = app;
 
   // --- activity (admin): who is watching what right now ---
@@ -134,8 +134,21 @@ module.exports = function register(app) {
   route('POST', '/api/meta/:id/match', async (req, res, { id }, url, user) => {
     const { target, kind } = getTarget(id, user);
     const body = await readBody(req);
-    await matcher.apply(target, kind, String(body.provider || ''), String(body.id || ''));
+    await matcher.apply(target, kind, String(body.provider || ''), String(body.id || ''), { how: { matchedBy: 'hand' } });
     json(res, 200, afterMetaChange(id, user));
+  }, 'admin');
+
+  // "Looks right" on a match listed under Needs a check.
+  route('POST', '/api/meta/:id/confirm', async (req, res, { id }, url, user) => {
+    const { target, kind } = getTarget(id, user);
+    if (kind === 'episode') throw new HttpError(400, 'Confirm the show instead of a single episode');
+    matcher.confirm(target);
+    json(res, 200, afterMetaChange(id, user));
+  }, 'admin');
+
+  // Re-check every automatic match in a library with the current matching rules (in the background).
+  route('POST', '/api/libraries/:id/recheck-matches', async (req, res, { id }, url, user) => {
+    json(res, 202, matcher.recheck(getLibrary(id, user)));
   }, 'admin');
 
   route('POST', '/api/meta/:id/refresh', async (req, res, { id }, url, user) => {
@@ -223,7 +236,9 @@ module.exports = function register(app) {
     store.save();
     json(res, 200, lib.itemDetail(store, user, item));
   }, 'admin');
-  route('GET', '/api/problems', async (req, res) => json(res, 200, findProblems(store, metadata)), 'admin');
+  route('GET', '/api/problems', async (req, res) => json(res, 200, {
+    ...findProblems(store, metadata), recheck: matcher.rechecking, lastRecheck: matcher.lastRecheck || null,
+  }), 'admin');
   // Same for where the end credits start: { start } | { none: true } | { auto: true }.
   route('PUT', '/api/items/:id/credits', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);

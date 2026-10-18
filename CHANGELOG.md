@@ -4,6 +4,22 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.5.1
+
+More accurate metadata:
+- **No more wrong matches without a word:** each match is scored on the title, the year and (for
+  movies) the running time. Poor matches are no longer applied — the title keeps its file name until
+  you choose. Doubtful ones are applied but listed under **Settings → Library problems → Matches that
+  need a check**, with the best guesses as posters: click the right one, or *✓ It's right*.
+- **Running time** tells remakes and same-name films apart (The Lion King 1994 vs 2019).
+- **Ids in names match exactly:** `Heat (1995) {tmdb-949}`, `[imdbid-tt0113277]`, or `{tvdb-73244}`
+  on a show folder (Plex / Jellyfin naming).
+- Titles are compared more sensibly: punctuation, "The", "&"/"and", accents and "II"/"2" don't
+  matter, and original-language titles count.
+- **Re-check matches** (Settings → Library problems) looks up a whole library again with the new
+  rules, fixing old wrong matches. Matches you picked or confirmed are kept; anything doubtful is
+  listed to check rather than changed.
+
 ## 0.5.0
 
 Organising your library:

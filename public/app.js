@@ -381,7 +381,12 @@ function castList(x) {
 }
 function matchNote(x) {
   if (state.user.role !== 'admin' || !x.match) return '';
-  if (x.match.notFound) return html`<p class="match-note">No online match was found. <button class="link-btn" data-fix-match="${x.type === 'episode' ? x.showId : x.id}">Find a match…</button></p>`;
+  const id = x.type === 'episode' ? x.showId : x.id;
+  if (x.match.notFound) return html`<p class="match-note">No online match was found. <button class="link-btn" data-fix-match="${id}">Find a match…</button></p>`;
+  if (x.match.uncertain) {
+    return html`<p class="match-note">Marquee isn't sure this is the right ${x.type === 'movie' ? 'movie' : 'show'}.
+      <button class="link-btn" data-review-ok="${id}">✓ It's right</button> · <button class="link-btn" data-fix-match="${id}">Find another…</button></p>`;
+  }
   return '';
 }
 document.addEventListener('click', (e) => {
@@ -616,7 +621,7 @@ async function viewSettings({ query, seq }) {
           <button class="btn small danger" data-act="delete">Delete</button>
         </div>
       </div>`) : html`<div class="panel muted">No libraries yet. Add one to get started.</div>`}
-    ${libs.length ? problemsSection(problems) : ''}
+    ${libs.length ? html`<div id="problems-wrap">${problemsSection(problems)}</div>` : ''}
     ${updates.check?.status === 'available' || updates.helper.state === 'updating' ? updatesSection(updates) : ''}
     ${metadataSection(metaSettings)}
     ${usersSection(users)}
@@ -639,6 +644,7 @@ async function viewSettings({ query, seq }) {
     </div>
     ${logsSection()}`)) return;
   bindLogsSection();
+  if (problems.recheck) setTimeout(refreshProblems, 2000);
   $('#maint-clean').onclick = async (e) => {
     e.target.disabled = true;
     try { const r = await api('/api/maintenance/cleanup', { method: 'POST' }); toast(r.files ? `Removed ${r.files} file(s), ${fmtSize(r.bytes)}` : 'Nothing to clean up'); router(); } catch (err) { toast(err.message, true); }

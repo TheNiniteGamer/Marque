@@ -46,7 +46,8 @@ const mock = http.createServer((req, res) => {
     return send(404, {});
   }
   if (url.pathname === '/tvmaze/search/shows') {
-    return send(200, [{ score: 1, show: { id: 55, name: 'Some Show', premiered: '2019-02-03', summary: '<p>A <b>great</b> show.</p>', image: { medium: `${BASE}/img/tvm/poster.png` } } }]);
+    const name = /fresh/i.test(url.searchParams.get('q')) ? 'Fresh Show' : 'Some Show';
+    return send(200, [{ score: 1, show: { id: 55, name, premiered: '2019-02-03', summary: '<p>A <b>great</b> show.</p>', image: { medium: `${BASE}/img/tvm/poster.png` } } }]);
   }
   if (url.pathname === '/tvmaze/shows/55') {
     return send(200, {
@@ -126,7 +127,7 @@ test('refresh matches the movie and pulls title, genres, cast and artwork', asyn
   assert.deepEqual(r.data.genres, ['Drama', 'Mystery']);
   assert.equal(r.data.rating, 7.5);
   assert.deepEqual(r.data.cast.map((c) => c.name), ['Ada Actor', 'Bo Bit']);
-  assert.deepEqual(r.data.match, { provider: 'tmdb', providerId: '101' });
+  assert.deepEqual(r.data.match, { provider: 'tmdb', providerId: '101', uncertain: false });
   const imgs = await admin('GET', `/api/meta/${ids.movie}/images`);
   assert.equal(imgs.data.poster.length, 2);
 });

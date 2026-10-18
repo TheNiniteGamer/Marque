@@ -835,12 +835,27 @@ async function openIntroEditor(id) {
 function problemsSection(p) {
   const link = (x) => html`<a href="#/${x.type === 'show' ? 'show' : 'item'}/${x.id}">${x.title}</a>`;
   const where = (x) => (x.file ? html` <span class="muted path-inner">${x.file}</span>` : '');
+  const yr = (y) => (y ? ` (${y})` : '');
   const groups = [
     { key: 'offline', title: 'Folders that are offline or missing', items: p.offline,
       row: (x) => html`<li><b>${x.library}</b>: <code>${x.path}</code></li>`,
       help: 'A drive is unplugged or a folder was moved. Its titles and watch history are kept until it comes back.' },
     { key: 'unreadable', title: 'Files that can’t be read', items: p.unreadable,
       row: (x) => html`<li>${link(x)}${where(x)}</li>`, help: 'ffprobe couldn’t open these. They may be damaged or still copying.' },
+    { key: 'review', title: 'Matches that need a check', items: p.review || [], open: true,
+      row: (x) => html`<li class="review-row">
+        <div><b>${x.name}${yr(x.year)}</b> <span class="muted">· ${x.library}${x.duration >= 60 ? ` · ${Math.round(x.duration / 60)} min` : ''}</span>${where(x)}</div>
+        <div class="review-now">${x.current
+          ? html`Now: ${link(x)}${yr(x.current.year)} <span class="muted">(${x.current.score != null ? `${x.current.score}% sure` : 'not sure'})</span>
+              <button class="btn small" data-review-ok="${x.id}">✓ It's right</button>`
+          : html`<span class="muted">Not matched — no result was close enough.</span>`}</div>
+        ${x.candidates.length ? html`<div class="review-cands">${x.candidates.map((c) => html`
+          <button class="review-cand" data-review-pick="${x.id}" data-provider="${c.provider}" data-pid="${c.id}" title="Use ${c.title}${yr(c.year)}">
+            ${c.thumb ? html`<img src="${c.thumb}" alt="" loading="lazy">` : html`<span class="review-noimg">?</span>`}
+            <span>${c.title}${yr(c.year)}<br><span class="muted">${c.score}% · ${c.provider === 'tvmaze' ? 'TVmaze' : 'TMDB'}</span></span></button>`)}</div>` : ''}
+        <div class="review-more"><button class="link-btn" data-fix-match="${x.id}">Search…</button> · <button class="link-btn" data-review-none="${x.id}">Don't match it</button></div>
+      </li>`,
+      help: 'Marquee wasn’t sure about these. Pick the right one, confirm the current match, or search. Titles renamed with an id, like “Heat (1995) {tmdb-949}”, always match exactly.' },
     { key: 'unmatched', title: 'No online match', items: p.unmatched,
       row: (x) => html`<li>${link(x)} <button class="link-btn" data-fix-match="${x.id}">Find a match…</button></li>`,
       help: 'No poster or details were found. Renaming the file as “Title (Year)”, or Find a match, usually fixes it.' },
@@ -852,17 +867,56 @@ function problemsSection(p) {
       help: 'Gaps in episode numbers, up to the last episode you have.' },
   ];
   const total = groups.reduce((n, g) => n + g.items.length, 0);
+  const r = p.recheck, last = p.lastRecheck;
   return html`
     <h2 style="margin:28px 0 12px" id="problems">Library problems</h2>
     <div class="panel problems">
       <div class="upd-state ${total ? '' : 'ok'}">${total ? `${total} thing${total === 1 ? '' : 's'} to look at` : '✓ No problems found'}</div>
-      ${groups.filter((g) => g.items.length).map((g) => html`<details>
+      <div class="row recheck-row"><span class="muted">Re-check matches:</span>
+        ${state.libraries.map((l) => html`<button class="btn small" data-recheck="${l.id}" ${r ? 'disabled' : ''} title="Look up every automatic match in ${l.name} again with the current rules (matches you picked or confirmed are kept)">${l.name}</button>`)}
+        <span class="muted" style="font-size:13px">${r ? `Checking ${r.library}: ${r.done} of ${r.total}…`
+          : last ? `Last check (${last.library}): ${last.total} title${last.total === 1 ? '' : 's'}, ${last.changed} changed, ${last.review} to look at.` : ''}</span></div>
+      ${groups.filter((g) => g.items.length).map((g) => html`<details ${g.open ? 'open' : ''}>
         <summary><b>${g.title}</b> <span class="muted">(${g.items.length})</span></summary>
         <p class="muted" style="font-size:13px;margin:6px 0">${g.help}</p>
         <ul>${g.items.slice(0, 200).map(g.row)}</ul>${g.items.length > 200 ? html`<p class="muted">…and ${g.items.length - 200} more.</p>` : ''}
       </details>`)}
     </div>`;
 }
+
+// Redraw the problems panel (after fixing something there, and while a re-check runs).
+let problemsTimer = null;
+async function refreshProblems() {
+  clearTimeout(problemsTimer);
+  const wrap = $('#problems-wrap');
+  if (!wrap) return;
+  const p = await api('/api/problems');
+  const open = new Set($$('details[open] summary b', wrap).map((b) => b.textContent));
+  wrap.innerHTML = problemsSection(p).s;
+  for (const d of $$('details', wrap)) if (open.has($('summary b', d).textContent)) d.open = true;
+  if (p.recheck) problemsTimer = setTimeout(refreshProblems, 2000);
+}
+document.addEventListener('click', async (e) => {
+  const t = e.target.closest('[data-review-ok], [data-review-pick], [data-review-none], [data-recheck]');
+  if (!t) return;
+  const inPanel = !!t.closest('#problems-wrap');
+  const after = (msg) => { toast(msg); if (inPanel) refreshProblems(); else router(); };
+  try {
+    if (t.dataset.reviewOk) { await api(`/api/meta/${t.dataset.reviewOk}/confirm`, { method: 'POST' }); after('Match confirmed'); }
+    if (t.dataset.reviewPick) {
+      t.disabled = true;
+      await api(`/api/meta/${t.dataset.reviewPick}/match`, { method: 'POST', body: { provider: t.dataset.provider, id: t.dataset.pid } });
+      after('Match changed');
+    }
+    if (t.dataset.reviewNone) { await api(`/api/meta/${t.dataset.reviewNone}/unmatch`, { method: 'POST' }); after('Left unmatched (it uses the file name)'); }
+    if (t.dataset.recheck) {
+      const lib = state.libraries.find((l) => l.id === t.dataset.recheck);
+      if (!confirm(`Look up every automatic match in ${lib?.name} again? Matches you picked or confirmed are kept; anything doubtful is listed under “Matches that need a check”.`)) return;
+      await api(`/api/libraries/${t.dataset.recheck}/recheck-matches`, { method: 'POST' });
+      refreshProblems();
+    }
+  } catch (err) { t.disabled = false; toast(err.message, true); }
+});
 
 // ---------- collections ----------
 // "Group into collections": titles that belong to a collection are shown as that collection's card

@@ -203,7 +203,8 @@ never gets access to Docker itself.
 | **Extras** | Trailers, featurettes and behind-the-scenes clips show on their movie or show page instead of in the library (see the folder layout below). |
 | **New files appear by themselves** | Marquee notices files added, removed or renamed in your folders within about 15 seconds, including on Windows drives in Docker. Files still being copied are picked up once they're finished. |
 | **Logs and housekeeping** | *Settings → Logs* shows recent warnings and errors with plain-language explanations. *Settings → Server* shows the space caches use; unused cached files are cleaned up daily. The database is saved crash-safely (with a `.bak` copy) and restored from the newest backup if it's ever unreadable. |
-| **Library problems** | *Settings → Library problems* lists offline folders, unreadable files, titles with no online match, duplicates and missing episodes. |
+| **Accurate matching** | Each match gets a score from the title (ignoring punctuation, “The”, “II” vs “2”, original-language titles), the year, and for movies the **running time** (so a 2-hour file isn't matched to the 90-minute film or remake with the same name). Poor matches are never applied. Doubtful ones are listed under *Settings → Library problems → Matches that need a check*, with the best guesses as posters to pick from in one click, or *✓ It's right*. **Ids in names** match exactly: `Heat (1995) {tmdb-949}`, `[imdbid-tt0113277]`, or `{tvdb-81189}` on a show folder. **Re-check matches** looks up a whole library again with these rules (matches you picked or confirmed are kept). |
+| **Library problems** | *Settings → Library problems* lists offline folders, unreadable files, matches that need a check, titles with no online match, duplicates and missing episodes. |
 | **Player** | Seek bar with hover time, skip, volume, **playback speed**, **picture-in-picture**, fullscreen, keyboard shortcuts, audio track choice, subtitles (sidecar `.srt`/`.vtt` or embedded), and an Up Next countdown. Autoplay and default subtitles can be set per browser under *Account*. |
 | **YouTube downloader** | Paste a video or playlist link, pick a library and quality. Saves an MP4 that plays directly, the thumbnail as its poster, English subtitles when available, and the video's details: its title, description, upload date, channel, a link to the original and its chapters (shown as marks on the seek bar). It is never matched to the wrong movie. **Nothing is downloaded twice**: a link you already have is caught, with *Download again* to override. Admins can set **download hours** (e.g. overnight) and a **speed limit**. Failed downloads are **retried automatically** and continue where they stopped. **yt-dlp updates itself** daily, and you get a notice when a download finishes. |
 
@@ -237,6 +238,11 @@ TV Shows/                                                     Extras, Trailers, 
     Season 01/Breaking Bad - S01E01 - Pilot.mkv
     Featurettes/Inside the episode.mkv
 ```
+
+For titles that are hard to find by name, add the database id in curly braces and it matches exactly:
+`Movies/Heat (1995) {tmdb-949}/Heat.mkv`, `Heat (1995) [imdbid-tt0113277].mkv`, or a show folder
+like `TV Shows/The Office (US) {tvdb-73244}/`. The id is found on the title's page at themoviedb.org,
+imdb.com or thetvdb.com.
 
 ## Configuration (environment variables)
 
