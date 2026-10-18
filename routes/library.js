@@ -191,8 +191,12 @@ module.exports = function register(app) {
     activity.report(user, item, { ...body, position, ip: clientIp(req), remote: isRemote(req), ua: String(req.headers['user-agent'] || '') });
     // Players also report while paused (for the Activity page); the resume point only changes when it moved.
     const prev = store.data.progress[user.id]?.[item.id];
-    if (body.paused && prev && !body.stopped && Math.abs((prev.position || 0) - position) < 1) return json(res, 200, lib.progressOf(store, user, item.id));
-    json(res, 200, lib.setProgress(store, user, item, position));
+    if (body.paused && prev && !body.stopped && Math.abs((prev.position || 0) - position) < 1) {
+      if (store.timer) store.save(); // a position still waiting to be written goes now
+      return json(res, 200, lib.progressOf(store, user, item.id));
+    }
+    // Stopping or pausing is saved straight away; the reports in between can wait a little.
+    json(res, 200, lib.setProgress(store, user, item, position, { lazy: !body.stopped && !body.paused }));
   });
 
   route('POST', '/api/items/:id/watched', async (req, res, { id }, url, user) => {

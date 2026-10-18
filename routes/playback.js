@@ -212,6 +212,7 @@ module.exports = function register(app) {
     if (!['poster', 'backdrop', 'thumb'].includes(kind)) throw new HttpError(404, 'Unknown art kind');
     const file = await resolveArt(kind, id, user);
     if (!file) throw new HttpError(404, 'No artwork');
-    sendFile(req, res, file, { headers: { 'Cache-Control': 'private, max-age=3600' } });
+    // Image addresses carry ?v=<version>, which changes whenever the artwork does: keep them for good.
+    sendFile(req, res, file, { headers: { 'Cache-Control': url.searchParams.has('v') ? 'private, max-age=31536000, immutable' : 'private, max-age=3600' } });
   }, 'media');
 };

@@ -12,6 +12,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const path = require('node:path');
 const { pipeline } = require('node:stream');
+const zlib = require('node:zlib');
 const { Store, randomId } = require('./lib/store');
 const { Scanner } = require('./lib/scanner');
 const { Auth, publicUser, canSeeLibrary, canDownload } = require('./lib/auth');
@@ -131,9 +132,18 @@ const transcodes = new Set();
 // ---------- helpers ----------
 class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
 
+// Compressed when the browser accepts it and it's worth it: a 3,000-movie library list goes from
+// about 900 KB to 35 KB, which matters on phones and away from home.
+const acceptsGzip = (req) => /\bgzip\b/.test(String(req?.headers['accept-encoding'] || ''));
 function json(res, status, body) {
-  const data = JSON.stringify(body);
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Length': Buffer.byteLength(data) });
+  let data = Buffer.from(JSON.stringify(body));
+  const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Accept-Encoding' };
+  if (data.length > 1400 && acceptsGzip(res.req)) {
+    data = zlib.gzipSync(data, { level: 5 });
+    headers['Content-Encoding'] = 'gzip';
+  }
+  headers['Content-Length'] = data.length;
+  res.writeHead(status, headers);
   res.end(data);
 }
 
@@ -165,13 +175,35 @@ const MIME = {
   '.apk': 'application/vnd.android.package-archive',
 };
 
-// Serve a file with HTTP Range support (needed for seeking in <video>).
+// Text files worth compressing; kept compressed in memory (the web app's own files, subtitles).
+const COMPRESSIBLE = /^(text\/|application\/(json|javascript|manifest\+json|vnd\.apple\.mpegurl)|image\/svg)/;
+const gzipCache = new Map(); // file -> { tag, data }
+
+// Serve a file with HTTP Range support (needed for seeking in <video>). Browsers that already have
+// the file get "304 Not Modified" instead of the whole file again.
 function sendFile(req, res, file, { type, headers = {} } = {}) {
   let st;
   try { st = fs.statSync(file); } catch { throw new HttpError(404, 'File not found on disk'); }
   if (!st.isFile()) throw new HttpError(404, 'Not a file');
-  const base = { 'Content-Type': type || MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Accept-Ranges': 'bytes', ...headers };
+  const contentType = type || MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
+  const etag = `W/"${st.size.toString(36)}-${Math.round(st.mtimeMs).toString(36)}"`;
+  const base = { 'Content-Type': contentType, 'Accept-Ranges': 'bytes', ETag: etag, 'Last-Modified': st.mtime.toUTCString(), ...headers };
   const range = req.headers.range;
+  if (!range && req.headers['if-none-match'] === etag) {
+    res.writeHead(304, { ETag: etag, ...(headers['Cache-Control'] ? { 'Cache-Control': headers['Cache-Control'] } : {}) });
+    return res.end();
+  }
+  if (!range && COMPRESSIBLE.test(contentType) && st.size > 1400 && st.size < 8 * 1024 * 1024 && acceptsGzip(req)) {
+    let c = gzipCache.get(file);
+    if (c?.tag !== etag) {
+      c = { tag: etag, data: zlib.gzipSync(fs.readFileSync(file), { level: 9 }) };
+      gzipCache.set(file, c);
+      if (gzipCache.size > 200) gzipCache.delete(gzipCache.keys().next().value);
+    }
+    delete base['Accept-Ranges'];
+    res.writeHead(200, { ...base, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding', 'Content-Length': c.data.length });
+    return res.end(req.method === 'HEAD' ? undefined : c.data);
+  }
   let start = 0, end = st.size - 1, status = 200;
   if (range) {
     const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
@@ -565,7 +597,10 @@ async function main() {
   downloader.startAutoUpdate();
   setTimeout(() => matcher.backfillCollections().catch((err) => console.warn('[meta]', err.message)), 60_000).unref();
   backups.startSchedule();
-  if (SCAN_INTERVAL_MIN > 0) setInterval(() => scanner.enqueueAll(), SCAN_INTERVAL_MIN * 60_000).unref();
+  // With new files noticed by the folder watcher, full rescans (which look at every file) are only a
+  // safety net, so they run at most every 6 hours.
+  const scanEvery = watcher.intervalMs > 0 ? Math.max(SCAN_INTERVAL_MIN, 360) : SCAN_INTERVAL_MIN;
+  if (scanEvery > 0) setInterval(() => scanner.enqueueAll(), scanEvery * 60_000).unref();
 }
 
 function shutdown() {

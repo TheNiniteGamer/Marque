@@ -322,7 +322,9 @@ async function viewLibrary({ params: [id], query, seq }) {
   const save = () => store.set(`lib:${id}`, prefs);
   $('#lib-sort').onchange = (e) => { prefs.sort = e.target.value; save(); render(); };
   $('#lib-size').oninput = (e) => { prefs.size = Number(e.target.value); save(); $('#lib-grid').style.setProperty('--card-w', `${prefs.size}px`); };
-  $('#lib-text').oninput = (e) => { text = e.target.value; render(); };
+  // Redrawn once typing pauses, not on every key (big libraries have thousands of cards).
+  let typing = null;
+  $('#lib-text').oninput = (e) => { text = e.target.value; clearTimeout(typing); typing = setTimeout(render, 150); };
   if ($('#lib-genre')) $('#lib-genre').onchange = (e) => { location.hash = e.target.value ? `#/library/${id}?genre=${encodeURIComponent(e.target.value)}` : `#/library/${id}`; };
   $('#lib-filter').onclick = (e) => {
     const f = e.target.dataset.f; if (!f) return;

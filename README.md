@@ -256,7 +256,7 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `MEDIA_ROOT` | home folder (`/media` in Docker) | Where the folder picker starts |
 | `AUTO_LIBRARIES` | — | Libraries to set up from config: `Name:movie\|show:/path1,/path2;…`. Checked on every start, so new folders are added. |
 | `MEDIA_LABELS` | — | Display names for container folders: `/media/movies=D:/Movies\|…` (set by Docker Compose) |
-| `SCAN_INTERVAL` | `30` | Minutes between automatic rescans (`0` disables) |
+| `SCAN_INTERVAL` | `30` | Minutes between automatic rescans (`0` disables). While new files are noticed on their own (`WATCH_INTERVAL`), full rescans run at most every 6 hours. |
 | `TMDB_API_KEY` / `TMDB_TOKEN` | — | TMDB key from the environment (easier: set it in *Settings → Metadata*) |
 | `METADATA_LANGUAGE` | `en-US` | Default metadata language (also settable in *Settings → Metadata*) |
 | `TVMAZE_DISABLED` | — | Set to `1` to stop using TVmaze |
@@ -268,7 +268,7 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `HLS_MAX_SESSIONS` | `6` | Adaptive streams converted at the same time |
 | `CAST_URL` | — | Address cast devices use to reach Marquee |
 | `INTRO_SCAN_SECONDS` | `600` | How much of each episode's start is searched for the intro |
-| `WATCH_INTERVAL` | `15` | Seconds between checks for new or removed files (`0` turns this off; scans still run every `SCAN_INTERVAL`) |
+| `WATCH_INTERVAL` | `15` | Seconds between checks for new or removed files (`0` turns this off; scans then run every `SCAN_INTERVAL`). On large or slow drives the checks space themselves out, waiting at least 10× as long as a check took. |
 | `YTDLP_PATH` | `yt-dlp` | Location of yt-dlp |
 | `DOWNLOAD_CONCURRENCY` | `1` | Downloads that run at the same time |
 | `FFMPEG_PATH` / `FFPROBE_PATH` | `ffmpeg` / `ffprobe` | Custom binary locations |

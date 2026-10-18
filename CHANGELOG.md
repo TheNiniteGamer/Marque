@@ -4,6 +4,24 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.5.2
+
+Faster and lighter:
+- **Home page and TV libraries load much faster on big libraries.** With 500 shows of 40 episodes,
+  the home page took about 11 seconds to prepare and the TV library 5 seconds; now about 0.06 and
+  0.02 seconds. (Each show's episodes were found by looking through every file, hundreds of times.)
+- **Far fewer disk writes while watching:** the playing position is saved within a minute instead
+  of rewriting the whole database every 10 seconds per viewer (pausing and stopping still save
+  straight away), and the backup copy of the database is made by renaming instead of copying.
+- **Smaller downloads for browsers and phones:** library lists and the web app are compressed
+  (a 3,000-movie list goes from about 900 KB to 35 KB), the web app isn't downloaded again on every
+  visit, and posters are kept by the browser until they change.
+- **Quieter drives:** the check for new files spaces itself out on large or slow drives (waiting
+  at least 10 times as long as a check took), pauses while a scan runs, and full rescans run at most
+  every 6 hours while it's on.
+- Big library pages: typing in the filter redraws once you pause, and cards far off-screen aren't
+  drawn until you scroll near them.
+
 ## 0.5.1
 
 More accurate metadata:

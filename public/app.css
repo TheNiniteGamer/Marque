@@ -94,6 +94,8 @@ h2 { font-size: 19px; margin: 0; }
 .grid.wide { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 
 .card { position: relative; scroll-snap-align: start; min-width: 0; }
+/* Cards far off-screen in big grids aren't laid out or drawn until they come near. */
+.grid > .card { content-visibility: auto; contain-intrinsic-size: auto 150px auto 290px; }
 .card .art {
   position: relative; border-radius: 6px; overflow: hidden; background: var(--bg-3);
   aspect-ratio: 2 / 3; box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
