@@ -4,7 +4,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { spawn, execFileSync } = require('node:child_process');
+const { spawn, execFile, execFileSync } = require('node:child_process');
+const { promisify } = require('node:util');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -13,6 +14,14 @@ const hls = require('../lib/hls');
 const { HwAccel, videoArgs } = require('../lib/hwaccel');
 const { MediaTokens } = require('../lib/tokens');
 const intro = require('../lib/intro');
+const { makeSup } = require('./pgs');
+const BOX = { width: 720, height: 480, x: 260, y: 400, w: 200, h: 40 };
+// Average brightness (0-255) of the subtitle box area in the frame at `t` seconds of a video URL or file.
+function boxBrightness(input, t, extra = []) {
+  const out = execFileSync('ffmpeg', ['-v', 'error', ...extra, '-i', input, '-ss', String(t), '-frames:v', '1',
+    '-vf', `scale=720:480,crop=${BOX.w}:${BOX.h}:${BOX.x}:${BOX.y}`, '-f', 'rawvideo', '-pix_fmt', 'gray', '-']);
+  return out.reduce((a, b) => a + b, 0) / out.length;
+}
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'marquee-stream-'));
 const PORT = 40000 + Math.floor(Math.random() * 10000);
@@ -63,10 +72,18 @@ test.before(async () => {
   episode(path.join(season, 'Theme Show - S01E01.mp4'), 1, 8, theme);
   episode(path.join(season, 'Theme Show - S01E02.mp4'), 2, 15, theme);
   episode(path.join(season, 'Theme Show - S01E03.mp4'), 3, 3, theme);
+  fs.mkdirSync(path.join(ROOT, 'Movies'));
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:rate=24:d=3', '-c:v', 'libx264', '-preset', 'ultrafast', '-b:v', '15M', '-pix_fmt', 'yuv420p',
+    path.join(ROOT, 'Movies', 'Big (2020).mp4')]);
+  // A DVD-sized film with a Blu-ray (PGS) subtitle: a white box from 1–4 s and 5–8 s.
+  fs.writeFileSync(path.join(ROOT, 'box.sup'), makeSup([{ start: 1, end: 4 }, { start: 5, end: 8 }], BOX));
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=720x480:rate=24:d=10', '-f', 'lavfi', '-i', 'sine=d=10', '-i', path.join(ROOT, 'box.sup'),
+    '-map', '0', '-map', '1', '-map', '2', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-c:s', 'copy',
+    '-metadata:s:s:0', 'language=eng', path.join(ROOT, 'Movies', 'Boxed (2019).mkv')]);
   server = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', DATA_DIR: path.join(ROOT, 'data'), SCAN_INTERVAL: '0', TVMAZE_DISABLED: '1',
       TMDB_API_KEY: '', TMDB_TOKEN: '', HWACCEL: 'auto', TRANSCODE_DIR: path.join(ROOT, 'transcode'),
-      AUTO_LIBRARIES: `TV:show:${path.join(ROOT, 'TV')}`, NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost' },
+      AUTO_LIBRARIES: `TV:show:${path.join(ROOT, 'TV')};Movies:movie:${path.join(ROOT, 'Movies')}`, NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   server.stdout.on('data', (d) => process.env.DEBUG && process.stderr.write(d));
@@ -230,7 +247,8 @@ test('adaptive streaming plays end to end and seeks', async () => {
 
   // A whole-file read through the playlist, like a player would do.
   const out = path.join(ROOT, 'all.mp4');
-  execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', `${BASE}/api/items/${ep.id}/hls/360p/index.m3u8?${q}`, '-c', 'copy', out]);
+  // (Asynchronous so this process keeps noticing the server closing idle connections meanwhile.)
+  await promisify(execFile)('ffmpeg', ['-v', 'error', '-y', '-i', `${BASE}/api/items/${ep.id}/hls/360p/index.m3u8?${q}`, '-c', 'copy', out]);
   const dur = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', out]).toString());
   assert.ok(Math.abs(dur - ep.duration) < 1, `full length (${dur} vs ${ep.duration})`);
   assert.equal((await call('DELETE', `/api/hls/${pb.sid}`)).status, 200);
@@ -251,4 +269,89 @@ test('transcoding settings: status, choice and re-test', async () => {
   const r = await fetch(`${BASE}/api/items/${ep.id}/transcode?start=0&mt=${pb.token}`);
   assert.equal(r.headers.get('x-encoder'), 'software');
   await r.body.cancel();
+});
+
+test('an admin can set, clear and reset an intro by hand', async () => {
+  const put = (body) => call('PUT', `/api/items/${ep.id}/intro`, body);
+  assert.equal((await put({ start: 50, end: 40 })).status, 400);
+  assert.equal((await put({ start: 0, end: 9999 })).status, 400, 'must end within the episode');
+  const set = (await put({ start: 10, end: 39.04 })).data;
+  assert.deepEqual(set.intro, { start: 10, end: 39, manual: true });
+  // Re-running detection leaves a manual intro alone.
+  await call('POST', '/api/intro/detect', { force: true });
+  await until(async () => !(await call('GET', '/api/intro')).data.running);
+  assert.deepEqual((await call('GET', `/api/items/${ep.id}`)).data.intro, { start: 10, end: 39, manual: true });
+
+  const none = (await put({ none: true })).data;
+  assert.equal(none.intro, null);
+  assert.equal(none.introSetByHand, true);
+  assert.equal((await call('GET', `/api/items/${ep.id}/playback`)).data.intro, null);
+
+  await put({ auto: true });
+  await until(async () => (await call('GET', `/api/items/${ep.id}`)).data.intro?.end > 0);
+  assert.equal((await call('GET', `/api/items/${ep.id}`)).data.introSetByHand, false);
+});
+
+test('an admin can cap the quality for viewers away from home', async () => {
+  const movies = (await call('GET', '/api/libraries')).data.find((l) => l.name === 'Movies');
+  const big = (await call('GET', `/api/libraries/${movies.id}/items`)).data.items.find((i) => i.title === 'Big');
+  const away = { 'x-forwarded-proto': 'https' }; // what Tailscale / Cloudflare add
+  const pb = async (headers) => (await call('GET', `/api/items/${big.id}/playback`, null, headers)).data;
+
+  assert.deepEqual((await pb(away)).qualities.map((q) => q.id), ['1080p', '720p', '480p', '360p'], 'no limit by default');
+  assert.equal((await call('PATCH', '/api/transcoding', { remoteMaxQuality: '4K' })).status, 400);
+  assert.equal((await call('PATCH', '/api/transcoding', { remoteMaxQuality: '720p' })).data.remoteMaxQuality, '720p');
+
+  const remote = await pb(away);
+  assert.equal(remote.limit, '720p');
+  assert.equal(remote.originalAllowed, false, 'a 15 Mbps file is over the limit');
+  assert.deepEqual(remote.qualities.map((q) => q.id), ['720p', '480p', '360p']);
+  const q = `sid=${remote.sid}&mt=${remote.token}`;
+  assert.equal((await anonGet(`/api/items/${big.id}/stream?mt=${remote.token}`, away)).status, 403);
+  assert.equal((await anonGet(`/api/items/${big.id}/transcode?mt=${remote.token}`, away)).status, 403);
+  const master = await (await anonGet(`/api/items/${big.id}/hls/master.m3u8?${q}`, away)).text();
+  assert.doesNotMatch(master, /1080p/);
+  assert.equal((await anonGet(`/api/items/${big.id}/hls/1080p/index.m3u8?${q}`, away)).status, 404);
+  assert.equal((await anonGet(`/api/items/${big.id}/hls/1080p/seg-0.ts?${q}`, away)).status, 404);
+
+  // At home nothing changes, and small files may still play as they are when away.
+  const home = await pb({});
+  assert.equal(home.limit, null);
+  assert.equal(home.originalAllowed, true);
+  assert.equal((await anonGet(`/api/items/${big.id}/stream?mt=${home.token}`, { range: 'bytes=0-9' })).status, 206);
+  const small = (await call('GET', `/api/items/${ep.id}/playback`, null, away)).data;
+  assert.equal(small.originalAllowed, true);
+  assert.equal((await call('PATCH', '/api/transcoding', { remoteMaxQuality: '' })).data.remoteMaxQuality, '');
+});
+
+test('Blu-ray / DVD picture subtitles are drawn into the converted video', async () => {
+  const movies = (await call('GET', '/api/libraries')).data.find((l) => l.name === 'Movies');
+  const all = (await call('GET', `/api/libraries/${movies.id}/items`)).data.items;
+  const film = all.find((i) => i.title === 'Boxed');
+  assert.ok(film, JSON.stringify(all.map((i) => i.title)));
+  const d = (await call('GET', `/api/items/${film.id}`)).data;
+  assert.deepEqual(d.subtitles.map((x) => [x.id, x.burn, x.label]), [['img0', 0, 'English (Picture)']]);
+  const pb = (await call('GET', `/api/items/${film.id}/playback`)).data;
+  const mt = `mt=${pb.token}`;
+
+  assert.equal((await anonGet(`/api/items/${film.id}/transcode?burn=7&${mt}`)).status, 400);
+  assert.equal((await anonGet(`/api/items/${ep.id}/seekpoint?t=3&burn=0&${mt}`)).status, 401, 'token is for another item');
+  assert.deepEqual(await (await anonGet(`/api/items/${film.id}/seekpoint?t=2.5&burn=0&${mt}`)).json(), { t: 2.5, start: 2.5 });
+
+  // Progressive stream starting at 2 s: the box is on screen; without burn it is not.
+  const file = path.join(ROOT, 'burn.mp4');
+  await promisify(execFile)('ffmpeg', ['-v', 'error', '-y', '-i', `${BASE}/api/items/${film.id}/transcode?start=2&burn=0&${mt}`, '-c', 'copy', file]);
+  assert.ok(boxBrightness(file, 0.2) > 240, 'box drawn at 2.2 s');
+  assert.ok(boxBrightness(file, 2.8) < 200, 'and gone at 4.8 s');
+  assert.ok(boxBrightness(path.join(ROOT, 'Movies', 'Boxed (2019).mkv'), 2.2) < 200, 'the original has no box burned in');
+
+  // Adaptive stream: segment 0 (0–4 s) with the box at 2 s.
+  const q = `sid=burn-test-1&burn=0&${mt}`;
+  const master = await (await anonGet(`/api/items/${film.id}/hls/master.m3u8?${q}`)).text();
+  assert.match(master, /index\.m3u8\?sid=burn-test-1&burn=0&mt=/, 'burn is kept in playlist links');
+  const seg = await anonGet(`/api/items/${film.id}/hls/360p/seg-0.ts?${q}`);
+  const segFile = path.join(ROOT, 'burn-seg0.ts');
+  fs.writeFileSync(segFile, Buffer.from(await seg.arrayBuffer()));
+  assert.ok(boxBrightness(segFile, 2) > 240, 'box drawn in the HLS segment');
+  await call('DELETE', '/api/hls/burn-test-1');
 });

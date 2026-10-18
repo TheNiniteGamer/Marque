@@ -74,8 +74,14 @@ function itemMenu(anchor, x, { ctx } = {}) {
     { label: '📺  Go to show', hidden: x.type !== 'episode', onClick: () => { location.hash = `#/show/${x.showId}`; } },
     { sep: true, hidden: !admin },
     { label: '✎  Edit details…', hidden: !admin, onClick: () => openEditor(x.id) },
-    { label: '⌕  Fix match…', hidden: !admin || x.type === 'episode', onClick: () => openMatcher(x.id) },
-    { label: '↻  Refresh metadata', hidden: !admin, onClick: () => refreshMetadata(x.type === 'episode' ? x.showId : x.id) },
+    { label: '▦  Add to collection…', hidden: !admin || !['movie', 'show'].includes(x.type), onClick: () => openCollectionPicker(x) },
+    { label: '✕  Remove from this collection', hidden: !ctx?.startsWith('collection:'), onClick: async () => {
+      await api(`/api/collections/${ctx.slice(11)}/members/${x.id}`, { method: 'DELETE' }); toast('Removed from the collection'); router();
+    } },
+    { label: '💬  Find subtitles…', hidden: !state.status?.subtitleSearch || !['movie', 'episode'].includes(x.type), onClick: () => openSubtitleSearch(x.id, () => router()) },
+    { label: '⏭  Edit intro…', hidden: !admin || x.type !== 'episode', onClick: () => openIntroEditor(x.id) },
+    { label: '⌕  Fix match…', hidden: !admin || x.type === 'episode' || x.type === 'extra', onClick: () => openMatcher(x.id) },
+    { label: '↻  Refresh metadata', hidden: !admin || x.type === 'extra', onClick: () => refreshMetadata(x.type === 'episode' ? x.showId : x.id) },
   ]);
 }
 
@@ -333,6 +339,18 @@ function metadataSection(st) {
       </div>
       <div class="row"><button class="btn small" id="meta-refresh-all">↻ Refresh metadata for all libraries</button>
         <span class="muted" style="font-size:13px">Your own edits are always kept.</span></div>
+      <h3 style="margin:12px 0 0">Subtitles from OpenSubtitles.com</h3>
+      <span class="muted" style="font-size:13px">Lets everyone search for missing subtitles from the player (Subtitles → Search online…).
+        Get a free API key at <a href="https://www.opensubtitles.com/en/consumers" target="_blank" rel="noopener">opensubtitles.com → API consumers</a>.
+        Without an OpenSubtitles account only a few downloads a day are allowed; signing in raises the limit.</span>
+      <div class="row">
+        <label style="flex:1;min-width:200px">API key <span class="muted" style="font-weight:400">— ${st.opensubtitles.keySet ? `saved (${st.opensubtitles.keyHint})` : 'not set'}</span>
+          <input class="input" id="os-key" type="password" autocomplete="off" placeholder="${st.opensubtitles.keySet ? 'Paste a new key to replace it' : 'API key'}"></label>
+        <label style="min-width:150px">Account (optional)<input class="input" id="os-user" autocomplete="off" value="${st.opensubtitles.username}" placeholder="Username"></label>
+        <label style="min-width:150px">Password<input class="input" id="os-pass" type="password" autocomplete="new-password" placeholder="${st.opensubtitles.username ? 'Unchanged' : ''}"></label>
+      </div>
+      <div class="row"><button class="btn small" id="os-save">Save</button>
+        ${st.opensubtitles.keySet ? html`<button class="btn small danger" id="os-remove">Remove</button>` : ''}</div>
     </div>`;
 }
 
@@ -340,6 +358,14 @@ function bindMetadataSection() {
   const patch = async (body, msg) => {
     try { await api('/api/settings', { method: 'PATCH', body }); toast(msg); router(); } catch (err) { toast(err.message, true); }
   };
+  $('#os-save').onclick = (e) => {
+    const o = { username: $('#os-user').value.trim() };
+    if ($('#os-key').value.trim()) o.apiKey = $('#os-key').value.trim();
+    if ($('#os-pass').value) o.password = $('#os-pass').value;
+    e.target.disabled = true;
+    patch({ opensubtitles: o }, 'OpenSubtitles settings saved');
+  };
+  if ($('#os-remove')) $('#os-remove').onclick = () => patch({ opensubtitles: { apiKey: '' } }, 'Removed');
   $('#tmdb-save').onclick = async (e) => {
     const key = $('#tmdb-key').value.trim();
     if (!key) return toast('Paste a key first', true);
@@ -686,6 +712,11 @@ function transcodingSection(t, intro, settings) {
         <div>A graphics card has to be passed through to Docker first: set <code>GPU=nvidia</code> (or <code>intel</code> / <code>amd</code> on Linux hosts) in the <code>.env</code> file and run <b>start-marquee.bat</b> again. See the README.</div></details>` : ''}
       <div class="row"><button class="btn small" id="tc-test">Test again</button>
         <span class="muted" style="font-size:13px">Videos your browser can already play are never converted.</span></div>
+      <label>Maximum quality away from home
+        <select id="tc-remote">${[['', 'No limit'], ['1080p', '1080p (about 8 Mbps)'], ['720p', '720p (about 4 Mbps)'], ['480p', '480p (about 1.5 Mbps)'], ['360p', '360p (under 1 Mbps)']]
+          .map(([v, l]) => html`<option value="${v}" ${t.remoteMaxQuality === v ? 'selected' : ''}>${l}</option>`)}</select></label>
+      <div class="muted" style="font-size:13px;margin-top:-6px">For people watching through Tailscale, Cloudflare or from outside your network, so one viewer can't use up your home internet's upload.
+        Videos are converted down to this quality; at home nothing changes.</div>
       <label>Address for cast devices <span class="muted" style="font-weight:400">(optional)</span>
         <input class="input" id="tc-cast" placeholder="${t.castUrlFromEnv || 'e.g. http://192.168.1.20:32500'}" value="${t.castUrl}"></label>
       <div class="muted" style="font-size:13px;margin-top:-6px">Chromecasts and TVs fetch the video from Marquee themselves, so they need an address that works on your network —
@@ -715,6 +746,7 @@ function bindTranscodingSection() {
     router();
   };
   $('#tc-save-cast').onclick = () => save({ castUrl: $('#tc-cast').value }, 'Saved');
+  $('#tc-remote').onchange = (e) => save({ remoteMaxQuality: e.target.value }, 'Saved');
   $('#intro-on').onchange = async (e) => {
     try { await api('/api/settings', { method: 'PATCH', body: { introDetection: e.target.checked } }); toast('Saved'); } catch (err) { toast(err.message, true); }
   };
@@ -725,4 +757,207 @@ function bindTranscodingSection() {
   };
   $('#intro-run').onclick = run(false);
   $('#intro-redo').onclick = run(true);
+}
+
+// ---------- edit an episode's intro by hand (admins) ----------
+// "1:23", "01:02:03" or plain seconds → seconds (NaN if unreadable).
+function parseClock(s) {
+  const parts = String(s).trim().split(':').map(Number);
+  if (!parts.length || parts.some((n) => !Number.isFinite(n) || n < 0)) return NaN;
+  return parts.reduce((acc, n) => acc * 60 + n, 0);
+}
+
+async function openIntroEditor(id) {
+  const it = await api(`/api/items/${id}`);
+  const inPlayer = typeof player !== 'undefined' && player?.item?.id === id;
+  const field = (name, value) => html`<label>${name === 'start' ? 'Intro starts at' : 'Intro ends at'}
+    <span class="row"><input class="input" name="${name}" value="${value != null ? fmtClock(value) : ''}" placeholder="m:ss" style="max-width:120px">
+    ${inPlayer ? html`<button type="button" class="btn small" data-now="${name}">Use current position</button>` : ''}</span></label>`;
+  const m = openModal({
+    title: `Intro — ${epLabel(it)} ${it.title}`,
+    body: html`<form class="form" id="intro-form">
+      <p class="muted" style="margin:0">${it.intro ? (it.introSetByHand ? 'Set by hand.' : 'Found automatically.') : it.introSetByHand ? 'Marked as having no intro.' : 'No intro found.'}
+        Times are minutes:seconds from the start of the episode.</p>
+      ${field('start', it.intro?.start ?? null)}
+      ${field('end', it.intro?.end ?? null)}
+    </form>`.s,
+    footer: html`<button class="btn" data-intro="auto" title="Forget the manual setting and look for the intro automatically">Detect automatically</button>
+      <button class="btn" data-intro="none">No intro</button>
+      <button class="btn primary" data-intro="save">Save</button>`.s,
+  });
+  const form = $('#intro-form', m.el);
+  m.el.addEventListener('click', async (e) => {
+    const now = e.target.closest('[data-now]');
+    if (now) { form.elements[now.dataset.now].value = fmtClock(player.time); return; }
+    const act = e.target.closest('[data-intro]')?.dataset.intro;
+    if (!act) return;
+    const body = act === 'auto' ? { auto: true } : act === 'none' ? { none: true }
+      : { start: parseClock(form.elements.start.value), end: parseClock(form.elements.end.value) };
+    if (act === 'save' && (Number.isNaN(body.start) || Number.isNaN(body.end))) return toast('Enter times like 1:05', true);
+    try {
+      const updated = await api(`/api/items/${id}/intro`, { method: 'PUT', body });
+      if (inPlayer) player.item.intro = updated.intro;
+      toast(act === 'auto' ? 'Looking for the intro automatically…' : 'Intro saved');
+      m.close();
+      if (!inPlayer) router();
+    } catch (err) { toast(err.message, true); }
+  });
+}
+
+// ---------- settings: problem finder ----------
+function problemsSection(p) {
+  const link = (x) => html`<a href="#/${x.type === 'show' ? 'show' : 'item'}/${x.id}">${x.title}</a>`;
+  const where = (x) => (x.file ? html` <span class="muted path-inner">${x.file}</span>` : '');
+  const groups = [
+    { key: 'offline', title: 'Folders that are offline or missing', items: p.offline,
+      row: (x) => html`<li><b>${x.library}</b>: <code>${x.path}</code></li>`,
+      help: 'A drive is unplugged or a folder was moved. Its titles and watch history are kept until it comes back.' },
+    { key: 'unreadable', title: 'Files that can’t be read', items: p.unreadable,
+      row: (x) => html`<li>${link(x)}${where(x)}</li>`, help: 'ffprobe couldn’t open these. They may be damaged or still copying.' },
+    { key: 'unmatched', title: 'No online match', items: p.unmatched,
+      row: (x) => html`<li>${link(x)} <button class="link-btn" data-fix-match="${x.id}">Find a match…</button></li>`,
+      help: 'No poster or details were found. Renaming the file as “Title (Year)”, or Find a match, usually fixes it.' },
+    { key: 'duplicates', title: 'Duplicates', items: p.duplicates,
+      row: (g) => html`<li><b>${g.title}</b> — ${g.copies.length} copies<ul>${g.copies.map((x) => html`<li>${link(x)} <span class="muted">(${x.library})</span>${where(x)}</li>`)}</ul></li>`,
+      help: 'The same movie or episode more than once (fine if you keep several versions on purpose).' },
+    { key: 'missing', title: 'Missing episodes', items: p.missingEpisodes,
+      row: (s) => html`<li><a href="#/show/${s.showId}?season=${s.season}">${s.show}</a>, season ${s.season}: episode${s.missing.length === 1 ? '' : 's'} ${s.missing.join(', ')}</li>`,
+      help: 'Gaps in episode numbers, up to the last episode you have.' },
+  ];
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+  return html`
+    <h2 style="margin:28px 0 12px" id="problems">Library problems</h2>
+    <div class="panel problems">
+      <div class="upd-state ${total ? '' : 'ok'}">${total ? `${total} thing${total === 1 ? '' : 's'} to look at` : '✓ No problems found'}</div>
+      ${groups.filter((g) => g.items.length).map((g) => html`<details>
+        <summary><b>${g.title}</b> <span class="muted">(${g.items.length})</span></summary>
+        <p class="muted" style="font-size:13px;margin:6px 0">${g.help}</p>
+        <ul>${g.items.slice(0, 200).map(g.row)}</ul>${g.items.length > 200 ? html`<p class="muted">…and ${g.items.length - 200} more.</p>` : ''}
+      </details>`)}
+    </div>`;
+}
+
+// ---------- collections ----------
+function collectionCard(c) {
+  return html`<div class="card">
+    <div class="art"><a class="cover" href="#/collection/${c.id}">
+      ${c.cover ? html`<img loading="lazy" src="${artUrl('poster', c.cover)}" alt="${c.name}">` : html`<div class="collection-empty">▦</div>`}</a>
+      <span class="badge" title="Titles in this collection">${c.count}</span></div>
+    <a href="#/collection/${c.id}"><div class="title" title="${c.name}">${c.name}</div><div class="sub">${c.kind === 'auto' ? 'From TMDB' : 'Collection'}</div></a>
+  </div>`;
+}
+
+function collectionChips(x) {
+  return x.collections?.length ? html`<div class="row collection-chips">${x.collections.map((c) => html`<a class="chip link" href="#/collection/${c.id}">▦ ${c.name}</a>`)}</div>` : '';
+}
+
+async function viewCollections({ query, seq }) {
+  const libraryId = query.get('library');
+  const list = await api(`/api/collections${libraryId ? `?library=${libraryId}` : ''}`);
+  const lib = libraryId && state.libraries.find((l) => l.id === libraryId);
+  if (!setView(seq, html`
+    <div class="toolbar"><h1>${lib ? `${lib.name} · ` : ''}Collections<span class="count">${list.length}</span></h1>
+      ${lib ? html`<a class="btn small" href="#/library/${lib.id}">‹ Back to ${lib.name}</a>` : ''}
+      ${state.user.role === 'admin' ? html`<button class="btn small primary" id="col-new">＋ New collection</button>` : ''}</div>
+    ${list.length ? html`<div class="grid">${list.map(collectionCard)}</div>` : html`<div class="empty"><h2>No collections yet</h2>
+      <p>Film series like “The Matrix Collection” appear here automatically once two of their movies are matched with TMDB.${state.user.role === 'admin' ? ' You can also make your own with ＋ New collection, or from a movie’s ⋯ menu.' : ''}</p></div>`}`)) return;
+  if ($('#col-new')) $('#col-new').onclick = async () => {
+    const name = prompt('Name of the new collection');
+    if (!name) return;
+    try { const c = await api('/api/collections', { method: 'POST', body: { name } }); location.hash = `#/collection/${c.id}`; } catch (err) { toast(err.message, true); }
+  };
+}
+
+async function viewCollection({ params: [id], seq }) {
+  const c = await api(`/api/collections/${id}`);
+  const admin = state.user.role === 'admin' && c.kind === 'manual';
+  if (!setView(seq, html`
+    <div class="toolbar"><h1>${c.name}<span class="count">${c.count}</span></h1>
+      <span class="muted">${c.kind === 'auto' ? 'Collection from TMDB' : 'Collection'}</span>
+      ${admin ? html`<button class="btn small" id="col-rename">Rename</button><button class="btn small danger" id="col-delete">Delete</button>` : ''}</div>
+    ${c.items.length ? html`<div class="grid">${c.items.map((x) => posterCard(x, admin ? `collection:${c.id}` : ''))}</div>`
+      : html`<div class="empty"><p>This collection is empty. Use “Add to collection…” in the ⋯ menu of a movie or show.</p></div>`}`)) return;
+  if (!admin) return;
+  $('#col-rename').onclick = async () => {
+    const name = prompt('New name', c.name);
+    if (!name || name === c.name) return;
+    try { await api(`/api/collections/${id}`, { method: 'PATCH', body: { name } }); router(); } catch (err) { toast(err.message, true); }
+  };
+  $('#col-delete').onclick = async () => {
+    if (!confirm(`Delete the collection “${c.name}”? The movies and shows in it are not affected.`)) return;
+    await api(`/api/collections/${id}`, { method: 'DELETE' });
+    toast('Collection deleted'); history.back();
+  };
+}
+
+// "Add to collection…": tick the collections a movie or show should be in, or make a new one.
+async function openCollectionPicker(x) {
+  const [all, detail] = await Promise.all([api('/api/collections'), api(x.type === 'show' ? `/api/shows/${x.id}` : `/api/items/${x.id}`)]);
+  const mine = all.filter((c) => c.kind === 'manual');
+  const inIds = new Set((detail.collections || []).map((c) => c.id));
+  const m = openModal({
+    title: `Collections — ${x.title}`,
+    body: html`<div class="form">
+      ${mine.length ? mine.map((c) => html`<label class="check"><input type="checkbox" data-col="${c.id}" ${inIds.has(c.id) ? 'checked' : ''}> ${c.name} <span class="muted">(${c.count})</span></label>`)
+        : html`<p class="muted" style="margin:0">You haven't made any collections yet.</p>`}
+      <label>New collection <span class="row"><input class="input" id="col-new-name" placeholder="e.g. Christmas movies"><button class="btn small" id="col-new-add">Add</button></span></label>
+    </div>`.s,
+    footer: html`<button class="btn primary" data-close>Done</button>`.s,
+    onClose: () => router(),
+  });
+  m.el.addEventListener('change', async (e) => {
+    const id = e.target.dataset.col; if (!id) return;
+    try { await api(`/api/collections/${id}/members/${x.id}`, { method: e.target.checked ? 'PUT' : 'DELETE' }); } catch (err) { toast(err.message, true); }
+  });
+  $('#col-new-add', m.el).onclick = async () => {
+    const name = $('#col-new-name', m.el).value.trim();
+    if (!name) return;
+    try { await api('/api/collections', { method: 'POST', body: { name, members: [x.id] } }); toast(`Added to ${name}`); m.close(); } catch (err) { toast(err.message, true); }
+  };
+  m.el.querySelector('footer [data-close]').onclick = () => m.close();
+}
+
+// ---------- subtitles from OpenSubtitles.com ----------
+// Search and download subtitles for an item; onAdded(detail, newSubId) runs after a download.
+async function openSubtitleSearch(id, onAdded) {
+  const it = knownItems.get(id) || await api(`/api/items/${id}`);
+  const m = openModal({
+    title: `Find subtitles — ${it.type === 'episode' ? `${it.showTitle} ${epLabel(it)}` : it.title}`,
+    wide: true,
+    body: html`<form class="row" id="subs-form" style="margin-bottom:12px">
+        <label>Language <input class="input" name="lang" value="${store.get('subsLang', (navigator.language || 'en').slice(0, 2).toLowerCase())}" style="max-width:110px" placeholder="en"></label>
+        <button class="btn primary" style="align-self:flex-end">Search</button>
+        <span class="muted" style="font-size:13px;align-self:flex-end">Two-letter codes, e.g. en, es, fr — several with commas.</span>
+      </form><div id="subs-results" class="muted">Searching…</div>`.s,
+  });
+  const box = $('#subs-results', m.el);
+  const form = $('#subs-form', m.el);
+  let results = [];
+  const search = async () => {
+    const lang = form.elements.lang.value.trim() || 'en';
+    store.set('subsLang', lang);
+    box.textContent = 'Searching…';
+    try {
+      results = (await api(`/api/items/${id}/subtitle-search?lang=${encodeURIComponent(lang)}`)).results;
+      box.innerHTML = results.length ? html`<div class="subs-list">${results.map((r, i) => html`
+        <div class="subs-row">
+          <div><b>${r.language?.toUpperCase()}</b> ${r.release || 'Unnamed'}
+            <div class="muted" style="font-size:12px">${r.downloads.toLocaleString()} downloads${r.hashMatch ? ' · ✓ made for this exact file' : ''}${r.hearingImpaired ? ' · for deaf and hard of hearing' : ''}${r.machineTranslated ? ' · machine translated' : ''}</div></div>
+          <button class="btn small" data-get="${i}">Download</button>
+        </div>`)}</div>`.s : html`<p>No subtitles found in that language.</p>`.s;
+    } catch (err) { box.textContent = err.message; }
+  };
+  form.onsubmit = (e) => { e.preventDefault(); search(); };
+  box.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-get]'); if (!b) return;
+    const r = results[Number(b.dataset.get)];
+    b.disabled = true; b.textContent = 'Downloading…';
+    try {
+      const d = await api(`/api/items/${id}/subtitle-download`, { method: 'POST', body: { fileId: r.fileId, language: r.language, release: r.release } });
+      toast(`Subtitles added${d.remaining != null ? ` (${d.remaining} downloads left today)` : ''}`);
+      m.close();
+      onAdded?.(d, d.added);
+    } catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Download'; }
+  });
+  search();
 }

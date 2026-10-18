@@ -60,6 +60,8 @@ public class PlayerActivity extends Activity {
     private String base;
     private JSONObject item;
     private boolean direct;
+    private boolean directCapable;  // the phone can play the original file
+    private int burn = -1;          // picture subtitle track the server draws into the video, or -1
     private boolean hls;           // playing the adaptive stream (quality other than "original")
     private String quality = "original";
     private String qualityPref;
@@ -191,11 +193,15 @@ public class PlayerActivity extends Activity {
         JSONObject v = media != null ? media.optJSONObject("video") : null;
         JSONArray audio = media != null ? media.optJSONArray("audio") : null;
         String aCodec = audio != null && audio.length() > 0 ? audio.optJSONObject(0).optString("codec", null) : null;
-        direct = media != null && PlaybackPlan.canDirectPlay(it.optString("fileName"),
+        burn = -1;
+        directCapable = media != null && PlaybackPlan.canDirectPlay(it.optString("fileName"),
             v != null ? v.optString("codec", null) : null, v != null ? v.optString("profile", null) : null, aCodec, decoders());
+        direct = directCapable;
         JSONArray qs = qualities();
         qualityBtn.setVisibility(qs.length() > 0 ? View.VISIBLE : View.GONE);
         quality = qs.length() > 0 ? PlaybackPlan.defaultQuality(qualityPref, Uri.parse(base).getHost()) : "original";
+        // Away from home the server's admin may have capped the quality: the original isn't offered then.
+        if ("original".equals(quality) && qs.length() > 0 && !originalAllowed()) quality = "auto";
         if (!"original".equals(quality) && !"auto".equals(quality) && !hasQuality(qs, quality)) quality = qs.optJSONObject(0).optString("id");
         hls = !"original".equals(quality);
 
@@ -204,13 +210,18 @@ public class PlayerActivity extends Activity {
         subs.setText("");
         JSONArray list = it.optJSONArray("subtitles");
         if (subsOn && list != null && list.length() > 0) {
+            // Text subtitles first: picture ones (Blu-ray / DVD) need the video converted.
             String lang = Locale.getDefault().getLanguage();
-            JSONObject pick = list.optJSONObject(0);
-            for (int i = 0; i < list.length(); i++) {
-                String l = list.optJSONObject(i).optString("lang", "");
-                if (!l.isEmpty() && l.toLowerCase(Locale.ROOT).startsWith(lang)) { pick = list.optJSONObject(i); break; }
+            JSONObject pick = null;
+            for (int pass = 0; pass < 2 && pick == null; pass++) {
+                for (int i = 0; i < list.length() && pick == null; i++) {
+                    JSONObject candidate = list.optJSONObject(i);
+                    String l = candidate.optString("lang", "");
+                    if (candidate.has("burn") == (pass == 1) && !l.isEmpty() && l.toLowerCase(Locale.ROOT).startsWith(lang)) pick = candidate;
+                }
             }
-            setSubtitles(pick.optString("id"));
+            if (pick == null) pick = list.optJSONObject(0);
+            setSubtitles(pick.optString("id"), false);
         }
         open(start);
         ui.removeCallbacks(tick);
@@ -222,6 +233,8 @@ public class PlayerActivity extends Activity {
         JSONArray qs = playback != null ? playback.optJSONArray("qualities") : null;
         return qs != null ? qs : new JSONArray();
     }
+
+    private boolean originalAllowed() { return playback == null || playback.optBoolean("originalAllowed", true); }
 
     private static boolean hasQuality(JSONArray qs, String id) {
         for (int i = 0; i < qs.length(); i++) if (id.equals(qs.optJSONObject(i).optString("id"))) return true;
@@ -253,7 +266,7 @@ public class PlayerActivity extends Activity {
         if (hls) {
             offset = 0;
             pendingSeek = t;
-            String url = base + PlaybackPlan.hlsPath(id, playback.optString("sid"), audioIndex, quality, playback.optString("token"));
+            String url = base + PlaybackPlan.hlsPath(id, playback.optString("sid"), audioIndex, quality, playback.optString("token")) + burnQuery();
             video.setVideoURI(Uri.parse(url), Net.headers(url));
         } else if (direct) {
             offset = 0;
@@ -264,17 +277,19 @@ public class PlayerActivity extends Activity {
             final double want = t;
             io.execute(() -> {
                 double start = want;
-                try { start = Net.getJson(base + "/api/items/" + id + "/seekpoint?t=" + fmt(want)).optDouble("start", want); } catch (Exception ignored) { }
+                try { start = Net.getJson(base + "/api/items/" + id + "/seekpoint?t=" + fmt(want) + burnQuery()).optDouble("start", want); } catch (Exception ignored) { }
                 final double s = start;
                 runOnUiThread(() -> {
                     offset = s;
                     pendingSeek = 0;
-                    String url = base + "/api/items/" + id + "/transcode?start=" + fmt(want) + "&audio=" + audioIndex;
+                    String url = base + "/api/items/" + id + "/transcode?start=" + fmt(want) + "&audio=" + audioIndex + burnQuery();
                     video.setVideoURI(Uri.parse(url), Net.headers(url));
                 });
             });
         }
     }
+
+    private String burnQuery() { return burn >= 0 ? "&burn=" + burn : ""; }
 
     private static String fmt(double d) { return String.format(Locale.ROOT, "%.3f", d); }
 
@@ -290,7 +305,7 @@ public class PlayerActivity extends Activity {
     }
 
     private boolean onPlaybackError() {
-        if (hls && item != null) {
+        if (hls && item != null && originalAllowed()) {
             Toast.makeText(this, R.string.adaptive_failed, Toast.LENGTH_SHORT).show();
             double at = now();
             hls = false;
@@ -302,7 +317,7 @@ public class PlayerActivity extends Activity {
             // The phone couldn't play the original file: let the server convert it.
             Toast.makeText(this, R.string.switching_to_convert, Toast.LENGTH_SHORT).show();
             double at = now();
-            direct = false;
+            direct = directCapable = false;
             open(at);
             return true;
         }
@@ -425,15 +440,27 @@ public class PlayerActivity extends Activity {
         }
         new AlertDialog.Builder(this).setTitle(R.string.subtitles).setSingleChoiceItems(labels, checked, (d, which) -> {
             d.dismiss();
-            setSubtitles(which == 0 ? null : list.optJSONObject(which - 1).optString("id"));
+            setSubtitles(which == 0 ? null : list.optJSONObject(which - 1).optString("id"), true);
         }).show();
     }
 
-    private void setSubtitles(String id) {
+    private void setSubtitles(String id, boolean reopen) {
         subId = id;
         cues = new ArrayList<>();
         subs.setText("");
-        if (id == null) return;
+        // Picture subtitles are drawn into the video by the server, so switching them changes the stream.
+        int newBurn = -1;
+        JSONArray list = item.optJSONArray("subtitles");
+        for (int i = 0; id != null && list != null && i < list.length(); i++) {
+            JSONObject sub = list.optJSONObject(i);
+            if (id.equals(sub.optString("id")) && sub.has("burn")) newBurn = sub.optInt("burn");
+        }
+        if (newBurn != burn) {
+            burn = newBurn;
+            direct = directCapable && burn < 0;
+            if (reopen) open(now());
+        }
+        if (id == null || burn >= 0) return;
         // Cues are fetched in the file's own timeline, so they line up in both direct and converted mode.
         final String url = base + "/api/items/" + item.optString("id") + "/subtitles/" + id;
         io.execute(() -> {
@@ -486,14 +513,15 @@ public class PlayerActivity extends Activity {
     private void chooseQuality() {
         JSONArray qs = qualities();
         if (qs.length() == 0) return;
-        String[] ids = new String[qs.length() + 2];
+        int first = originalAllowed() ? 1 : 0; // slots before "Auto"
+        String[] ids = new String[qs.length() + 1 + first];
         String[] labels = new String[ids.length];
-        ids[0] = "original"; labels[0] = getString(R.string.quality_original);
-        ids[1] = "auto"; labels[1] = getString(R.string.quality_auto);
+        if (first == 1) { ids[0] = "original"; labels[0] = getString(R.string.quality_original); }
+        ids[first] = "auto"; labels[first] = getString(R.string.quality_auto);
         int checked = 0;
         for (int i = 0; i < qs.length(); i++) {
-            ids[i + 2] = qs.optJSONObject(i).optString("id");
-            labels[i + 2] = qs.optJSONObject(i).optString("label");
+            ids[i + first + 1] = qs.optJSONObject(i).optString("id");
+            labels[i + first + 1] = qs.optJSONObject(i).optString("label");
         }
         for (int i = 0; i < ids.length; i++) if (ids[i].equals(quality)) checked = i;
         new AlertDialog.Builder(this).setTitle(R.string.quality).setSingleChoiceItems(labels, checked, (d, which) -> {
@@ -517,7 +545,7 @@ public class PlayerActivity extends Activity {
             }
         } catch (Exception e) {
             // Fall back to letting the server pick the track.
-            direct = false;
+            direct = directCapable = false;
             open(now());
         }
     }

@@ -173,8 +173,15 @@ never gets access to Docker itself.
 | **Streaming** | **Direct Play** with instant seeking when the browser supports the file. Otherwise ffmpeg converts it **on the fly**, copying the video when possible so only the audio is converted. Falls back automatically if direct play fails. |
 | **Quality / adaptive streaming** | Pick **Original**, **Auto** or a fixed 1080p / 720p / 480p / 360p in the player. *Auto* uses HLS adaptive streaming, which switches quality to suit the connection. It is the default when you're away from home. Segments are made on demand, so seeking anywhere starts within seconds. |
 | **Graphics card conversion** | NVIDIA (NVENC), Intel Quick Sync and Intel/AMD VAAPI, detected automatically, with fallback to the CPU. |
-| **Skip intro** | Theme songs are found automatically by comparing the audio of episodes in a season. A **Skip Intro** button appears during the intro (`S`), or turn on automatic skipping under *Account*. |
+| **Skip intro** | Theme songs are found automatically by comparing the audio of episodes in a season. A **Skip Intro** button appears during the intro (`S`), or turn on automatic skipping under *Account*. Admins can fix an intro by hand: *⋯ → Edit intro…*, or ✂ in the player. |
 | **Casting** | Chromecast / Google TV from Chrome and Edge, AirPlay from Safari. Includes subtitles, resume position and next episode. |
+| **Watch together** | 👥 in the player makes a watch party and gives you a link. Everyone with an account who opens it stays in sync: play, pause, skipping and the next episode. |
+| **Subtitles** | Sidecar `.srt`/`.vtt`, embedded text subtitles, and Blu-ray / DVD picture subtitles (PGS, VobSub), which the server draws into the video. Missing ones can be found on **OpenSubtitles.com** from the player (*Subtitles → Search online…*) once an admin adds a free API key in *Settings → Metadata*. |
+| **Quality limit away from home** | *Settings → Transcoding*: cap the quality for people watching through Tailscale, Cloudflare or from outside, so one viewer can't use up your upload. |
+| **Collections** | Film series from TMDB (e.g. “The Matrix Collection”) are grouped automatically. Admins can make their own with *⋯ → Add to collection…*. Find them with the *Collections* button in a library. |
+| **Extras** | Trailers, featurettes and behind-the-scenes clips show on their movie or show page instead of in the library (see the folder layout below). |
+| **New files appear by themselves** | Marquee notices files added, removed or renamed in your folders within about 15 seconds, including on Windows drives in Docker. Files still being copied are picked up once they're finished. |
+| **Library problems** | *Settings → Library problems* lists offline folders, unreadable files, titles with no online match, duplicates and missing episodes. |
 | **Player** | Seek bar with hover time, skip, volume, **playback speed**, **picture-in-picture**, fullscreen, keyboard shortcuts, audio track choice, subtitles (sidecar `.srt`/`.vtt` or embedded), and an Up Next countdown. Autoplay and default subtitles can be set per browser under *Account*. |
 | **YouTube downloader** | Paste a video or playlist link, pick a library and quality. Saves an MP4 that plays directly, the thumbnail as its poster, and English subtitles when available, then adds it to the library. Has a queue with progress, cancel and retry, plus **Update yt-dlp** for when YouTube changes. |
 
@@ -200,10 +207,13 @@ Movies/
   The Matrix (1999)/The Matrix (1999).en.srt
   The Matrix (1999)/poster.jpg
   Heat (1995).mp4
-TV Shows/
+  The Matrix (1999)/The Matrix (1999)-trailer.mkv          (an extra: also -featurette, -behindthescenes,
+  The Matrix (1999)/Extras/Making of.mkv                     -deleted, -interview, -scene, -short; or folders
+TV Shows/                                                     Extras, Trailers, Featurettes, Behind The Scenes…)
   Breaking Bad/
     poster.jpg
     Season 01/Breaking Bad - S01E01 - Pilot.mkv
+    Featurettes/Inside the episode.mkv
 ```
 
 ## Configuration (environment variables)
@@ -230,6 +240,7 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `HLS_MAX_SESSIONS` | `6` | Adaptive streams converted at the same time |
 | `CAST_URL` | — | Address cast devices use to reach Marquee |
 | `INTRO_SCAN_SECONDS` | `600` | How much of each episode's start is searched for the intro |
+| `WATCH_INTERVAL` | `15` | Seconds between checks for new or removed files (`0` turns this off; scans still run every `SCAN_INTERVAL`) |
 | `YTDLP_PATH` | `yt-dlp` | Location of yt-dlp |
 | `DOWNLOAD_CONCURRENCY` | `1` | Downloads that run at the same time |
 | `FFMPEG_PATH` / `FFPROBE_PATH` | `ffmpeg` / `ffprobe` | Custom binary locations |
@@ -274,6 +285,11 @@ lib/hwaccel.js      encoder choice (NVENC / QSV / VAAPI / x264), start-up tests,
 lib/hls.js          adaptive streaming: VOD playlists, on-demand segment conversion per session
 lib/intro.js        skip-intro detection (Chromaprint audio fingerprints compared across a season)
 lib/tokens.js       signed, expiring playback links for cast devices and native players
+lib/watcher.js      notices folder changes (polls folder times; works on Docker bind mounts and network drives)
+lib/collections.js  automatic (TMDB) and hand-made collections
+lib/party.js        watch together: shared play state pushed to members over Server-Sent Events
+lib/opensubtitles.js  subtitle search/download from OpenSubtitles.com
+lib/problems.js     library health check (offline folders, duplicates, missing episodes…)
 lib/library.js      per-user API shaping: hubs, continue watching / up next, search, watch state
 lib/metadata.js     metadata providers (TMDB, TVmaze), image downloads
 lib/matcher.js      matching, refresh/unmatch, user edits and custom artwork (edits > metadata > file name)

@@ -13,8 +13,8 @@ BT="$SDK/build-tools/${BUILD_TOOLS:-34.0.0}"
 JAR="$SDK/platforms/android-34/android.jar"
 [ -x "$BT/aapt2" ] && [ -f "$JAR" ] || { echo "Need build-tools 34.0.0 and platform android-34 in $SDK"; exit 1; }
 
-VERSION_NAME="${VERSION_NAME:-1.1.0}"
-VERSION_CODE="${VERSION_CODE:-2}"
+VERSION_NAME="${VERSION_NAME:-1.2.0}"
+VERSION_CODE="${VERSION_CODE:-3}"
 OUT=build
 rm -rf "$OUT"; mkdir -p "$OUT/res" "$OUT/gen" "$OUT/classes" "$OUT/dex"
 
@@ -26,9 +26,11 @@ echo "• resources"
 
 echo "• compile"
 # Compile against Android's own Java library (not the desktop JDK's), like the Android build tools do.
+status=0
 javac -nowarn -Xlint:-options -source 8 -target 8 -bootclasspath "$JAR:$BT/core-lambda-stubs.jar" -d "$OUT/classes" -encoding UTF-8 \
-  $(find app/src/main/java "$OUT/gen" -name '*.java') 2>&1 | grep -v "^Note:" || true
-[ -n "$(find "$OUT/classes" -name '*.class' -print -quit)" ] || { echo "compile failed"; exit 1; }
+  $(find app/src/main/java "$OUT/gen" -name '*.java') > "$OUT/javac.log" 2>&1 || status=$?
+grep -v "^Note:" "$OUT/javac.log" || true
+[ "$status" -eq 0 ] || { echo "compile failed"; exit 1; }
 
 echo "• dex"
 "$BT/d8" --release --min-api 26 --lib "$JAR" --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')

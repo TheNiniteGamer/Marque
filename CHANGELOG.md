@@ -4,9 +4,30 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.3.0 — Significant update
+
+- **Watch together:** 👥 in the player creates a watch party link. Everyone in it stays in sync:
+  play, pause, skipping and moving on to the next episode.
+- **Subtitles from OpenSubtitles.com:** *Subtitles → Search online…* in the player, or *⋯ → Find
+  subtitles…*. An admin adds a free API key (and, optionally, an account for more downloads a day)
+  in Settings → Metadata.
+- **Blu-ray and DVD subtitles:** picture-based subtitles (PGS, VobSub) can now be chosen. The server
+  draws them into the video while converting it, in the browser and in the Android app.
+- **Quality limit away from home:** Settings → Transcoding can cap the quality for people
+  watching through Tailscale, Cloudflare or from outside your network.
+- **Collections:** film series from TMDB are grouped automatically (movies matched earlier are
+  looked up in the background). Admins can make their own collections.
+- **Extras:** trailers, featurettes and similar clips (`-trailer` files, or `Extras` / `Trailers` …
+  folders) appear on their movie or show page instead of as separate movies.
+- **New files appear by themselves** within about 15 seconds, without waiting for the next scan.
+- **Edit intros by hand** when detection gets one wrong (*⋯ → Edit intro…*, or ✂ in the player).
+- **Library problems** in Settings: offline folders, unreadable files, titles with no match,
+  duplicates and missing episodes.
+- **Android app 1.2.0:** picture subtitles, and respects the quality limit away from home.
+
 ## 0.2.0 — Significant update
 
-Commit `8548090`, October 2026.
+Commits `8548090` and `1160e32`, October 2026.
 
 - **Adaptive streaming (HLS):** a quality menu in the player with Original, Auto and fixed
   1080p / 720p / 480p / 360p. *Auto* adjusts to your connection and is the default away from home.

@@ -156,7 +156,7 @@ function progressBar(x) {
 }
 function hrefFor(x) { return x.type === 'show' ? `#/show/${x.id}` : `#/item/${x.id}`; }
 
-function posterCard(x) {
+function posterCard(x, ctx = '') {
   const sub = x.type === 'show'
     ? (x.seasonCount > 1 ? `${x.seasonCount} seasons` : `${x.episodeCount} episode${x.episodeCount === 1 ? '' : 's'}`)
     : x.type === 'episode' ? `${x.showTitle} · ${epLabel(x)}` : (x.year || '');
@@ -170,7 +170,7 @@ function posterCard(x) {
         <a class="cover" href="${hrefFor(x)}"><img loading="lazy" src="${artUrl('poster', x)}" alt="${x.title}"></a>
         ${badge}${progressBar(x)}
         <button class="play-hover" data-play="${x.type === 'show' ? `show:${x.id}` : x.id}" aria-label="Play ${x.title}">▶</button>
-        <button class="card-menu" data-menu="${x.id}" aria-label="More options for ${x.title}" title="More">⋯</button>
+        <button class="card-menu" data-menu="${x.id}" data-ctx="${ctx}" aria-label="More options for ${x.title}" title="More">⋯</button>
       </div>
       <a href="${hrefFor(x)}"><div class="title" title="${x.title}">${x.title}</div><div class="sub">${sub}</div></a>
     </div>`;
@@ -232,7 +232,7 @@ async function viewHome({ seq }) {
 }
 
 async function viewLibrary({ params: [id], query, seq }) {
-  const data = await api(`/api/libraries/${id}/items`);
+  const [data, cols] = await Promise.all([api(`/api/libraries/${id}/items`), api(`/api/collections?library=${id}`).catch(() => [])]);
   const lib = data.library;
   const prefs = { sort: 'title', filter: 'all', size: 150, ...store.get(`lib:${id}`, {}) };
   // Genre and text filters live in the URL so they survive back/forward and can be linked to.
@@ -284,6 +284,7 @@ async function viewLibrary({ params: [id], query, seq }) {
       </select>
       <input type="range" id="lib-size" min="110" max="230" step="10" value="${prefs.size}" title="Poster size" aria-label="Poster size">
       <button class="btn small" id="lib-shuffle" title="Play something random from this view">⤮ Shuffle</button>
+      ${cols.length ? html`<a class="btn small" href="#/collections?library=${id}">▦ Collections (${cols.length})</a>` : ''}
       ${state.user.role === 'admin' ? html`<button class="btn small" id="lib-scan">↻ Scan</button>` : ''}
     </div>
     ${genre ? html`<div class="filter-note">Showing <b>${genre}</b> · <a href="#/library/${id}">clear</a></div>` : ''}
@@ -352,6 +353,22 @@ document.addEventListener('click', (e) => {
   if (b) openMatcher(b.dataset.fixMatch).catch((err) => toast(err.message, true));
 });
 
+// Trailers, featurettes and other extras on a movie or show page.
+function extrasRow(list) {
+  if (!list?.length) return '';
+  return html`<section class="hub extras"><div class="hub-head"><h2>Extras</h2></div><div class="grid wide">${list.map((x) => {
+    knownItems.set(x.id, x);
+    const sub = [x.title !== x.extraLabel ? x.extraLabel : '', fmtDuration(x.duration)].filter(Boolean).join(' · ');
+    return html`<div class="card wide">
+      <div class="art">
+        <a class="cover" href="#/item/${x.id}"><img loading="lazy" src="${artUrl('thumb', x)}" alt="${x.title}"></a>
+        ${progressBar(x)}<button class="play-hover" data-play="${x.id}" data-t="0" aria-label="Play">▶</button>
+      </div>
+      <a href="#/item/${x.id}"><div class="title" title="${x.title}">${x.title}</div><div class="sub">${sub}</div></a>
+    </div>`;
+  })}</div></section>`;
+}
+
 async function viewShow({ params: [id], query, seq }) {
   const show = await api(`/api/shows/${id}`);
   const seasonKey = (s) => String(s.season);
@@ -410,6 +427,7 @@ async function viewShow({ params: [id], query, seq }) {
             ${show.rating ? html`<span>★ ${show.rating}</span>` : ''}
           </div>
           ${genreChips(show)}
+          ${collectionChips(show)}
           ${show.overview ? html`<p class="overview">${show.overview}</p>` : ''}
           ${matchNote(show)}
           <div class="row actions">
@@ -422,7 +440,8 @@ async function viewShow({ params: [id], query, seq }) {
       </div>
     </div>
     <div class="seasons-nav">${show.seasons.map((s) => html`<button class="btn small" data-season="${seasonKey(s)}">${s.title}</button>`)}</div>
-    <div id="season-body"></div>`)) return;
+    <div id="season-body"></div>
+    ${extrasRow(show.extras)}`)) return;
 
   bindDetailActions(show);
   if (current != null) renderSeason();
@@ -444,6 +463,7 @@ async function viewItem({ params: [id], seq }) {
   const it = await api(`/api/items/${id}`);
   view.onclick = null;
   const isEp = it.type === 'episode';
+  const isExtra = it.type === 'extra';
   const p = it.progress;
   const resumable = p && !p.watched && p.position > 15;
   const v = it.media?.video, a = it.media?.audio?.[0];
@@ -452,9 +472,10 @@ async function viewItem({ params: [id], seq }) {
     <div class="detail">
       ${backdrop(it)}
       <div class="detail-body">
-        <div class="poster ${isEp ? 'wide' : ''}"><img src="${artUrl(isEp ? 'thumb' : 'poster', it)}" alt="${it.title}"></div>
+        <div class="poster ${isEp || isExtra ? 'wide' : ''}"><img src="${artUrl(isEp || isExtra ? 'thumb' : 'poster', it)}" alt="${it.title}"></div>
         <div class="info">
           ${isEp ? html`<div class="eyebrow"><a href="#/show/${it.showId}?season=${it.season}">${it.showTitle}</a> · ${epLabel(it)}</div>` : ''}
+          ${isExtra ? html`<div class="eyebrow">${it.extraLabel}${it.parent ? html` · <a href="#/${it.parent.type === 'show' ? 'show' : 'item'}/${it.parent.id}">${it.parent.title}</a>` : ''}</div>` : ''}
           <h1>${it.title}</h1>
           ${it.tagline ? html`<p class="tagline">${it.tagline}</p>` : ''}
           <div class="meta-line">
@@ -467,6 +488,7 @@ async function viewItem({ params: [id], seq }) {
             ${p?.watched ? html`<span class="chip" style="color:var(--accent)">✓ Watched</span>` : ''}
           </div>
           ${genreChips(it)}
+          ${collectionChips(it)}
           ${matchNote(it)}
           <div class="row actions">
             ${it.media ? html`
@@ -494,7 +516,8 @@ async function viewItem({ params: [id], seq }) {
           </dl>
         </div>
       </div>
-    </div>`)) return;
+    </div>
+    ${extrasRow(it.extras)}`)) return;
   bindDetailActions(it);
   $('#item-watch').onclick = async () => {
     await api(`/api/items/${id}/watched`, { method: 'POST', body: { watched: !p?.watched } });
@@ -520,8 +543,8 @@ async function viewSearch({ query, seq }) {
 async function viewSettings({ query, seq }) {
   view.onclick = null;
   if (state.user.role !== 'admin') { location.replace('#/account'); return; }
-  const [, s, users, metaSettings, updates, remote, backupInfo, transcoding, introInfo] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'),
-    api('/api/settings'), api('/api/updates'), api('/api/remote'), api('/api/backups'), api('/api/transcoding'), api('/api/intro')]);
+  const [, s, users, metaSettings, updates, remote, backupInfo, transcoding, introInfo, problems] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'),
+    api('/api/settings'), api('/api/updates'), api('/api/remote'), api('/api/backups'), api('/api/transcoding'), api('/api/intro'), api('/api/problems')]);
   state.status = s;
   const libs = state.libraries;
   if (!setView(seq, html`
@@ -547,6 +570,7 @@ async function viewSettings({ query, seq }) {
           <button class="btn small danger" data-act="delete">Delete</button>
         </div>
       </div>`) : html`<div class="panel muted">No libraries yet. Add one to get started.</div>`}
+    ${libs.length ? problemsSection(problems) : ''}
     ${updates.check?.status === 'available' || updates.helper.state === 'updating' ? updatesSection(updates) : ''}
     ${metadataSection(metaSettings)}
     ${usersSection(users)}
@@ -703,14 +727,35 @@ async function viewPlay({ params: [id], query }) {
   if (!item.media) { toast('This file cannot be played', true); return history.back(); }
   let start = query.has('t') ? Number(query.get('t')) || 0 : 0;
   if (!query.has('t') && item.progress && !item.progress.watched && item.progress.position > 15) start = item.progress.position;
-  // Inside the Android app, videos open in the phone's native player.
-  if (window.MarqueeAndroid?.play) {
+  // Watch together: start where the party is.
+  const partyId = query.get('party');
+  if (partyId) {
+    const p = await api(`/api/parties/${partyId}`).catch((err) => { toast(err.message, true); return null; });
+    if (p) start = partyPosition(p, p.serverNow - Date.now());
+  }
+  // Inside the Android app, videos open in the phone's native player (watch parties stay in the web player).
+  if (window.MarqueeAndroid?.play && !partyId) {
     window.MarqueeAndroid.play(JSON.stringify({ id: item.id, start, autoplayNext: store.get('autoplayNext', true), subsOn: store.get('subsOn', false),
       autoSkipIntro: store.get('autoSkipIntro', false), quality: store.get('quality', '') }));
     if (state.inAppNav) history.back(); else location.replace(`#/item/${item.id}`);
     return;
   }
-  player = new Player(item, start);
+  player = new Player(item, start, { partyId });
+}
+
+// Where a watch party is now: its last known position, plus the time since then if it's playing.
+// clockOffset = server clock − this device's clock.
+function partyPosition(p, clockOffset) {
+  return p.position + (p.playing ? Math.max(0, Date.now() + clockOffset - p.updatedAt) / 1000 : 0);
+}
+
+async function viewParty({ params: [id] }) {
+  try {
+    const p = await api(`/api/parties/${id}`);
+    location.replace(`#/play/${p.itemId}?party=${p.id}`);
+  } catch (err) {
+    view.innerHTML = html`<div class="empty"><h2>Can't join this watch party</h2><p>${err.message}</p><a class="btn" href="#/">Go home</a></div>`.s;
+  }
 }
 
 const loadedScripts = new Map();
@@ -736,7 +781,7 @@ function defaultQuality() {
 }
 
 class Player {
-  constructor(item, start) {
+  constructor(item, start, { partyId = null } = {}) {
     this.item = item;
     this.duration = item.duration || 0;
     this.quality = defaultQuality();
@@ -767,6 +812,7 @@ class Player {
         <div class="p-title">${it.title}<small>${subtitle}</small></div>
         <span class="p-spacer"></span>
         <span class="p-badge" id="p-mode"></span>
+        <button class="p-btn p-party" data-a="party" title="Watch together">👥<span class="p-party-count"></span></button>
         <button class="p-btn" data-a="airplay" title="AirPlay" hidden>⇪</button>
         <button class="p-btn" data-a="cast" title="Cast to a TV" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M1 18v3h3a3 3 0 0 0-3-3zm0-4v2a5 5 0 0 1 5 5h2a7 7 0 0 0-7-7zm0-4v2a9 9 0 0 1 9 9h2A11 11 0 0 0 1 10zm20-7H3a2 2 0 0 0-2 2v3h2V5h18v14h-7v2h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/></svg></button>
       </div>
@@ -779,12 +825,13 @@ class Player {
           <span class="p-time">0:00 / ${fmtClock(this.duration)}</span>
           <span class="p-spacer"></span>
           ${it.audioTracks.length > 1 ? html`<select data-a="audio" class="p-hide-sm" title="Audio">${it.audioTracks.map((t) => html`<option value="${t.index}">${t.label}</option>`)}</select>` : ''}
-          ${it.subtitles.length ? html`<select data-a="subs" title="Subtitles (c)"><option value="">Subtitles off</option>${it.subtitles.map((s) => html`<option value="${s.id}" ${s.id === this.subId ? 'selected' : ''}>${s.label}</option>`)}</select>` : ''}
+          ${it.subtitles.length || state.status?.subtitleSearch ? html`<select data-a="subs" title="Subtitles (c)">${this.subOptions()}</select>` : ''}
           <select data-a="quality" title="Quality" hidden></select>
           <button class="p-btn" data-a="mute" title="Mute (m)">🔊</button>
           <input type="range" class="p-volume" min="0" max="1" step="0.05" aria-label="Volume">
           <select data-a="speed" class="p-speed" title="Playback speed (&lt; &gt;)">${[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((r) => html`<option value="${r}" ${r === 1 ? 'selected' : ''}>${r === 1 ? 'Normal' : `${r}×`}</option>`)}</select>
           ${document.pictureInPictureEnabled ? html`<button class="p-btn p-hide-sm" data-a="pip" title="Picture-in-picture (p)">⧉</button>` : ''}
+          ${it.type === 'episode' && state.user.role === 'admin' ? html`<button class="p-btn p-hide-sm" data-a="intro-edit" title="Edit this episode's intro">✂</button>` : ''}
           ${it.next ? html`<button class="p-btn" data-a="next" title="Next episode">⏭</button>` : ''}
           <button class="p-btn" data-a="fs" title="Fullscreen (f)">⛶</button>
         </div>
@@ -798,7 +845,7 @@ class Player {
     $('.p-volume', this.root).value = this.v.volume;
     this.bind();
     this.spinner(true);
-    this.init(start);
+    this.init(start).then(() => { if (partyId && this.root.isConnected) this.joinParty(partyId); });
     this.reportTimer = setInterval(() => this.report(), 10_000);
     document.title = `${it.type === 'episode' ? `${it.showTitle} - ` : ''}${it.title} · Marquee`;
   }
@@ -813,8 +860,12 @@ class Player {
     if (!this.root.isConnected) return;
     if (this.canHls) {
       const sel = $('[data-a=quality]', this.root);
-      sel.innerHTML = html`<option value="original">Original</option><option value="auto">Auto</option>${qs.map((q) => html`<option value="${q.id}">${q.label}</option>`)}`.s;
-      if (!['original', 'auto', ...qs.map((q) => q.id)].includes(this.quality)) {
+      // Away from home the admin may have limited the quality: then the original file isn't offered.
+      const original = this.pb.originalAllowed !== false;
+      if (!original && this.quality === 'original') this.quality = 'auto';
+      sel.innerHTML = html`${original ? html`<option value="original">Original</option>` : ''}<option value="auto">Auto</option>${qs.map((q) => html`<option value="${q.id}">${q.label}</option>`)}`.s;
+      sel.title = this.pb.limit ? `Quality is limited to ${this.pb.limit} away from home` : 'Quality';
+      if (![...(original ? ['original'] : []), 'auto', ...qs.map((q) => q.id)].includes(this.quality)) {
         // A fixed quality above this video's resolution: use the best one it has.
         this.quality = /^\d+p$/.test(this.quality) ? qs[0].id : 'original';
       }
@@ -831,11 +882,21 @@ class Player {
 
   setModeFromQuality() {
     if (this.quality !== 'original' && this.canHls) this.mode = 'hls';
-    else this.mode = this.item.directPlay && this.audio === 0 && !this.directFailed ? 'direct' : 'transcode';
+    else this.mode = this.item.directPlay && this.audio === 0 && this.burn == null && !this.directFailed ? 'direct' : 'transcode';
+  }
+
+  // Picture subtitles (Blu-ray / DVD) are drawn into the video by the server: index of that track, or null.
+  get burn() { return this.item.subtitles.find((s) => s.id === this.subId)?.burn ?? null; }
+  burnQuery() { return this.burn != null ? `&burn=${this.burn}` : ''; }
+
+  subOptions() {
+    return html`<option value="">Subtitles off</option>${this.item.subtitles.map((s) => html`<option value="${s.id}" ${s.id === this.subId ? 'selected' : ''}>${s.label}</option>`)}
+      ${state.status?.subtitleSearch && ['movie', 'episode'].includes(this.item.type) ? html`<option value="__search">Search online…</option>` : ''}`;
   }
 
   pickDefaultSub() {
-    const subs = this.item.subtitles;
+    // Text subtitles first: picture ones need the video converted.
+    const subs = [...this.item.subtitles].sort((a, b) => (a.burn != null) - (b.burn != null));
     const lang = (navigator.language || 'en').slice(0, 2);
     return (subs.find((s) => s.lang && s.lang.toLowerCase().startsWith(lang)) || subs[0])?.id || null;
   }
@@ -844,7 +905,7 @@ class Player {
   tok(sep = '?') { return this.pb?.token ? `${sep}mt=${encodeURIComponent(this.pb.token)}` : ''; }
 
   hlsUrl({ sid = this.pb.sid, quality = this.quality } = {}) {
-    return `/api/items/${this.item.id}/hls/master.m3u8?sid=${sid}&audio=${this.audio}${quality !== 'auto' ? `&q=${quality}` : ''}${this.tok('&')}`;
+    return `/api/items/${this.item.id}/hls/master.m3u8?sid=${sid}&audio=${this.audio}${quality !== 'auto' ? `&q=${quality}` : ''}${this.burnQuery()}${this.tok('&')}`;
   }
 
   get time() {
@@ -882,10 +943,10 @@ class Player {
       this.offset = t;
       this.updateTime();
       const req = t.toFixed(3);
-      api(`/api/items/${this.item.id}/seekpoint?t=${req}`).catch(() => ({ start: t })).then(({ start }) => {
+      api(`/api/items/${this.item.id}/seekpoint?t=${req}${this.burnQuery()}`).catch(() => ({ start: t })).then(({ start }) => {
         if (seq !== this.loadSeq || !this.root.isConnected) return;
         this.offset = start;
-        this.v.src = `/api/items/${this.item.id}/transcode?start=${req}&audio=${this.audio}${this.tok('&')}`;
+        this.v.src = `/api/items/${this.item.id}/transcode?start=${req}&audio=${this.audio}${this.burnQuery()}${this.tok('&')}`;
         this.applySubs();
         this.v.play().catch(() => this.spinner(false));
       });
@@ -962,6 +1023,7 @@ class Player {
       Cast.controller.seek();
       this.castTime = t;
       this.updateTime();
+      this.partySend();
       return;
     }
     if (this.mode !== 'transcode') { this.v.currentTime = t; return; }
@@ -980,7 +1042,7 @@ class Player {
     $$('track', this.v).forEach((t) => t.remove());
     const box = $('.p-subs', this.root);
     box.replaceChildren();
-    if (!this.subId) return;
+    if (!this.subId || this.burn != null) return;
     const sub = this.item.subtitles.find((s) => s.id === this.subId);
     const track = document.createElement('track');
     track.kind = 'subtitles';
@@ -1104,7 +1166,7 @@ class Player {
     }
     const it = this.item;
     // MP4 files TVs can play are sent as they are; everything else as adaptive streaming.
-    const direct = it.directPlay && this.audio === 0 && /\.(mp4|m4v)$/i.test(it.fileName || '') && (this.quality === 'original' || !this.canHls);
+    const direct = it.directPlay && this.audio === 0 && this.burn == null && /\.(mp4|m4v)$/i.test(it.fileName || '') && (this.quality === 'original' || !this.canHls) && this.pb.originalAllowed !== false;
     const media = direct
       ? { url: `${base}/api/items/${it.id}/stream${this.tok()}`, contentType: 'video/mp4' }
       : { url: base + this.hlsUrl({ sid: `${this.pb.sid}c`, quality: this.quality === 'original' || !/^\d+p$/.test(this.quality) ? 'auto' : this.quality }), contentType: 'application/x-mpegURL', hls: true };
@@ -1126,7 +1188,7 @@ class Player {
       await Cast.play({
         ...media, title: it.title, subtitle: it.type === 'episode' ? [it.showTitle, epLabel(it)].filter(Boolean).join(' · ') : it.year,
         image: `${base}/api/art/backdrop/${it.id}${this.tok()}`, duration: this.duration, startTime: t,
-        subtitles: it.subtitles.map((s) => ({ id: s.id, label: s.label, lang: s.lang, url: base + this.subUrl(s.id) })), activeSub: this.subId,
+        subtitles: it.subtitles.filter((s) => s.burn == null).map((s) => ({ id: s.id, label: s.label, lang: s.lang, url: base + this.subUrl(s.id) })), activeSub: this.subId,
       });
     } catch (err) {
       toast(`Casting failed${err?.code ? ` (${err.code})` : ''}`, true);
@@ -1140,7 +1202,7 @@ class Player {
     const T = window.cast.framework.RemotePlayerEventType;
     this.castHandlers = {
       [T.CURRENT_TIME_CHANGED]: () => { if (!this.casting) return; this.castTime = Cast.player.currentTime || 0; this.updateTime(); },
-      [T.IS_PAUSED_CHANGED]: () => { if (!this.casting) return; $('[data-a=toggle]', this.root).textContent = Cast.player.isPaused ? '▶' : '❚❚'; this.report(true); this.showControls(); },
+      [T.IS_PAUSED_CHANGED]: () => { if (!this.casting) return; $('[data-a=toggle]', this.root).textContent = Cast.player.isPaused ? '▶' : '❚❚'; this.report(true); this.showControls(); this.partySend(); },
       [T.PLAYER_STATE_CHANGED]: () => {
         if (!this.casting) return;
         // IDLE after playing to the end: same as reaching the end locally.
@@ -1174,7 +1236,111 @@ class Player {
   }
 
   playNext() {
-    if (this.item.next) location.replace(`#/play/${this.item.next.id}?t=0`);
+    if (!this.item.next) return;
+    // In a watch party, everyone moves on to the next episode together.
+    if (this.partyId) this.partyPost({ itemId: this.item.next.id, playing: true, position: 0 });
+    location.replace(`#/play/${this.item.next.id}?t=0${this.partyId ? `&party=${this.partyId}` : ''}`);
+  }
+
+  // ---- watch together ----
+  async partyClicked() {
+    if (!this.partyId) {
+      try {
+        // The party starts exactly where (and as) this player is.
+        const p = await api('/api/parties', { method: 'POST', body: { itemId: this.item.id, position: this.time, playing: !this.paused } });
+        this.joinParty(p.id);
+        history.replaceState(null, '', `#/play/${this.item.id}?party=${p.id}`);
+      } catch (err) { return toast(err.message, true); }
+    }
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    const link = `${location.origin}${location.pathname}#/party/${this.partyId}`;
+    const m = openModal({
+      title: 'Watch together',
+      body: html`<div class="form">
+        <p style="margin:0">Send this link to people with an account on this server. Play, pause and skipping stay in sync for everyone, and so does moving on to the next episode.</p>
+        <div class="row"><input class="input" readonly value="${link}" id="party-link" style="flex:1"><button class="btn small primary" id="party-copy">Copy</button></div>
+        <p class="muted" style="margin:0">Watching now: <b id="party-members">${(this.partyState?.members || []).join(', ') || '…'}</b></p>
+      </div>`.s,
+      footer: html`<button class="btn danger" id="party-leave">Leave the party</button><button class="btn" data-close>Close</button>`.s,
+    });
+    $('#party-copy', m.el).onclick = () => { $('#party-link', m.el).select(); navigator.clipboard?.writeText(link).then(() => toast('Link copied'), () => document.execCommand('copy')); };
+    $('#party-leave', m.el).onclick = () => { this.leaveParty(); m.close(); toast('You left the watch party'); };
+    m.el.querySelector('footer [data-close]').onclick = () => m.close();
+  }
+
+  joinParty(id) {
+    this.partyId = id;
+    this.clientId = Math.random().toString(36).slice(2, 12);
+    this.clockOffset = 0;
+    this.es = new EventSource(`/api/parties/${id}/events?client=${this.clientId}`);
+    this.es.onmessage = (e) => this.onPartyState(JSON.parse(e.data));
+    this.es.onerror = () => {
+      if (this.es?.readyState === EventSource.CLOSED) { toast('The watch party has ended', true); this.leaveParty(); }
+    };
+    this.root.classList.add('in-party');
+    this.driftTimer = setInterval(() => this.checkDrift(), 4000);
+  }
+
+  leaveParty() {
+    this.es?.close();
+    this.es = null;
+    clearInterval(this.driftTimer);
+    this.partyId = null;
+    this.partyState = null;
+    this.root.classList.remove('in-party');
+    $('.p-party-count', this.root).textContent = '';
+    if (location.hash.includes('party=')) history.replaceState(null, '', `#/play/${this.item.id}`);
+  }
+
+  onPartyState(s) {
+    this.partyState = s;
+    this.clockOffset = s.serverNow - Date.now();
+    $('.p-party-count', this.root).textContent = s.members.length > 1 ? String(s.members.length) : '';
+    $('[data-a=party]', this.root).title = `Watch together: ${s.members.join(', ')}`;
+    const names = $('#party-members'); if (names) names.textContent = s.members.join(', ');
+    if (s.from === this.clientId) return; // our own change coming back
+    if (s.itemId !== this.item.id) { location.replace(`#/play/${s.itemId}?t=0&party=${s.id}`); return; }
+    this.applyParty();
+  }
+
+  // Does this player match the party (playing/paused, and within `slack` seconds)?
+  inSync(slack) {
+    const s = this.partyState;
+    return s.playing === !this.paused && Math.abs(this.time - partyPosition(s, this.clockOffset)) < slack;
+  }
+
+  // Bring this player in line with the party.
+  applyParty() {
+    const s = this.partyState;
+    const t = partyPosition(s, this.clockOffset);
+    if (Math.abs(this.time - t) > 1.5) this.seek(t);
+    if (s.playing === this.paused) this.toggle();
+  }
+
+  // Every few seconds: catch up if this player fell behind (slow connection) or missed a change.
+  checkDrift() {
+    if (!this.partyState || this.v.seeking || (!this.casting && this.v.readyState < 3)) return;
+    if (Date.now() - (this.lastPartySend || 0) < 3000) return; // our own change is on its way
+    if (!this.inSync(2.5)) this.applyParty();
+  }
+
+  // After a play, pause or seek: if this player now differs from the party, the person here did
+  // something, so tell everyone. (Changes made to follow the party match it, so they aren't echoed.)
+  partySend() {
+    if (!this.partyId || !this.partyState) return;
+    clearTimeout(this.partySendTimer);
+    this.partySendTimer = setTimeout(() => {
+      if (!this.partyState || this.inSync(1.5)) return;
+      this.lastPartySend = Date.now();
+      this.partyPost({ itemId: this.item.id, playing: !this.paused, position: this.time });
+    }, 250);
+  }
+
+  partyPost(state) {
+    fetch(`/api/parties/${this.partyId}/state`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+      body: JSON.stringify({ clientId: this.clientId, ...state }),
+    }).catch(() => {});
   }
 
   onEnded() {
@@ -1240,6 +1406,7 @@ class Player {
     v.addEventListener('play', () => { $('[data-a=toggle]', this.root).textContent = '❚❚'; this.showControls(); });
     v.addEventListener('pause', () => { if (this.casting) return; $('[data-a=toggle]', this.root).textContent = '▶'; this.showControls(); this.report(true); });
     v.addEventListener('ended', () => { if (!this.casting) this.onEnded(); });
+    for (const ev of ['play', 'pause', 'seeked']) v.addEventListener(ev, () => { if (!this.casting) this.partySend(); });
     v.addEventListener('volumechange', () => {
       store.set('volume', v.volume); store.set('muted', v.muted);
       $('[data-a=mute]', this.root).textContent = v.muted || v.volume === 0 ? '🔇' : '🔊';
@@ -1280,14 +1447,33 @@ class Player {
       else if (a === 'pip') this.togglePip();
       else if (a === 'skip-intro' && this.item.intro) { this.seek(this.item.intro.end); $('[data-a=skip-intro]', this.root).hidden = true; }
       else if (a === 'cast') this.castClicked();
+      else if (a === 'party') this.partyClicked();
+      else if (a === 'intro-edit') { v.pause(); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); openIntroEditor(this.item.id).catch((err) => toast(err.message, true)); }
       else if (a === 'cast-stop') this.stopCasting(true);
       else if (a === 'airplay') v.webkitShowPlaybackTargetPicker?.();
     });
     this.root.addEventListener('change', (e) => {
       const a = e.target.dataset.a;
+      if (a === 'subs' && e.target.value === '__search') {
+        e.target.value = this.subId || '';
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+        openSubtitleSearch(this.item.id, (detail, added) => {
+          this.item.subtitles = detail.subtitles;
+          e.target.innerHTML = this.subOptions().s;
+          e.target.value = added;
+          e.target.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        return;
+      }
       if (a === 'subs') {
+        const burnBefore = this.burn;
         this.subId = e.target.value || null; store.set('subsOn', !!this.subId);
-        if (this.casting) Cast.setSubtitle(this.item.subtitles.findIndex((s) => s.id === this.subId));
+        if (this.burn !== burnBefore) {
+          // Picture subtitles switched on, off or changed: the video itself changes.
+          if (this.burn != null) toast('Picture subtitles are drawn into the video, so it is converted');
+          this.setModeFromQuality();
+          if (this.casting) this.startCasting(this.time); else { this.v.removeAttribute('src'); this.load(this.time); }
+        } else if (this.casting) Cast.setSubtitle(this.item.subtitles.filter((s) => s.burn == null).findIndex((s) => s.id === this.subId));
         else this.applySubs();
       }
       if (a === 'speed') this.setSpeed(Number(e.target.value));
@@ -1320,7 +1506,7 @@ class Player {
     this.root.addEventListener('mousemove', this.onMove);
     this.root.addEventListener('touchstart', this.onMove, { passive: true });
     this.onKey = (e) => {
-      if (e.target.tagName === 'SELECT' || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (['SELECT', 'INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key;
       const handled = {
         ' ': () => this.toggle(), k: () => this.toggle(),
@@ -1348,6 +1534,8 @@ class Player {
     clearTimeout(this.idleTimer);
     document.removeEventListener('keydown', this.onKey);
     this.offCast?.();
+    this.es?.close();
+    clearInterval(this.driftTimer);
     if (this.casting) {
       // Leaving the player stops the video on the TV but stays connected, so the next one casts too.
       this.unbindCastEvents();
@@ -1384,6 +1572,9 @@ const routes = [
   [/^\/account$/, viewAccount],
   [/^\/downloads$/, viewDownloads],
   [/^\/watchlist$/, viewWatchlist],
+  [/^\/collections$/, viewCollections],
+  [/^\/party\/(\w+)$/, viewParty],
+  [/^\/collection\/([\w-]+)$/, viewCollection],
 ];
 
 // Scroll position per page, so "back" returns to where you were in a long library.

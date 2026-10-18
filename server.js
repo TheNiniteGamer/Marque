@@ -23,6 +23,11 @@ const { HwAccel } = require('./lib/hwaccel');
 const hlsLib = require('./lib/hls');
 const { MediaTokens } = require('./lib/tokens');
 const { IntroDetector } = require('./lib/intro');
+const { FolderWatcher } = require('./lib/watcher');
+const { findProblems } = require('./lib/problems');
+const collections = require('./lib/collections');
+const { OpenSubtitles } = require('./lib/opensubtitles');
+const { Parties } = require('./lib/party');
 
 const PORT = Number(process.env.PORT) || 32500;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -45,6 +50,7 @@ function hostLabel(p) {
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const THUMB_DIR = path.join(DATA_DIR, 'thumbs');
 const SUB_CACHE = path.join(DATA_DIR, 'subs');
+const SUB_DOWNLOADS = path.join(DATA_DIR, 'subs-downloaded');
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const store = new Store(path.join(DATA_DIR, 'db.json'));
@@ -56,8 +62,11 @@ const updater = new Updater(store, __dirname);
 const hwaccel = new HwAccel(store);
 const hls = new hlsLib.HlsManager(path.resolve(process.env.TRANSCODE_DIR || path.join(os.tmpdir(), `marquee-transcode-${PORT}`)), hwaccel);
 const tokens = new MediaTokens(store);
+const opensubs = new OpenSubtitles(() => store.data.settings);
+const parties = new Parties();
 const intro = new IntroDetector(store, DATA_DIR);
 scanner.on('done', (libraryId) => intro.enqueue({ libraryId }));
+const watcher = new FolderWatcher(store, scanner, Number(process.env.WATCH_INTERVAL ?? 15) * 1000);
 const backups = new Backups(store, {
   dataDir: DATA_DIR,
   dir: path.resolve(process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups')),
@@ -152,7 +161,7 @@ function getUser(id) {
 }
 
 function librarySummary(l, user) {
-  const items = Object.values(store.data.items).filter((i) => i.libraryId === l.id);
+  const items = Object.values(store.data.items).filter((i) => i.libraryId === l.id && i.type !== 'extra');
   const admin = user.role === 'admin';
   return {
     id: l.id, name: l.name, type: l.type, createdAt: l.createdAt, scannedAt: l.scannedAt || null,
@@ -231,6 +240,11 @@ async function subtitleVtt(item, subId) {
     if (!s) throw new HttpError(404, 'Subtitle not found');
     const text = fs.readFileSync(s.file, 'utf8');
     return s.format === 'vtt' ? text : subs.srtToVtt(text);
+  }
+  if ((m = /^dl(\d+)$/.exec(subId))) {
+    const s = item.downloadedSubs?.[Number(m[1])];
+    if (!s) throw new HttpError(404, 'Subtitle not found');
+    return subs.srtToVtt(fs.readFileSync(path.join(SUB_DOWNLOADS, s.file), 'utf8'));
   }
   if ((m = /^emb(\d+)$/.exec(subId))) {
     const cache = path.join(SUB_CACHE, `${item.id}-${m[1]}-${Math.round(item.mtime)}.vtt`);
@@ -383,7 +397,7 @@ route('DELETE', '/api/users/:id', async (req, res, { id }, url, me) => {
 route('GET', '/api/status', async (req, res, p, url, user) => json(res, 200, {
   name: 'Marquee', version: require('./package.json').version, hostname: os.hostname(),
   metadataProviders: metadata.available(), ...scanner.status(), activeTranscodes: transcodes.size + hls.active,
-  downloader: downloader.status(),
+  downloader: downloader.status(), subtitleSearch: opensubs.configured(),
   ...(user.role === 'admin' ? { dataDir: DATA_DIR, mediaRoot: MEDIA_ROOT, updateAvailable: updater.updateAvailable(), significantUpdate: updater.significantUpdate(), updating: updater.helper().state === 'updating' } : {}),
 }));
 
@@ -436,7 +450,7 @@ route('GET', '/api/home', async (req, res, p, url, user) => json(res, 200, lib.h
 
 route('GET', '/api/search', async (req, res, p, url, user) => json(res, 200, lib.search(store, user, url.searchParams.get('q') || '')));
 
-route('GET', '/api/shows/:id', async (req, res, { id }, url, user) => json(res, 200, lib.showDetail(store, user, getShow(id, user))));
+route('GET', '/api/shows/:id', async (req, res, { id }, url, user) => json(res, 200, { ...lib.showDetail(store, user, getShow(id, user)), collections: collections.of(store, user, id) }));
 
 route('POST', '/api/shows/:id/watched', async (req, res, { id }, url, user) => {
   const body = await readBody(req);
@@ -447,7 +461,28 @@ route('POST', '/api/shows/:id/watched', async (req, res, { id }, url, user) => {
   json(res, 200, lib.showDetail(store, user, show));
 });
 
-route('GET', '/api/items/:id', async (req, res, { id }, url, user) => json(res, 200, lib.itemDetail(store, user, getItem(id, user))));
+route('GET', '/api/items/:id', async (req, res, { id }, url, user) => json(res, 200, { ...lib.itemDetail(store, user, getItem(id, user)), collections: collections.of(store, user, id) }));
+
+// --- collections ---
+route('GET', '/api/collections', async (req, res, p, url, user) => json(res, 200, collections.list(store, user, { libraryId: url.searchParams.get('library') })));
+route('GET', '/api/collections/:id', async (req, res, { id }, url, user) => json(res, 200, collections.detail(store, user, id)));
+route('POST', '/api/collections', async (req, res, p, url, user) => {
+  const c = collections.create(store, await readBody(req));
+  json(res, 201, collections.detail(store, user, c.id));
+}, 'admin');
+route('PATCH', '/api/collections/:id', async (req, res, { id }, url, user) => {
+  collections.rename(store, id, (await readBody(req)).name);
+  json(res, 200, collections.detail(store, user, id));
+}, 'admin');
+route('DELETE', '/api/collections/:id', async (req, res, { id }) => { collections.remove(store, id); json(res, 200, { ok: true }); }, 'admin');
+route('PUT', '/api/collections/:id/members/:target', async (req, res, { id, target }, url, user) => {
+  collections.addMember(store, id, target);
+  json(res, 200, collections.detail(store, user, id));
+}, 'admin');
+route('DELETE', '/api/collections/:id/members/:target', async (req, res, { id, target }, url, user) => {
+  collections.removeMember(store, id, target);
+  json(res, 200, collections.detail(store, user, id));
+}, 'admin');
 
 route('POST', '/api/items/:id/progress', async (req, res, { id }, url, user) => {
   const item = getItem(id, user);
@@ -465,8 +500,34 @@ route('POST', '/api/items/:id/watched', async (req, res, { id }, url, user) => {
 });
 
 // --- playback ---
+// The admin can cap the quality for viewers away from home (Settings → Transcoding), so one remote
+// viewer can't use up the home upload. Away = through Tailscale / Cloudflare, or from outside the network.
+// Returns null (no limit) or { maxHeight, originalAllowed }.
+const isRemote = (req) => viaHttpsProxy(req) || !isPrivateIp(clientIp(req));
+function remoteLimit(req, item) {
+  const q = hlsLib.QUALITIES.find((x) => x.id === store.data.settings.remoteMaxQuality);
+  if (!q || !isRemote(req)) return null;
+  // The original file is fine when its bitrate already fits the limit.
+  const bitrate = item.media?.bitrate || Infinity;
+  return { maxHeight: q.height, quality: q.id, originalAllowed: bitrate <= q.bitrate * 1.25 + 192_000 };
+}
+// ?burn=<n>: draw picture-based subtitle stream n into the video (it must be one).
+function burnParam(item, url) {
+  if (!url.searchParams.has('burn')) return null;
+  const n = Number(url.searchParams.get('burn'));
+  const sub = item.media?.subtitles?.find((s) => s.index === n);
+  if (!sub || !media.IMAGE_SUB_CODECS.has(sub.codec)) throw new HttpError(400, 'Not a picture subtitle track');
+  return n;
+}
+
+function checkOriginalAllowed(req, item) {
+  const limit = remoteLimit(req, item);
+  if (limit && !limit.originalAllowed) throw new HttpError(403, `Away from home, videos play at up to ${limit.quality} (set by the server's admin)`);
+}
+
 route('GET', '/api/items/:id/stream', async (req, res, { id }, url, user) => {
   const item = getItem(id, user);
+  checkOriginalAllowed(req, item);
   const headers = url.searchParams.has('download')
     ? { 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(item.file))}` } : {};
   sendFile(req, res, item.file, { type: url.searchParams.has('download') ? 'application/octet-stream' : media.mimeFor(item.file), headers });
@@ -476,17 +537,20 @@ route('GET', '/api/items/:id/seekpoint', async (req, res, { id }, url, user) => 
   const item = getItem(id, user);
   const t = Math.max(0, Number(url.searchParams.get('t')) || 0);
   // Request the transcode with `t`; the stream's first frame will be at `start` (<= t).
-  json(res, 200, { t, start: await media.seekPoint(item, t) });
+  // (With subtitles drawn in, the video is re-encoded and starts exactly at t.)
+  json(res, 200, { t, start: burnParam(item, url) != null ? t : await media.seekPoint(item, t) });
 }, 'media');
 
 route('GET', '/api/items/:id/transcode', async (req, res, { id }, url, user) => {
   const item = getItem(id, user);
   if (!fs.existsSync(item.file)) throw new HttpError(404, 'File not found on disk');
+  checkOriginalAllowed(req, item);
   const start = Math.max(0, Number(url.searchParams.get('start')) || 0);
   const audioIndex = Math.max(0, Number(url.searchParams.get('audio')) || 0);
+  const burn = burnParam(item, url);
   let finished = false;
   const run = (encoder) => {
-    const proc = media.transcode(item, { start, audioIndex, encoder });
+    const proc = media.transcode(item, { start, audioIndex, encoder, burn });
     transcodes.add(proc);
     let stderr = '';
     let sent = false;
@@ -521,11 +585,14 @@ route('GET', '/api/items/:id/transcode', async (req, res, { id }, url, user) => 
 // fresh adaptive-streaming session id, the qualities on offer, and where cast devices can reach us.
 route('GET', '/api/items/:id/playback', async (req, res, { id }, url, user) => {
   const item = getItem(id, user);
+  const limit = remoteLimit(req, item);
   json(res, 200, {
     token: tokens.create(item.id, user.id),
     sid: crypto.randomBytes(12).toString('base64url'),
     directPlay: media.canDirectPlay(item),
-    qualities: item.media?.video ? hlsLib.qualitiesFor(item).map(({ id: q, label, height, bitrate }) => ({ id: q, label, height, bitrate })) : [],
+    originalAllowed: !limit || limit.originalAllowed,
+    limit: limit ? limit.quality : null,
+    qualities: item.media?.video ? hlsLib.qualitiesFor(item, limit?.maxHeight).map(({ id: q, label, height, bitrate }) => ({ id: q, label, height, bitrate })) : [],
     intro: item.intro?.end ? { start: item.intro.start, end: item.intro.end } : null,
     cast: castAddresses(),
   });
@@ -535,7 +602,7 @@ route('GET', '/api/items/:id/playback', async (req, res, { id }, url, user) => {
 // ?sid=<session>&audio=<track>&q=<quality, to offer just one>&mt=<token>
 const hlsQuery = (url) => {
   const q = new URLSearchParams();
-  for (const k of ['sid', 'audio', 'mt']) if (url.searchParams.get(k)) q.set(k, url.searchParams.get(k));
+  for (const k of ['sid', 'audio', 'burn', 'mt']) if (url.searchParams.get(k)) q.set(k, url.searchParams.get(k));
   return `?${q}`;
 };
 const hlsItem = (id, user) => {
@@ -547,23 +614,81 @@ const hlsItem = (id, user) => {
 const M3U8 = { 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-cache' };
 route('GET', '/api/items/:id/hls/master.m3u8', async (req, res, { id }, url, user) => {
   const item = hlsItem(id, user);
-  const body = hlsLib.masterPlaylist(item, { only: url.searchParams.get('q') || null, query: hlsQuery(url) });
+  const body = hlsLib.masterPlaylist(item, { only: url.searchParams.get('q') || null, query: hlsQuery(url), maxHeight: remoteLimit(req, item)?.maxHeight });
   res.writeHead(200, M3U8); res.end(body);
 }, 'media');
 route('GET', '/api/items/:id/hls/:quality/index.m3u8', async (req, res, { id, quality }, url, user) => {
-  const body = hlsLib.mediaPlaylist(hlsItem(id, user), quality, { query: hlsQuery(url) });
+  const item = hlsItem(id, user);
+  const body = hlsLib.mediaPlaylist(item, quality, { query: hlsQuery(url), maxHeight: remoteLimit(req, item)?.maxHeight });
   res.writeHead(200, M3U8); res.end(body);
 }, 'media');
 route('GET', '/api/items/:id/hls/:quality/:segment', async (req, res, { id, quality, segment }, url, user) => {
   const m = /^seg-(\d+)\.ts$/.exec(segment);
   if (!m) throw new HttpError(404, 'Not found');
-  const file = await hls.segment(hlsItem(id, user), {
+  const item = hlsItem(id, user);
+  const file = await hls.segment(item, {
     quality, sid: url.searchParams.get('sid'), audio: Math.max(0, Number(url.searchParams.get('audio')) || 0),
+    burn: burnParam(item, url), maxHeight: remoteLimit(req, item)?.maxHeight,
   }, Number(m[1]));
   sendFile(req, res, file, { type: 'video/mp2t', headers: { 'Cache-Control': 'no-cache' } });
 }, 'media');
 // The player closed: stop converting right away instead of waiting for the idle timeout.
 route('DELETE', '/api/hls/:sid', async (req, res, { sid }) => { hls.end(sid); json(res, 200, { ok: true }); });
+
+// --- watch together ---
+// Everyone in a party must be able to see the video being played (normal library permissions).
+const partyFor = (id, user) => {
+  const p = parties.get(id);
+  getItem(p.itemId, user);
+  return p;
+};
+route('POST', '/api/parties', async (req, res, p, url, user) => {
+  const body = await readBody(req);
+  const item = getItem(String(body.itemId || ''), user);
+  json(res, 201, parties.view(parties.create(user, item.id, { position: Math.max(0, Number(body.position) || 0), playing: !!body.playing })));
+});
+route('GET', '/api/parties/:id', async (req, res, { id }, url, user) => json(res, 200, parties.view(partyFor(id, user))));
+route('GET', '/api/parties/:id/events', async (req, res, { id }, url, user) => parties.join(partyFor(id, user), user, url.searchParams.get('client'), res));
+route('POST', '/api/parties/:id/state', async (req, res, { id }, url, user) => {
+  const p = partyFor(id, user);
+  const body = await readBody(req);
+  if (body.itemId) getItem(String(body.itemId), user);
+  parties.update(p, body);
+  json(res, 200, parties.view(p));
+});
+
+// --- subtitles from OpenSubtitles.com ---
+route('GET', '/api/items/:id/subtitle-search', async (req, res, { id }, url, user) => {
+  const item = getItem(id, user);
+  if (!['movie', 'episode'].includes(item.type)) throw new HttpError(400, 'Subtitles can be searched for movies and episodes');
+  const languages = (url.searchParams.get('lang') || 'en').split(',').map((l) => l.trim().toLowerCase()).filter((l) => /^[a-z]{2}(-[a-z]{2})?$/.test(l)).join(',');
+  if (!languages) throw new HttpError(400, 'Choose a language');
+  json(res, 200, { results: await opensubs.search(item, store.data.shows[item.showId], languages) });
+});
+route('POST', '/api/items/:id/subtitle-download', async (req, res, { id }, url, user) => {
+  const item = getItem(id, user);
+  const body = await readBody(req);
+  if (!/^\d+$/.test(String(body.fileId || ''))) throw new HttpError(400, 'Pick a subtitle from the search results');
+  const { text, remaining } = await opensubs.download(body.fileId);
+  fs.mkdirSync(SUB_DOWNLOADS, { recursive: true });
+  const file = `${item.id}-${body.fileId}.srt`;
+  fs.writeFileSync(path.join(SUB_DOWNLOADS, file), text);
+  const lang = /^[a-z]{2}(-[a-z]{2})?$/i.test(body.language || '') ? body.language.toLowerCase() : null;
+  item.downloadedSubs = [...(item.downloadedSubs || []).filter((s) => s.file !== file), { file, lang, release: String(body.release || '').slice(0, 200), at: Date.now() }];
+  store.save();
+  const detail = lib.itemDetail(store, user, item);
+  json(res, 200, { ...detail, added: `dl${item.downloadedSubs.length - 1}`, remaining });
+});
+route('DELETE', '/api/items/:id/subtitles/:sub', async (req, res, { id, sub }, url, user) => {
+  const item = getItem(id, user);
+  const m = /^dl(\d+)$/.exec(sub);
+  const s = m && item.downloadedSubs?.[Number(m[1])];
+  if (!s) throw new HttpError(404, 'Only downloaded subtitles can be removed');
+  fs.rmSync(path.join(SUB_DOWNLOADS, s.file), { force: true });
+  item.downloadedSubs.splice(Number(m[1]), 1);
+  store.save();
+  json(res, 200, lib.itemDetail(store, user, item));
+}, 'admin');
 
 route('GET', '/api/items/:id/subtitles/:sub', async (req, res, { id, sub }, url, user) => {
   const item = getItem(id, user);
@@ -591,6 +716,7 @@ const settingsView = () => {
     updateCheck: st.updateCheck !== false,
     introDetection: st.introDetection !== false,
     providers: metadata.available(),
+    opensubtitles: { keySet: !!st.opensubtitles?.apiKey, keyHint: st.opensubtitles?.apiKey ? `••••${st.opensubtitles.apiKey.slice(-4)}` : null, username: st.opensubtitles?.username || '' },
   };
 };
 route('GET', '/api/settings', async (req, res) => json(res, 200, settingsView()), 'admin');
@@ -611,6 +737,22 @@ route('PATCH', '/api/settings', async (req, res) => {
   }
   if (body.autoMatch !== undefined) st.autoMatch = !!body.autoMatch;
   if (body.updateCheck !== undefined) st.updateCheck = !!body.updateCheck;
+  if (body.opensubtitles !== undefined) {
+    // { apiKey, username, password }: an empty apiKey removes the whole setup.
+    const o = body.opensubtitles || {};
+    const prev = st.opensubtitles || {};
+    const next = {
+      apiKey: o.apiKey !== undefined ? String(o.apiKey || '').trim() : prev.apiKey,
+      username: o.username !== undefined ? String(o.username || '').trim() : prev.username,
+      password: o.password ? String(o.password) : o.username === '' ? '' : prev.password,
+    };
+    if (!next.apiKey && o.apiKey === undefined) throw new HttpError(400, 'Paste the OpenSubtitles API key first');
+    if (!next.apiKey) delete st.opensubtitles;
+    else {
+      st.opensubtitles = next;
+      try { await opensubs.test(); } catch (err) { st.opensubtitles = prev.apiKey ? prev : undefined; if (!prev.apiKey) delete st.opensubtitles; throw err; }
+    }
+  }
   if (body.introDetection !== undefined) {
     st.introDetection = !!body.introDetection;
     if (st.introDetection) setImmediate(() => intro.enqueue());
@@ -697,11 +839,16 @@ route('DELETE', '/api/meta/:id/art/:kind', async (req, res, { id, kind: artKind 
 
 // --- updates (admin) ---
 // --- transcoding + skip intro (admin) ---
-const transcodingView = () => ({ ...hwaccel.status(), checking: !!hwaccel.checking, sessions: hls.status(), castUrl: store.data.settings.castUrl || '', castUrlFromEnv: process.env.CAST_URL || null });
+const transcodingView = () => ({ ...hwaccel.status(), checking: !!hwaccel.checking, sessions: hls.status(), castUrl: store.data.settings.castUrl || '', castUrlFromEnv: process.env.CAST_URL || null,
+  remoteMaxQuality: store.data.settings.remoteMaxQuality || '' });
 route('GET', '/api/transcoding', async (req, res) => json(res, 200, transcodingView()), 'admin');
 route('PATCH', '/api/transcoding', async (req, res) => {
   const body = await readBody(req);
   const st = store.data.settings;
+  if (body.remoteMaxQuality !== undefined) {
+    if (body.remoteMaxQuality && !hlsLib.QUALITIES.some((q) => q.id === body.remoteMaxQuality)) throw new HttpError(400, 'Unknown quality');
+    if (body.remoteMaxQuality) st.remoteMaxQuality = body.remoteMaxQuality; else delete st.remoteMaxQuality;
+  }
   if (body.castUrl !== undefined) {
     const u = String(body.castUrl || '').trim().replace(/\/+$/, '');
     if (u && !/^https?:\/\/[^/\s]+$/i.test(u)) throw new HttpError(400, 'Enter an address like http://192.168.1.20:32500');
@@ -718,6 +865,29 @@ route('PATCH', '/api/transcoding', async (req, res) => {
   json(res, 200, transcodingView());
 }, 'admin');
 route('POST', '/api/transcoding/test', async (req, res) => { await hwaccel.detect(); json(res, 200, transcodingView()); }, 'admin');
+// Set an episode's intro by hand ({ start, end } in seconds), mark it as having none ({ none: true }),
+// or go back to automatic detection ({ auto: true }).
+route('PUT', '/api/items/:id/intro', async (req, res, { id }, url, user) => {
+  const item = getItem(id, user);
+  if (item.type !== 'episode') throw new HttpError(400, 'Only TV episodes have intros');
+  const body = await readBody(req);
+  if (body.auto) {
+    delete item.intro;
+    intro.enqueue({ libraryId: item.libraryId });
+  } else if (body.none) {
+    item.intro = { manual: true, at: Date.now() };
+  } else {
+    const start = Number(body.start), end = Number(body.end);
+    const dur = item.media?.duration || Infinity;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > dur) {
+      throw new HttpError(400, 'The intro must end after it starts, within the episode');
+    }
+    item.intro = { manual: true, start: Math.round(start * 10) / 10, end: Math.round(end * 10) / 10, at: Date.now() };
+  }
+  store.save();
+  json(res, 200, lib.itemDetail(store, user, item));
+}, 'admin');
+route('GET', '/api/problems', async (req, res) => json(res, 200, findProblems(store, metadata)), 'admin');
 route('GET', '/api/intro', async (req, res) => json(res, 200, intro.status()), 'admin');
 route('POST', '/api/intro/detect', async (req, res) => {
   const body = await readBody(req);
@@ -922,6 +1092,8 @@ async function main() {
   });
   scanner.enqueueAll();
   updater.startSchedule();
+  watcher.start();
+  setTimeout(() => matcher.backfillCollections().catch((err) => console.warn('[meta]', err.message)), 60_000).unref();
   backups.startSchedule();
   if (SCAN_INTERVAL_MIN > 0) setInterval(() => scanner.enqueueAll(), SCAN_INTERVAL_MIN * 60_000).unref();
 }
@@ -929,6 +1101,7 @@ async function main() {
 function shutdown() {
   for (const p of transcodes) p.kill('SIGKILL');
   hls.stopAll();
+  parties.closeAll();
   for (const p of downloader.procs.values()) p.kill('SIGTERM'); // interrupted downloads are requeued on next start
   store.flush();
   process.exit(0);
