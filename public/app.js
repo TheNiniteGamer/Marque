@@ -111,6 +111,7 @@ function renderSidebar() {
     ${state.libraries.length ? '' : state.user?.role === 'admin' ? html`<a href="#/settings">＋ Add a library</a>` : html`<div class="muted" style="padding:8px 12px;font-size:13px">No libraries shared with you yet.</div>`}
     <div class="section">${state.user?.role === 'admin' ? 'Manage' : 'You'}</div>
     ${state.user?.canDownload ? html`<a href="#/downloads" class="${path === '/downloads' ? 'active' : ''}">⤓ Downloads</a>` : ''}
+    ${state.user?.role === 'admin' ? html`<a href="#/activity" class="${path === '/activity' ? 'active' : ''}">📊 Activity</a>` : ''}
     ${state.user?.role === 'admin' ? html`<a href="#/settings" data-nav="settings" class="${path === '/settings' ? 'active' : ''}">⚙ Settings</a>` : ''}
     <a href="#/account" class="${path === '/account' ? 'active' : ''}">👤 Account</a>
   `.s;
@@ -780,6 +781,9 @@ function defaultQuality() {
   return home ? 'original' : 'auto';
 }
 
+// Identifies this browser tab on the Activity page.
+const PAGE_ID = Math.random().toString(36).slice(2, 12);
+
 class Player {
   constructor(item, start, { partyId = null } = {}) {
     this.item = item;
@@ -817,7 +821,7 @@ class Player {
         <button class="p-btn" data-a="cast" title="Cast to a TV" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M1 18v3h3a3 3 0 0 0-3-3zm0-4v2a5 5 0 0 1 5 5h2a7 7 0 0 0-7-7zm0-4v2a9 9 0 0 1 9 9h2A11 11 0 0 0 1 10zm20-7H3a2 2 0 0 0-2 2v3h2V5h18v14h-7v2h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/></svg></button>
       </div>
       <div class="p-bottom">
-        <div class="p-seek"><div class="p-buffer"></div><input type="range" class="p-range" min="0" step="0.1" value="0" aria-label="Seek"><div class="p-hover-time" hidden></div></div>
+        <div class="p-seek"><div class="p-buffer"></div><input type="range" class="p-range" min="0" step="0.1" value="0" aria-label="Seek"><div class="p-hover-thumb" hidden></div><div class="p-hover-time" hidden></div></div>
         <div class="p-row">
           <button class="p-btn big" data-a="toggle" title="Play/Pause (Space)">▶</button>
           <button class="p-btn" data-a="back" title="Back 10s (←)">⟲</button>
@@ -874,8 +878,35 @@ class Player {
     } else this.quality = 'original';
     this.setModeFromQuality();
     this.setupRemote();
+    this.loadTrickplay();
     if (Cast.state() === 'CONNECTED') this.startCasting(start);
     else this.load(start);
+  }
+
+  // Seek preview thumbnails: the server makes them the first time a video is opened.
+  async loadTrickplay() {
+    for (let tries = 0; tries < 120 && this.root.isConnected; tries++) {
+      const info = await api(`/api/items/${this.item.id}/trickplay`).catch(() => null);
+      if (!info) return;
+      if (info.ready) { this.trick = info; return; }
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+  }
+
+  showThumb(el, f) {
+    const t = this.trick;
+    if (!t) { el.hidden = true; return; }
+    const i = Math.min(t.count - 1, Math.floor((f * this.total) / t.interval));
+    const perSheet = t.cols * t.rows;
+    const sheet = Math.min(t.sheets, Math.floor(i / perSheet) + 1);
+    const k = i % perSheet;
+    el.hidden = false;
+    const w = el.parentElement.clientWidth; // keep the picture on screen at either end
+    el.style.left = `${Math.min(w - t.width / 2, Math.max(t.width / 2, f * w))}px`;
+    el.style.width = `${t.width}px`;
+    el.style.height = `${t.height}px`;
+    el.style.backgroundImage = `url("/api/items/${this.item.id}/trickplay/${sheet}${this.tok()}")`;
+    el.style.backgroundPosition = `-${(k % t.cols) * t.width}px -${Math.floor(k / t.cols) * t.height}px`;
   }
 
   nativeHls() { return !!this.v.canPlayType('application/vnd.apple.mpegurl') && !/Android/.test(navigator.userAgent); }
@@ -1078,6 +1109,11 @@ class Player {
 
   // "Skip Intro" while the detected theme song plays (or skip it automatically, once).
   updateIntro(t) {
+    const credits = this.item.credits;
+    if (credits && this.item.next && t >= credits.start && t < credits.start + 30 && !this.creditsShown && !this.dragging) {
+      this.creditsShown = true;
+      this.showUpNext(true);
+    }
     const intro = this.item.intro;
     const btn = $('[data-a=skip-intro]', this.root);
     const inIntro = !!intro && t >= intro.start && t < intro.end - 1;
@@ -1112,14 +1148,16 @@ class Player {
     if (this.v.paused) this.v.play().catch(() => {}); else this.v.pause();
   }
 
-  report(force = false) {
+  // Saves the resume position, and tells the admin's Activity page what's playing (every 10 s,
+  // also while paused; `stopped` when the player closes).
+  report(stopped = false) {
+    if (this.markedWatched) return;
     const t = this.time;
-    if (!force && (this.paused || Math.abs(t - this.lastReported) < 2)) return;
     if (this.casting && t <= 0) return;
     this.lastReported = t;
     fetch(`/api/items/${this.item.id}/progress`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
-      body: JSON.stringify({ position: t }),
+      body: JSON.stringify({ position: t, paused: this.paused, mode: this.casting ? 'cast' : this.mode, quality: this.mode === 'hls' ? this.quality : null, client: PAGE_ID, stopped }),
     }).catch(() => {});
   }
 
@@ -1202,7 +1240,7 @@ class Player {
     const T = window.cast.framework.RemotePlayerEventType;
     this.castHandlers = {
       [T.CURRENT_TIME_CHANGED]: () => { if (!this.casting) return; this.castTime = Cast.player.currentTime || 0; this.updateTime(); },
-      [T.IS_PAUSED_CHANGED]: () => { if (!this.casting) return; $('[data-a=toggle]', this.root).textContent = Cast.player.isPaused ? '▶' : '❚❚'; this.report(true); this.showControls(); this.partySend(); },
+      [T.IS_PAUSED_CHANGED]: () => { if (!this.casting) return; $('[data-a=toggle]', this.root).textContent = Cast.player.isPaused ? '▶' : '❚❚'; this.report(); this.showControls(); this.partySend(); },
       [T.PLAYER_STATE_CHANGED]: () => {
         if (!this.casting) return;
         // IDLE after playing to the end: same as reaching the end locally.
@@ -1220,7 +1258,7 @@ class Player {
 
   stopCasting(disconnect = true) {
     if (!this.casting) return;
-    this.report(true);
+    this.report();
     const t = this.castTime;
     this.casting = false;
     this.unbindCastEvents();
@@ -1237,6 +1275,11 @@ class Player {
 
   playNext() {
     if (!this.item.next) return;
+    // Leaving during the credits counts as having watched the episode.
+    if (this.item.credits && this.time >= this.item.credits.start - 1) {
+      this.markedWatched = true; // (and no position report afterwards, which would undo it)
+      fetch(`/api/items/${this.item.id}/watched`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true, body: '{"watched":true}' }).catch(() => {});
+    }
     // In a watch party, everyone moves on to the next episode together.
     if (this.partyId) this.partyPost({ itemId: this.item.next.id, playing: true, position: 0 });
     location.replace(`#/play/${this.item.next.id}?t=0${this.partyId ? `&party=${this.partyId}` : ''}`);
@@ -1344,8 +1387,13 @@ class Player {
   }
 
   onEnded() {
-    this.report(true);
+    this.report();
     if (!this.item.next) return setTimeout(() => this.close(), 800);
+    this.showUpNext(false);
+  }
+
+  // "Up next" card: at the end of an episode, or as soon as its credits start.
+  showUpNext(atCredits) {
     if ($('.p-upnext', this.root)) return;
     const n = this.item.next;
     const auto = store.get('autoplayNext', true);
@@ -1355,11 +1403,13 @@ class Player {
     box.innerHTML = html`<div class="muted">${auto ? html`Up next in <b id="un-count">${left}</b>s` : 'Up next'}</div>
       <img src="${artUrl('thumb', n)}" alt="">
       <div><b>${epLabel(n)}</b> — ${n.title}</div>
-      <div class="row"><button class="btn primary small" data-a="next">▶ Play now</button><button class="btn small" data-a="cancel-next">Cancel</button></div>`.s;
+      <div class="row"><button class="btn primary small" data-a="next">▶ Play now</button>
+        <button class="btn small" data-a="cancel-next">${atCredits ? 'Watch credits' : 'Cancel'}</button></div>`.s;
     this.root.append(box);
     this.root.classList.remove('idle');
     if (!auto) return;
     this.upNextTimer = setInterval(() => {
+      if (atCredits && this.paused) return; // the countdown waits while paused
       left--;
       const c = $('#un-count', box); if (c) c.textContent = left;
       if (left <= 0) { clearInterval(this.upNextTimer); this.playNext(); }
@@ -1404,7 +1454,7 @@ class Player {
     v.addEventListener('seeking', () => this.spinner(true));
     for (const ev of ['playing', 'canplay', 'seeked', 'pause']) v.addEventListener(ev, () => { if (ev !== 'pause' || v.readyState >= 3) this.spinner(false); });
     v.addEventListener('play', () => { $('[data-a=toggle]', this.root).textContent = '❚❚'; this.showControls(); });
-    v.addEventListener('pause', () => { if (this.casting) return; $('[data-a=toggle]', this.root).textContent = '▶'; this.showControls(); this.report(true); });
+    v.addEventListener('pause', () => { if (this.casting) return; $('[data-a=toggle]', this.root).textContent = '▶'; this.showControls(); this.report(); });
     v.addEventListener('ended', () => { if (!this.casting) this.onEnded(); });
     for (const ev of ['play', 'pause', 'seeked']) v.addEventListener(ev, () => { if (!this.casting) this.partySend(); });
     v.addEventListener('volumechange', () => {
@@ -1487,20 +1537,27 @@ class Player {
     $('.p-volume', this.root).addEventListener('input', (e) => { v.volume = Number(e.target.value); v.muted = v.volume === 0; });
 
     const hover = $('.p-hover-time', this.root);
+    const thumb = $('.p-hover-thumb', this.root);
+    // Time label + preview picture over the seek bar at fraction f.
+    const preview = (f) => {
+      hover.hidden = false;
+      hover.style.left = `${f * 100}%`;
+      hover.textContent = fmtClock(f * this.total);
+      this.showThumb(thumb, f);
+    };
+    const hidePreview = () => { hover.hidden = true; thumb.hidden = true; };
     this.range.addEventListener('input', () => {
       this.dragging = true;
       this.range.style.setProperty('--pct', `${pct(Number(this.range.value), this.total)}%`);
       this.updateTime();
+      if (this.total) preview(Number(this.range.value) / this.total); // also while dragging on touch screens
     });
-    this.range.addEventListener('change', () => { this.dragging = false; this.seek(Number(this.range.value)); });
+    this.range.addEventListener('change', () => { this.dragging = false; hidePreview(); this.seek(Number(this.range.value)); });
     this.range.addEventListener('mousemove', (e) => {
       const r = this.range.getBoundingClientRect();
-      const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-      hover.hidden = false;
-      hover.style.left = `${f * 100}%`;
-      hover.textContent = fmtClock(f * this.total);
+      preview(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
     });
-    this.range.addEventListener('mouseleave', () => { hover.hidden = true; });
+    this.range.addEventListener('mouseleave', hidePreview);
 
     this.onMove = () => this.showControls();
     this.root.addEventListener('mousemove', this.onMove);
@@ -1573,6 +1630,7 @@ const routes = [
   [/^\/downloads$/, viewDownloads],
   [/^\/watchlist$/, viewWatchlist],
   [/^\/collections$/, viewCollections],
+  [/^\/activity$/, viewActivity],
   [/^\/party\/(\w+)$/, viewParty],
   [/^\/collection\/([\w-]+)$/, viewCollection],
 ];
@@ -1651,6 +1709,11 @@ async function startApp() {
   await router();
   firstRoute = false;
   pollStatus();
+  // A shared device can ask who's watching once per visit.
+  if (store.get('askProfile', false) && !sessionStorage.getItem('marquee:asked')) {
+    try { sessionStorage.setItem('marquee:asked', '1'); } catch { /* ignore */ }
+    showProfilePicker({ atStart: true });
+  }
 }
 
 (async function init() {

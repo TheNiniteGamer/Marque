@@ -173,7 +173,10 @@ never gets access to Docker itself.
 | **Streaming** | **Direct Play** with instant seeking when the browser supports the file. Otherwise ffmpeg converts it **on the fly**, copying the video when possible so only the audio is converted. Falls back automatically if direct play fails. |
 | **Quality / adaptive streaming** | Pick **Original**, **Auto** or a fixed 1080p / 720p / 480p / 360p in the player. *Auto* uses HLS adaptive streaming, which switches quality to suit the connection. It is the default when you're away from home. Segments are made on demand, so seeking anywhere starts within seconds. |
 | **Graphics card conversion** | NVIDIA (NVENC), Intel Quick Sync and Intel/AMD VAAPI, detected automatically, with fallback to the CPU. |
-| **Skip intro** | Theme songs are found automatically by comparing the audio of episodes in a season. A **Skip Intro** button appears during the intro (`S`), or turn on automatic skipping under *Account*. Admins can fix an intro by hand: *⋯ → Edit intro…*, or ✂ in the player. |
+| **Skip intro, Up Next at the credits** | Theme songs and end credits are found automatically by comparing the audio of episodes in a season. A **Skip Intro** button appears during the intro (`S`), or turn on automatic skipping under *Account*. When the credits start, **Up Next** offers the next episode (with *Watch credits* to stay). Admins can fix either by hand: *⋯ → Edit intro & credits…*, or ✂ in the player. |
+| **Seek preview thumbnails** | Pictures above the seek bar while you hover or drag. They're made the first time a video is opened (a few seconds to a minute or two for a film). |
+| **Who's watching?** | Profiles for a shared TV or tablet: anyone who sets a PIN (*Account*) can be switched to with it, and admins can let children's accounts be picked without one. *Switch profile* is in the account menu; *Account → Ask “Who's watching?”* shows the picker when Marquee opens on that device. Five wrong PINs lock a profile for 10 minutes. |
+| **Activity** | *Activity* (admins) shows who's watching what right now, on which device, whether at home or away, direct or converted (and on the graphics card or CPU), plus the server's CPU and memory use. |
 | **Casting** | Chromecast / Google TV from Chrome and Edge, AirPlay from Safari. Includes subtitles, resume position and next episode. |
 | **Watch together** | 👥 in the player makes a watch party and gives you a link. Everyone with an account who opens it stays in sync: play, pause, skipping and the next episode. |
 | **Subtitles** | Sidecar `.srt`/`.vtt`, embedded text subtitles, and Blu-ray / DVD picture subtitles (PGS, VobSub), which the server draws into the video. Missing ones can be found on **OpenSubtitles.com** from the player (*Subtitles → Search online…*) once an admin adds a free API key in *Settings → Metadata*. |
@@ -283,13 +286,15 @@ lib/scanner.js      folder walking, ffprobe, show grouping, TMDB enrichment
 lib/media.js        ffprobe/ffmpeg: probe, thumbnails, direct-play check, live transcode, seek points
 lib/hwaccel.js      encoder choice (NVENC / QSV / VAAPI / x264), start-up tests, fallback
 lib/hls.js          adaptive streaming: VOD playlists, on-demand segment conversion per session
-lib/intro.js        skip-intro detection (Chromaprint audio fingerprints compared across a season)
+lib/intro.js        intro and credits detection (Chromaprint audio fingerprints compared across a season)
 lib/tokens.js       signed, expiring playback links for cast devices and native players
 lib/watcher.js      notices folder changes (polls folder times; works on Docker bind mounts and network drives)
 lib/collections.js  automatic (TMDB) and hand-made collections
 lib/party.js        watch together: shared play state pushed to members over Server-Sent Events
 lib/opensubtitles.js  subtitle search/download from OpenSubtitles.com
 lib/problems.js     library health check (offline folders, duplicates, missing episodes…)
+lib/trickplay.js    seek preview thumbnail sheets
+lib/activity.js     "now playing" sessions for the Activity page
 lib/library.js      per-user API shaping: hubs, continue watching / up next, search, watch state
 lib/metadata.js     metadata providers (TMDB, TVmaze), image downloads
 lib/matcher.js      matching, refresh/unmatch, user edits and custom artwork (edits > metadata > file name)

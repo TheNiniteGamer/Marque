@@ -466,3 +466,29 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .p-party { position: relative; }
 .p-party-count:not(:empty) { position: absolute; top: 2px; right: 0; min-width: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-size: 10px; font-weight: 700; line-height: 16px; }
 .player.in-party .p-party { color: var(--accent); }
+.p-seek .p-hover-thumb { position: absolute; bottom: 46px; translate: -50% 0; border: 2px solid rgba(255,255,255,.85); border-radius: 6px; background-color: #000; background-repeat: no-repeat; box-shadow: 0 4px 16px rgba(0,0,0,.6); pointer-events: none; }
+@media (max-width: 640px) { .p-seek .p-hover-thumb { transform: scale(.75); transform-origin: bottom center; } }
+
+/* "Who's watching?" */
+.profile-picker { position: fixed; inset: 0; z-index: 70; background: var(--bg, #111); display: grid; place-items: center; padding: 20px; overflow: auto; }
+.pp-inner { display: grid; gap: 20px; justify-items: center; text-align: center; max-width: 760px; }
+.pp-list { display: flex; flex-wrap: wrap; gap: 22px; justify-content: center; }
+.pp-list[hidden], .pp-pin[hidden] { display: none; }
+.pp-profile { display: grid; gap: 8px; justify-items: center; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; position: relative; }
+.pp-avatar { width: 104px; height: 104px; border-radius: 14px; display: grid; place-items: center; font-size: 44px; font-weight: 700; background: var(--bg-3); border: 3px solid transparent; }
+.pp-profile:hover .pp-avatar, .pp-profile:focus-visible .pp-avatar { border-color: var(--accent); }
+.pp-profile.current .pp-avatar { background: var(--accent); color: var(--accent-ink); }
+.pp-lock { position: absolute; top: 4px; right: 4px; font-size: 14px; }
+.pp-pin { display: grid; gap: 10px; justify-items: center; }
+.pp-pin input { text-align: center; font-size: 24px; letter-spacing: 8px; max-width: 220px; }
+
+/* activity */
+.activity-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.activity-stats .panel { display: grid; gap: 4px; margin: 0; }
+.activity-stats b { font-size: 22px; }
+.meter, .activity-progress { height: 6px; border-radius: 3px; background: var(--bg-3); overflow: hidden; }
+.meter span, .activity-progress span { display: block; height: 100%; background: var(--accent); }
+.activity-row { display: grid; grid-template-columns: 160px 1fr; gap: 14px; align-items: center; }
+.activity-row img { width: 160px; aspect-ratio: 16/9; object-fit: cover; border-radius: 6px; background: var(--bg-3); }
+.activity-info { display: grid; gap: 4px; min-width: 0; }
+@media (max-width: 640px) { .activity-row { grid-template-columns: 1fr; } .activity-row img { width: 100%; } }

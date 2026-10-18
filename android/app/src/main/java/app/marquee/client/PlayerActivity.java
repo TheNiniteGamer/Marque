@@ -47,6 +47,7 @@ public class PlayerActivity extends Activity {
     private static final float[] SPEEDS = {0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f};
 
     private final Handler ui = new Handler(Looper.getMainLooper());
+    private final String clientId = "android-" + Long.toHexString(System.nanoTime());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
 
     private VideoView video;
@@ -66,8 +67,8 @@ public class PlayerActivity extends Activity {
     private String quality = "original";
     private String qualityPref;
     private JSONObject playback;   // signed link + streaming session from /playback
-    private JSONObject intro;
-    private boolean autoSkipIntro, autoSkipped;
+    private JSONObject intro, credits;
+    private boolean autoSkipIntro, autoSkipped, creditsShown;
     private double offset;       // seconds: where a converted stream starts in the real timeline
     private double pendingSeek;  // seconds: seek to this once a direct stream is ready
     private double duration;
@@ -177,7 +178,8 @@ public class PlayerActivity extends Activity {
         item = it;
         playback = pb;
         intro = it.optJSONObject("intro");
-        autoSkipped = false;
+        credits = it.optJSONObject("credits");
+        autoSkipped = creditsShown = false;
         skipIntro.setVisibility(View.GONE);
         duration = it.optDouble("duration", 0);
         seek.setMax((int) Math.max(1, duration));
@@ -363,7 +365,7 @@ public class PlayerActivity extends Activity {
         subs.setText(cues.isEmpty() ? "" : Vtt.textAt(cues, (long) (t * 1000)));
         updateIntro(t);
         updatePlayIcon();
-        if (video.isPlaying() && System.currentTimeMillis() - lastReport > 10000) report();
+        if (System.currentTimeMillis() - lastReport > 10000) report(); // also while paused
     }
 
     // "Skip Intro" while the theme song plays, or skip it automatically once if the user asked for that.
@@ -376,17 +378,39 @@ public class PlayerActivity extends Activity {
             in = false;
         }
         skipIntro.setVisibility(in ? View.VISIBLE : View.GONE);
+        // "Up next" as soon as the end credits start.
+        JSONObject n = item.optJSONObject("next");
+        if (credits != null && n != null && !creditsShown && !dragging && t >= credits.optDouble("start") && t < credits.optDouble("start") + 30) {
+            creditsShown = true;
+            showUpNext(n, autoplayNext ? 10 : -1, true);
+        }
     }
 
     private String label(double t) { return PlaybackPlan.clock(t) + " / " + PlaybackPlan.clock(duration); }
 
-    private void report() {
+    private void markWatched() {
+        final String url = base + "/api/items/" + item.optString("id") + "/watched";
+        io.execute(() -> {
+            try { Net.postJson(url, new JSONObject().put("watched", true)); } catch (Exception ignored) { }
+        });
+    }
+
+    private void report() { report(false); }
+
+    // Saves the resume position and tells the server's Activity page what's playing.
+    private void report(boolean stopped) {
         if (item == null) return;
         lastReport = System.currentTimeMillis();
         final String url = base + "/api/items/" + item.optString("id") + "/progress";
         final double pos = now();
+        final boolean paused = !video.isPlaying();
+        final String mode = hls ? "hls" : direct ? "direct" : "transcode";
+        final String q = hls ? quality : null;
         io.execute(() -> {
-            try { Net.postJson(url, new JSONObject().put("position", pos)); } catch (Exception ignored) { }
+            try {
+                Net.postJson(url, new JSONObject().put("position", pos).put("paused", paused).put("mode", mode)
+                    .put("quality", q).put("client", clientId).put("stopped", stopped));
+            } catch (Exception ignored) { }
         });
     }
 
@@ -398,16 +422,18 @@ public class PlayerActivity extends Activity {
         });
         JSONObject n = item.optJSONObject("next");
         if (n == null) { finish(); return; }
-        if (!autoplayNext) { showUpNext(n, -1); return; }
-        showUpNext(n, 10);
+        if (upNext != null && upNext.isShowing()) return; // already offered at the credits
+        showUpNext(n, autoplayNext ? 10 : -1, false);
     }
 
-    private void showUpNext(JSONObject n, int seconds) {
+    private void showUpNext(JSONObject n, int seconds, boolean atCredits) {
         String name = "S" + n.optInt("season") + " · E" + n.optInt("episode") + " — " + n.optString("title");
-        upNext = new AlertDialog.Builder(this).setTitle(R.string.up_next).setMessage(name)
-            .setPositiveButton(R.string.play_now, (d, w) -> playNext())
-            .setNegativeButton(R.string.close, (d, w) -> finish())
-            .setOnCancelListener(d -> finish()).show();
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(R.string.up_next).setMessage(name)
+            .setPositiveButton(R.string.play_now, (d, w) -> playNext());
+        // At the credits, "Watch credits" just closes the card; at the very end, leave the player.
+        if (atCredits) b.setNegativeButton(R.string.watch_credits, (d, w) -> d.dismiss());
+        else b.setNegativeButton(R.string.close, (d, w) -> finish()).setOnCancelListener(d -> finish());
+        upNext = b.show();
         if (seconds > 0) countdown(seconds);
     }
 
@@ -422,7 +448,8 @@ public class PlayerActivity extends Activity {
         if (upNext != null) upNext.dismiss();
         JSONObject n = item != null ? item.optJSONObject("next") : null;
         if (n == null) return;
-        report();
+        if (credits != null && now() >= credits.optDouble("start") - 1) markWatched(); // left during the credits
+        else report();
         video.stopPlayback();
         load(n.optString("id"), 0);
     }
@@ -634,7 +661,7 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onDestroy() {
         ui.removeCallbacksAndMessages(null);
-        if (item != null && video.getCurrentPosition() > 0) report();
+        if (item != null && video.getCurrentPosition() > 0) report(true);
         video.stopPlayback();
         // Stop the server's conversion right away instead of waiting for it to time out.
         if (playback != null && hls) {

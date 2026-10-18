@@ -98,3 +98,26 @@ test('problem finder: offline folders, unreadable, unmatched, duplicates, missin
   assert.deepEqual(p.missingEpisodes, [{ showId: 's1', show: 'Show', season: 1, missing: [4] }], 'S01E02-E03 covers 3; specials are ignored');
   assert.deepEqual(findProblems(store, { providersFor: () => [] }).unmatched, [], 'nothing is "unmatched" without a metadata source');
 });
+
+test('seek preview thumbnails are made on first request', async () => {
+  const { Movies } = await libs();
+  const [film] = (await admin('GET', `/api/libraries/${Movies.id}/items`)).data.items;
+  assert.deepEqual((await admin('GET', `/api/items/${film.id}/trickplay`)).data, { ready: false }, 'clips under 10 s get none');
+
+  const long = path.join(ROOT, 'long.mp4');
+  clip(long, 25);
+  const old = new Date(Date.now() - 120_000);
+  fs.utimesSync(long, old, old);
+  fs.mkdirSync(path.join(ROOT, 'Movies', 'Long (2022)'));
+  fs.renameSync(long, path.join(ROOT, 'Movies', 'Long (2022)', 'Long (2022).mp4'));
+  const item = await until(async () => (await admin('GET', `/api/libraries/${Movies.id}/items`)).data.items.find((i) => i.title === 'Long'), 15000);
+  assert.deepEqual((await admin('GET', `/api/items/${item.id}/trickplay`)).data, { ready: false });
+  const info = await until(async () => { const d = (await admin('GET', `/api/items/${item.id}/trickplay`)).data; return d.ready && d; });
+  // 160x120 source → 240x180 thumbnails, one every 10 s.
+  assert.deepEqual(info, { ready: true, interval: 10, cols: 10, rows: 10, width: 240, height: 180, count: 3, sheets: 1 });
+  const sheet = await admin('GET', `/api/items/${item.id}/trickplay/1`);
+  assert.equal(sheet.status, 200);
+  assert.equal(sheet.data.subarray(0, 2).toString('hex'), 'ffd8', 'a JPEG');
+  assert.equal((await admin('GET', `/api/items/${item.id}/trickplay/2`)).status, 404);
+  assert.equal((await admin('GET', `/api/items/${item.id}/trickplay/..%2Finfo.json`)).status, 404);
+});

@@ -65,6 +65,7 @@ function renderUserMenu() {
       ${u.canDownload ? html`<a href="#/downloads">Downloads</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/settings">Settings</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/settings?section=updates" class="upd-link">Update available</a>` : ''}
+      <button id="switch-profile">Switch profile</button>
       ${window.MarqueeAndroid ? html`<button id="switch-server">Switch server</button>` : ''}
       <button id="sign-out">Sign out</button>
     </div>`.s;
@@ -73,6 +74,7 @@ function renderUserMenu() {
   pop.onclick = (e) => {
     if (e.target.id === 'sign-out') signOut();
     if (e.target.id === 'switch-server') window.MarqueeAndroid?.changeServer();
+    if (e.target.id === 'switch-profile') showProfilePicker();
     pop.hidden = true;
   };
 }
@@ -99,8 +101,20 @@ async function viewAccount({ seq }) {
       <label>Streaming quality
         <select data-pref="quality">${[['', 'Automatic (original at home, adaptive when away)'], ['original', 'Original'], ['auto', 'Adaptive (adjusts to your connection)'],
           ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']].map(([v, l]) => html`<option value="${v}" ${(store.get('quality', '') || '') === v ? 'selected' : ''}>${l}</option>`)}</select></label>
+      <label class="check"><input type="checkbox" data-pref="askProfile" ${store.get('askProfile', false) ? 'checked' : ''}> Ask “Who's watching?” when Marquee opens (for a shared TV or tablet)</label>
       <p class="muted" style="margin:0;font-size:13px">These are saved in this browser.</p>
     </div>
+    <form class="panel form" id="pin-form">
+      <h2>Profile PIN</h2>
+      <p class="muted" style="margin:0">${u.hasPin ? 'You have a PIN.' : u.noPin ? 'Your profile can be picked on “Who\'s watching?” without a PIN (set by an admin).' : 'Set a PIN to appear on the “Who\'s watching?” screen, so people sharing a device can switch to your profile with it instead of your password.'}</p>
+      <div class="row" style="align-items:flex-end">
+        <label style="min-width:160px">Current password<input class="input" type="password" name="currentPassword" autocomplete="current-password" required></label>
+        <label style="min-width:120px">${u.hasPin ? 'New PIN' : 'PIN'}<input class="input" name="pin" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" placeholder="4–8 digits" autocomplete="off"></label>
+        <button class="btn primary" type="submit">${u.hasPin ? 'Change PIN' : 'Set PIN'}</button>
+        ${u.hasPin ? html`<button class="btn danger" type="button" id="pin-remove">Remove PIN</button>` : ''}
+      </div>
+      <div class="form-error" id="pin-error"></div>
+    </form>
     ${window.MarqueeAndroid ? '' : html`<div class="panel">
       <h2 style="margin-top:0">Android app</h2>
       <p class="muted" style="margin:0 0 10px">Watch on your Android phone or tablet with the Marquee app. It plays videos in the phone's own player,
@@ -119,6 +133,16 @@ async function viewAccount({ seq }) {
     </form>`)) return;
   $('#acct-signout').onclick = signOut;
   $('#prefs').onchange = (e) => { const k = e.target.dataset.pref; if (k) { store.set(k, e.target.type === 'checkbox' ? e.target.checked : e.target.value); toast('Saved'); } };
+  const savePin = async (pin) => {
+    const f = $('#pin-form').elements;
+    try {
+      state.user = (await api('/api/auth/pin', { method: 'POST', body: { currentPassword: f.currentPassword.value, pin } })).user;
+      toast(pin ? 'PIN saved' : 'PIN removed');
+      router();
+    } catch (err) { $('#pin-error').textContent = err.message; }
+  };
+  $('#pin-form').onsubmit = (e) => { e.preventDefault(); savePin(e.target.elements.pin.value); };
+  if ($('#pin-remove')) $('#pin-remove').onclick = () => { if ($('#pin-form').elements.currentPassword.reportValidity()) savePin(''); };
   $('#pw-form').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target.elements;
@@ -194,6 +218,7 @@ function showUserForm(user = null) {
           ${state.libraries.map((l) => html`<label class="check"><input type="checkbox" name="lib" value="${l.id}" ${user?.libraries?.includes(l.id) ? 'checked' : ''}> ${l.name}</label>`)}
         </div>
         <label class="check"><input type="checkbox" name="canDownload" ${user?.canDownload ? 'checked' : ''}> Can download videos (YouTube downloader)</label>
+        <label class="check"><input type="checkbox" name="noPin" ${user?.noPin ? 'checked' : ''}> Show on “Who's watching?” without a PIN (e.g. for children)</label>
       </fieldset>
       <p class="muted" id="admin-note" style="margin:0;font-size:13px" hidden>Administrators can see every library and use all features.</p>
       <div class="form-error" id="user-error"></div>
@@ -216,6 +241,7 @@ function showUserForm(user = null) {
       username: f.username.value,
       libraries: f.access.value === 'all' ? null : $$('input[name=lib]:checked', form).map((c) => c.value),
       canDownload: f.canDownload.checked,
+      noPin: f.noPin.checked,
     };
     if (!self) body.role = f.role.value;
     if (f.password.value) body.password = f.password.value;
@@ -352,4 +378,58 @@ async function viewDownloads({ seq }) {
       poll();
     } catch (err) { toast(err.message, true); }
   };
+}
+
+// ---------- "Who's watching?" ----------
+async function showProfilePicker({ atStart = false } = {}) {
+  if ($('.profile-picker')) return;
+  let data;
+  try { data = await api('/api/profiles'); } catch { return; }
+  const list = data.profiles.some((p) => p.id === data.current) ? data.profiles
+    : [{ id: data.current, username: state.user.username, needsPin: false }, ...data.profiles];
+  if (atStart && list.length < 2) return; // nobody else to switch to
+  const root = document.createElement('div');
+  root.className = 'profile-picker';
+  root.innerHTML = html`<div class="pp-inner">
+      <h1>Who's watching?</h1>
+      <div class="pp-list">${list.map((p) => html`<button class="pp-profile ${p.id === data.current ? 'current' : ''}" data-pid="${p.id}">
+        <span class="pp-avatar">${p.username.slice(0, 1).toUpperCase()}</span><span>${p.username}</span>${p.needsPin && p.id !== data.current ? html`<span class="pp-lock" title="PIN">🔒</span>` : ''}</button>`)}</div>
+      <form class="pp-pin" hidden><label>PIN for <b class="pp-name"></b>
+        <input class="input" name="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off"></label>
+        <div class="row"><button class="btn primary">Continue</button><button class="btn" type="button" data-pp="back">Back</button></div>
+        <div class="form-error"></div></form>
+      <p class="muted" style="font-size:13px">${data.profiles.length ? 'Not listed? Set a PIN on your Account page, or sign in with your password.' : 'Nobody has set a PIN yet: set one on the Account page to appear here.'}</p>
+      <div class="row" style="justify-content:center"><button class="btn small" data-pp="close">${atStart ? 'Continue as ' + state.user.username : 'Cancel'}</button>
+        <button class="btn small" data-pp="signin">Sign in with a password</button></div>
+    </div>`.s;
+  document.body.append(root);
+  const form = $('.pp-pin', root);
+  let target = null;
+  const go = async (pin) => {
+    try {
+      await api('/api/auth/switch', { method: 'POST', body: { userId: target.id, pin } });
+      location.hash = '#/';
+      location.reload(); // start fresh as the new profile
+    } catch (err) { $('.form-error', form).textContent = err.message; form.elements.pin.select(); }
+  };
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pid]');
+    if (b) {
+      target = list.find((p) => p.id === b.dataset.pid);
+      if (target.id === data.current) return root.remove();
+      if (!target.needsPin) return go('');
+      $('.pp-list', root).hidden = true;
+      form.hidden = false;
+      $('.pp-name', form).textContent = target.username;
+      form.elements.pin.value = '';
+      $('.form-error', form).textContent = '';
+      form.elements.pin.focus();
+      return;
+    }
+    const act = e.target.closest('[data-pp]')?.dataset.pp;
+    if (act === 'close') root.remove();
+    if (act === 'back') { form.hidden = true; $('.pp-list', root).hidden = false; }
+    if (act === 'signin') { root.remove(); signOut(); }
+  });
+  form.onsubmit = (e) => { e.preventDefault(); go(form.elements.pin.value); };
 }

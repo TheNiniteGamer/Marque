@@ -28,6 +28,9 @@ const { findProblems } = require('./lib/problems');
 const collections = require('./lib/collections');
 const { OpenSubtitles } = require('./lib/opensubtitles');
 const { Parties } = require('./lib/party');
+const { Trickplay } = require('./lib/trickplay');
+const { Activity } = require('./lib/activity');
+const { KINDS: ENCODER_NAMES } = require('./lib/hwaccel');
 
 const PORT = Number(process.env.PORT) || 32500;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -64,6 +67,8 @@ const hls = new hlsLib.HlsManager(path.resolve(process.env.TRANSCODE_DIR || path
 const tokens = new MediaTokens(store);
 const opensubs = new OpenSubtitles(() => store.data.settings);
 const parties = new Parties();
+const trickplay = new Trickplay(DATA_DIR);
+const activity = new Activity();
 const intro = new IntroDetector(store, DATA_DIR);
 scanner.on('done', (libraryId) => intro.enqueue({ libraryId }));
 const watcher = new FolderWatcher(store, scanner, Number(process.env.WATCH_INTERVAL ?? 15) * 1000);
@@ -361,6 +366,25 @@ route('POST', '/api/auth/logout', async (req, res, p, url, user) => {
   json(res, 200, { ok: true });
 }, 'public');
 
+// --- profiles ("Who's watching?") ---
+route('GET', '/api/profiles', async (req, res, p, url, user) => json(res, 200, { current: user.id, profiles: auth.profiles() }));
+route('POST', '/api/auth/switch', async (req, res, p, url, user) => {
+  const body = await readBody(req);
+  const target = auth.byId(String(body.userId || ''));
+  if (target?.id === user.id) return json(res, 200, { user: publicUser(user) });
+  await auth.checkSwitch(target, body.pin);
+  auth.destroySession(req, res);
+  auth.createSession(req, res, target);
+  json(res, 200, { user: publicUser(target) });
+});
+// Set or remove your own PIN (needs your password).
+route('POST', '/api/auth/pin', async (req, res, p, url, user) => {
+  const body = await readBody(req);
+  if (!(await auth.login(user.username, body.currentPassword))) throw new HttpError(400, 'Current password is incorrect');
+  await auth.setPin(user, body.pin || null);
+  json(res, 200, { user: publicUser(user) });
+});
+
 route('POST', '/api/auth/password', async (req, res, p, url, user) => {
   const body = await readBody(req);
   if (!(await auth.login(user.username, body.currentPassword))) throw new HttpError(400, 'Current password is incorrect');
@@ -489,6 +513,10 @@ route('POST', '/api/items/:id/progress', async (req, res, { id }, url, user) => 
   const body = await readBody(req);
   const position = Number(body.position);
   if (!Number.isFinite(position)) throw new HttpError(400, 'position (seconds) required');
+  activity.report(user, item, { ...body, position, ip: clientIp(req), remote: isRemote(req), ua: String(req.headers['user-agent'] || '') });
+  // Players also report while paused (for the Activity page); the resume point only changes when it moved.
+  const prev = store.data.progress[user.id]?.[item.id];
+  if (body.paused && prev && !body.stopped && Math.abs((prev.position || 0) - position) < 1) return json(res, 200, lib.progressOf(store, user, item.id));
   json(res, 200, lib.setProgress(store, user, item, position));
 });
 
@@ -551,6 +579,7 @@ route('GET', '/api/items/:id/transcode', async (req, res, { id }, url, user) => 
   let finished = false;
   const run = (encoder) => {
     const proc = media.transcode(item, { start, audioIndex, encoder, burn });
+    proc.meta = { itemId: item.id, userId: user.id, encoder: media.canCopyVideo(item.media?.video) && burn == null ? null : encoder };
     transcodes.add(proc);
     let stderr = '';
     let sent = false;
@@ -594,6 +623,7 @@ route('GET', '/api/items/:id/playback', async (req, res, { id }, url, user) => {
     limit: limit ? limit.quality : null,
     qualities: item.media?.video ? hlsLib.qualitiesFor(item, limit?.maxHeight).map(({ id: q, label, height, bitrate }) => ({ id: q, label, height, bitrate })) : [],
     intro: item.intro?.end ? { start: item.intro.start, end: item.intro.end } : null,
+    credits: item.credits?.start ? { start: item.credits.start } : null,
     cast: castAddresses(),
   });
 });
@@ -628,12 +658,48 @@ route('GET', '/api/items/:id/hls/:quality/:segment', async (req, res, { id, qual
   const item = hlsItem(id, user);
   const file = await hls.segment(item, {
     quality, sid: url.searchParams.get('sid'), audio: Math.max(0, Number(url.searchParams.get('audio')) || 0),
-    burn: burnParam(item, url), maxHeight: remoteLimit(req, item)?.maxHeight,
+    burn: burnParam(item, url), maxHeight: remoteLimit(req, item)?.maxHeight, userId: user.id,
   }, Number(m[1]));
   sendFile(req, res, file, { type: 'video/mp2t', headers: { 'Cache-Control': 'no-cache' } });
 }, 'media');
 // The player closed: stop converting right away instead of waiting for the idle timeout.
 route('DELETE', '/api/hls/:sid', async (req, res, { sid }) => { hls.end(sid); json(res, 200, { ok: true }); });
+
+// --- activity (admin): who is watching what right now ---
+route('GET', '/api/activity', async (req, res) => {
+  // Videos being converted, by item and user: progressive (one ffmpeg per viewer) and adaptive streams.
+  const conversions = [
+    ...[...transcodes].filter((p) => p.meta).map((p) => ({ itemId: p.meta.itemId, userId: p.meta.userId, kind: 'transcode', encoder: p.meta.encoder, quality: null })),
+    ...hls.status().filter((s) => s.running || s.paused).map((s) => ({ itemId: s.item, userId: s.userId, kind: 'hls', encoder: s.encoder, quality: s.quality })),
+  ];
+  const describe = (id) => {
+    const it = store.data.items[id];
+    if (!it) return null;
+    const s = lib.itemSummary(store, { id: '' }, it); // (no one's own progress needed here)
+    return { id, type: it.type, title: s.title, showTitle: s.showTitle, season: s.season, episode: s.episode, duration: s.duration, artV: s.artV };
+  };
+  const used = new Set();
+  const streams = activity.list().map((s) => {
+    const conv = conversions.find((c, i) => !used.has(i) && c.itemId === s.itemId && (!c.userId || c.userId === s.userId) && used.add(i));
+    return { ...s, item: describe(s.itemId), conversion: conv ? { ...conv, encoderName: conv.encoder ? ENCODER_NAMES[conv.encoder] : null } : null };
+  });
+  // Conversions with no player reporting (e.g. a Chromecast fetching the stream itself).
+  const others = conversions.filter((c, i) => !used.has(i)).map((c) => ({
+    ...c, encoderName: c.encoder ? ENCODER_NAMES[c.encoder] : null, item: describe(c.itemId), user: auth.byId(c.userId)?.username || null,
+  }));
+  json(res, 200, {
+    streams, others, cpu: activity.cpu(), memory: { total: os.totalmem(), free: os.freemem() },
+    encoder: { active: hwaccel.active, name: ENCODER_NAMES[hwaccel.active] },
+  });
+}, 'admin');
+
+// --- seek preview thumbnails ---
+route('GET', '/api/items/:id/trickplay', async (req, res, { id }, url, user) => json(res, 200, trickplay.info(getItem(id, user))), 'media');
+route('GET', '/api/items/:id/trickplay/:n', async (req, res, { id, n }, url, user) => {
+  const file = trickplay.sheet(getItem(id, user), String(n).replace(/\.jpg$/, ''));
+  if (!file) throw new HttpError(404, 'Not ready');
+  sendFile(req, res, file, { type: 'image/jpeg', headers: { 'Cache-Control': 'private, max-age=86400' } });
+}, 'media');
 
 // --- watch together ---
 // Everyone in a party must be able to see the video being played (normal library permissions).
@@ -888,6 +954,24 @@ route('PUT', '/api/items/:id/intro', async (req, res, { id }, url, user) => {
   json(res, 200, lib.itemDetail(store, user, item));
 }, 'admin');
 route('GET', '/api/problems', async (req, res) => json(res, 200, findProblems(store, metadata)), 'admin');
+// Same for where the end credits start: { start } | { none: true } | { auto: true }.
+route('PUT', '/api/items/:id/credits', async (req, res, { id }, url, user) => {
+  const item = getItem(id, user);
+  if (item.type !== 'episode') throw new HttpError(400, 'Only TV episodes have credits detection');
+  const body = await readBody(req);
+  if (body.auto) {
+    delete item.credits;
+    intro.enqueue({ libraryId: item.libraryId });
+  } else if (body.none) {
+    item.credits = { manual: true, at: Date.now() };
+  } else {
+    const start = Number(body.start);
+    if (!Number.isFinite(start) || start <= 0 || start >= (item.media?.duration || Infinity)) throw new HttpError(400, 'The credits must start within the episode');
+    item.credits = { manual: true, start: Math.round(start * 10) / 10, at: Date.now() };
+  }
+  store.save();
+  json(res, 200, lib.itemDetail(store, user, item));
+}, 'admin');
 route('GET', '/api/intro', async (req, res) => json(res, 200, intro.status()), 'admin');
 route('POST', '/api/intro/detect', async (req, res) => {
   const body = await readBody(req);

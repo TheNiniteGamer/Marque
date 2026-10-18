@@ -79,7 +79,7 @@ function itemMenu(anchor, x, { ctx } = {}) {
       await api(`/api/collections/${ctx.slice(11)}/members/${x.id}`, { method: 'DELETE' }); toast('Removed from the collection'); router();
     } },
     { label: '💬  Find subtitles…', hidden: !state.status?.subtitleSearch || !['movie', 'episode'].includes(x.type), onClick: () => openSubtitleSearch(x.id, () => router()) },
-    { label: '⏭  Edit intro…', hidden: !admin || x.type !== 'episode', onClick: () => openIntroEditor(x.id) },
+    { label: '⏭  Edit intro & credits…', hidden: !admin || x.type !== 'episode', onClick: () => openIntroEditor(x.id) },
     { label: '⌕  Fix match…', hidden: !admin || x.type === 'episode' || x.type === 'extra', onClick: () => openMatcher(x.id) },
     { label: '↻  Refresh metadata', hidden: !admin || x.type === 'extra', onClick: () => refreshMetadata(x.type === 'episode' ? x.showId : x.id) },
   ]);
@@ -768,38 +768,61 @@ function parseClock(s) {
 }
 
 async function openIntroEditor(id) {
-  const it = await api(`/api/items/${id}`);
+  let it = await api(`/api/items/${id}`);
   const inPlayer = typeof player !== 'undefined' && player?.item?.id === id;
-  const field = (name, value) => html`<label>${name === 'start' ? 'Intro starts at' : 'Intro ends at'}
+  const field = (name, label, value) => html`<label>${label}
     <span class="row"><input class="input" name="${name}" value="${value != null ? fmtClock(value) : ''}" placeholder="m:ss" style="max-width:120px">
     ${inPlayer ? html`<button type="button" class="btn small" data-now="${name}">Use current position</button>` : ''}</span></label>`;
+  const how = (part, setByHand) => (it[part] ? (setByHand ? 'Set by hand.' : 'Found automatically.') : setByHand ? `Marked as having none.` : 'Not found.');
   const m = openModal({
-    title: `Intro — ${epLabel(it)} ${it.title}`,
+    title: `Intro & credits — ${epLabel(it)} ${it.title}`,
     body: html`<form class="form" id="intro-form">
-      <p class="muted" style="margin:0">${it.intro ? (it.introSetByHand ? 'Set by hand.' : 'Found automatically.') : it.introSetByHand ? 'Marked as having no intro.' : 'No intro found.'}
-        Times are minutes:seconds from the start of the episode.</p>
-      ${field('start', it.intro?.start ?? null)}
-      ${field('end', it.intro?.end ?? null)}
+      <p class="muted" style="margin:0">Times are minutes:seconds from the start of the episode.</p>
+      <h3 style="margin:4px 0 0">Intro <span class="muted" style="font-weight:400;font-size:13px">${how('intro', it.introSetByHand)}</span></h3>
+      ${field('start', 'Starts at', it.intro?.start ?? null)}
+      ${field('end', 'Ends at', it.intro?.end ?? null)}
+      <div class="row"><button type="button" class="btn small" data-set="intro:none">No intro</button>
+        <button type="button" class="btn small" data-set="intro:auto" title="Forget the manual setting and look for it automatically">Detect automatically</button></div>
+      <h3 style="margin:8px 0 0">Credits <span class="muted" style="font-weight:400;font-size:13px">${how('credits', it.creditsSetByHand)}</span></h3>
+      ${field('credits', 'Start at', it.credits?.start ?? null)}
+      <div class="row"><button type="button" class="btn small" data-set="credits:none">No credits</button>
+        <button type="button" class="btn small" data-set="credits:auto">Detect automatically</button></div>
     </form>`.s,
-    footer: html`<button class="btn" data-intro="auto" title="Forget the manual setting and look for the intro automatically">Detect automatically</button>
-      <button class="btn" data-intro="none">No intro</button>
-      <button class="btn primary" data-intro="save">Save</button>`.s,
+    footer: html`<button class="btn" data-close>Cancel</button><button class="btn primary" data-save>Save</button>`.s,
   });
   const form = $('#intro-form', m.el);
+  const initial = Object.fromEntries(['start', 'end', 'credits'].map((n) => [n, form.elements[n].value]));
+  const done = (updated, msg) => {
+    if (inPlayer) Object.assign(player.item, { intro: updated.intro, credits: updated.credits });
+    toast(msg);
+    m.close();
+    if (!inPlayer) router();
+  };
+  m.el.querySelector('footer [data-close]').onclick = () => m.close();
   m.el.addEventListener('click', async (e) => {
     const now = e.target.closest('[data-now]');
     if (now) { form.elements[now.dataset.now].value = fmtClock(player.time); return; }
-    const act = e.target.closest('[data-intro]')?.dataset.intro;
-    if (!act) return;
-    const body = act === 'auto' ? { auto: true } : act === 'none' ? { none: true }
-      : { start: parseClock(form.elements.start.value), end: parseClock(form.elements.end.value) };
-    if (act === 'save' && (Number.isNaN(body.start) || Number.isNaN(body.end))) return toast('Enter times like 1:05', true);
+    const set = e.target.closest('[data-set]')?.dataset.set;
     try {
-      const updated = await api(`/api/items/${id}/intro`, { method: 'PUT', body });
-      if (inPlayer) player.item.intro = updated.intro;
-      toast(act === 'auto' ? 'Looking for the intro automatically…' : 'Intro saved');
-      m.close();
-      if (!inPlayer) router();
+      if (set) {
+        const [part, what] = set.split(':');
+        const updated = await api(`/api/items/${id}/${part}`, { method: 'PUT', body: { [what]: true } });
+        return done(updated, what === 'auto' ? 'Looking for it automatically…' : 'Saved');
+      }
+      if (!e.target.closest('[data-save]')) return;
+      // Only the parts whose times were changed are saved.
+      let updated = it;
+      if (form.elements.start.value !== initial.start || form.elements.end.value !== initial.end) {
+        const body = { start: parseClock(form.elements.start.value), end: parseClock(form.elements.end.value) };
+        if (Number.isNaN(body.start) || Number.isNaN(body.end)) return toast('Enter intro times like 1:05', true);
+        updated = await api(`/api/items/${id}/intro`, { method: 'PUT', body });
+      }
+      if (form.elements.credits.value !== initial.credits) {
+        const start = parseClock(form.elements.credits.value);
+        if (Number.isNaN(start)) return toast('Enter the credits time like 41:30', true);
+        updated = await api(`/api/items/${id}/credits`, { method: 'PUT', body: { start } });
+      }
+      done(updated, 'Saved');
     } catch (err) { toast(err.message, true); }
   });
 }
@@ -961,3 +984,52 @@ async function openSubtitleSearch(id, onAdded) {
   });
   search();
 }
+
+// ---------- activity (admins): who is watching what right now ----------
+async function viewActivity({ seq }) {
+  if (state.user.role !== 'admin') { location.replace('#/'); return; }
+  const modeLabel = (s) => {
+    const c = s.conversion;
+    const by = c?.encoderName ? ` on ${c.encoderName}` : '';
+    if (s.mode === 'cast') return 'Casting to a TV';
+    if (s.mode === 'direct') return 'Direct Play';
+    if (s.mode === 'hls' || c?.kind === 'hls') return `Adaptive · ${s.quality === 'auto' || !s.quality ? (c?.quality ? `Auto (${c.quality})` : 'Auto') : s.quality}${c ? ` · converting${by}` : ''}`;
+    if (c) return c.encoder ? `Converting${by}` : 'Converting audio only (video copied)';
+    return s.mode === 'transcode' ? 'Converting' : 'Playing';
+  };
+  const title = (it) => (!it ? 'Unknown video' : it.type === 'episode' ? `${it.showTitle} · ${epLabel(it)} — ${it.title}` : it.title);
+  const render = (a) => html`
+    <div class="toolbar"><h1>Activity<span class="count">${a.streams.length}</span></h1>
+      <span class="muted">Updates every few seconds</span></div>
+    <div class="activity-stats">
+      <div class="panel"><div class="muted">Server CPU</div><b>${a.cpu.percent}%</b><div class="meter"><span style="width:${a.cpu.percent}%"></span></div><div class="muted">${a.cpu.cores} cores</div></div>
+      <div class="panel"><div class="muted">Memory in use</div><b>${Math.round((1 - a.memory.free / a.memory.total) * 100)}%</b><div class="meter"><span style="width:${(1 - a.memory.free / a.memory.total) * 100}%"></span></div><div class="muted">${fmtSize(a.memory.total)} total</div></div>
+      <div class="panel"><div class="muted">Converting video with</div><b>${a.encoder.name}</b><div class="muted">${a.streams.filter((s) => s.conversion?.encoder).length + a.others.filter((o) => o.encoder).length} video conversion(s) running</div></div>
+    </div>
+    ${a.streams.length ? a.streams.map((s) => html`
+      <div class="panel activity-row">
+        ${s.item ? html`<img src="${artUrl(s.item.type === 'episode' ? 'thumb' : 'backdrop', s.item)}" alt="">` : html`<div></div>`}
+        <div class="activity-info">
+          <div><b>${s.user}</b> <span class="muted">· ${s.device}${s.remote ? ' · away from home' : ''} · ${s.ip}</span></div>
+          <a href="#/item/${s.itemId}" style="font-weight:600">${title(s.item)}</a>
+          <div class="muted" style="font-size:13px">${s.paused ? '❚❚ Paused' : '▶ Playing'} · ${modeLabel(s)} · started ${new Date(s.startedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div>
+          ${s.item?.duration ? html`<div class="activity-progress"><span style="width:${pct(s.position, s.item.duration)}%"></span></div>
+            <div class="muted" style="font-size:12px">${fmtClock(s.position)} / ${fmtClock(s.item.duration)}</div>` : ''}
+        </div>
+      </div>`) : html`<div class="panel muted">Nobody is watching right now.</div>`}
+    ${a.others.length ? html`<h2 style="margin:24px 0 12px">Other conversions</h2>
+      <p class="muted" style="margin:-6px 0 10px;font-size:13px">Streams with no player reporting back, for example a Chromecast fetching the video itself.</p>
+      ${a.others.map((o) => html`<div class="panel" style="padding:10px 14px">${title(o.item)} <span class="muted">· ${o.user || 'someone'} · ${o.kind === 'hls' ? `adaptive ${o.quality}` : 'converting'}${o.encoderName ? ` on ${o.encoderName}` : ''}</span></div>`)}` : ''}`;
+  const load = async () => {
+    const a = await api('/api/activity');
+    if (parseHash().path !== '/activity') return false;
+    view.innerHTML = render(a).s;
+    return true;
+  };
+  const a = await api('/api/activity');
+  if (!setView(seq, render(a))) return;
+  // Refresh while the page is open (one timer, even when the page is opened again).
+  clearInterval(activityTimer);
+  activityTimer = setInterval(async () => { if (!(await load().catch(() => true))) clearInterval(activityTimer); }, 3000);
+}
+let activityTimer = null;

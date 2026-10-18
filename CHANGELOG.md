@@ -4,6 +4,18 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.4.0 — Significant update
+
+- **Up Next at the credits:** end credits are found automatically, like intros, and the next
+  episode is offered as soon as they start (*Watch credits* to stay). Leaving during the credits
+  marks the episode as watched. Admins can correct the time in *⋯ → Edit intro & credits…*.
+  Seasons already checked for intros are checked again once for credits after updating.
+- **Seek preview thumbnails** above the seek bar, made the first time a video is opened.
+- **Who's watching?** profiles with PINs for shared devices; admins can allow children's
+  accounts without a PIN.
+- **Activity page** for admins: who is watching what, how, and how busy the server is.
+- **Android app 1.3.0:** Up Next at the credits, and reports to the Activity page.
+
 ## 0.3.0 — Significant update
 
 - **Watch together:** 👥 in the player creates a watch party link. Everyone in it stays in sync:

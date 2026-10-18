@@ -29,14 +29,16 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const memStore = (data = {}) => ({ data: { settings: {}, ...data }, save() {} });
 const ff = (args) => execFileSync('ffmpeg', ['-v', 'error', '-y', ...args]);
 
-// An episode: some episode-specific sound, the shared theme (30 s), then more episode audio.
-function episode(file, n, themeAt, theme) {
+// An episode: some episode-specific sound, the shared theme (30 s), more episode audio (30 s),
+// the shared end credits (20 s), then a short episode-specific ending (4 s).
+function episode(file, n, themeAt, theme, credits) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tail = 30;
   const tone = (d, f) => `aevalsrc='0.4*sin(2*PI*(${f}+${90 * n}*sin(${0.9 + n / 10}*t+${n}))*t)*(0.6+0.4*sin(2*PI*1.7*t/${n}))':d=${d}:s=44100`;
   ff(['-f', 'lavfi', '-i', tone(themeAt, 200 + 40 * n), '-i', theme, '-f', 'lavfi', '-i', tone(tail, 500 + 30 * n),
-    '-f', 'lavfi', '-i', `testsrc2=size=320x180:rate=10:d=${themeAt + 30 + tail}`,
-    '-filter_complex', '[0][1][2]concat=n=3:v=0:a=1[a]', '-map', '3:v', '-map', '[a]',
+    '-i', credits, '-f', 'lavfi', '-i', tone(4, 900 + 20 * n),
+    '-f', 'lavfi', '-i', `testsrc2=size=320x180:rate=10:d=${themeAt + 30 + tail + 24}`,
+    '-filter_complex', '[0][1][2][3][4]concat=n=5:v=0:a=1[a]', '-map', '5:v', '-map', '[a]',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', file]);
 }
 
@@ -68,10 +70,13 @@ test.before(async () => {
   const theme = path.join(ROOT, 'theme.wav');
   ff(['-f', 'lavfi', '-i', 'anoisesrc=d=30:c=pink:seed=7:a=0.3', '-f', 'lavfi', '-i', "aevalsrc='0.3*sin(2*PI*(300+200*sin(0.7*t))*t)':d=30",
     '-filter_complex', 'amix=inputs=2', '-ar', '44100', theme]);
+  const credits = path.join(ROOT, 'credits.wav');
+  ff(['-f', 'lavfi', '-i', 'anoisesrc=d=20:c=white:seed=99:a=0.2', '-f', 'lavfi', '-i', "aevalsrc='0.4*sin(2*PI*(700+300*sin(1.3*t))*t)':d=20",
+    '-filter_complex', 'amix=inputs=2', '-ar', '44100', credits]);
   const season = path.join(ROOT, 'TV', 'Theme Show', 'Season 01');
-  episode(path.join(season, 'Theme Show - S01E01.mp4'), 1, 8, theme);
-  episode(path.join(season, 'Theme Show - S01E02.mp4'), 2, 15, theme);
-  episode(path.join(season, 'Theme Show - S01E03.mp4'), 3, 3, theme);
+  episode(path.join(season, 'Theme Show - S01E01.mp4'), 1, 8, theme, credits);
+  episode(path.join(season, 'Theme Show - S01E02.mp4'), 2, 15, theme, credits);
+  episode(path.join(season, 'Theme Show - S01E03.mp4'), 3, 3, theme, credits);
   fs.mkdirSync(path.join(ROOT, 'Movies'));
   ff(['-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:rate=24:d=3', '-c:v', 'libx264', '-preset', 'ultrafast', '-b:v', '15M', '-pix_fmt', 'yuv420p',
     path.join(ROOT, 'Movies', 'Big (2020).mp4')]);
@@ -195,6 +200,8 @@ test('episodes get their intro detected after the scan', async () => {
     const [s, end] = want[d.episode];
     assert.ok(d.intro, `episode ${d.episode} has an intro`);
     assert.ok(Math.abs(d.intro.start - s) < 3 && Math.abs(d.intro.end - end) < 3, `episode ${d.episode}: ${JSON.stringify(d.intro)}`);
+    // Credits start 60 s after the theme does.
+    assert.ok(d.credits && Math.abs(d.credits.start - (s + 60 + (d.episode === 3 ? 3 : 0))) < 3, `episode ${d.episode} credits: ${JSON.stringify(d.credits)}`);
     if (d.episode === 2) ep = d;
   }
 });
@@ -289,6 +296,16 @@ test('an admin can set, clear and reset an intro by hand', async () => {
 
   await put({ auto: true });
   await until(async () => (await call('GET', `/api/items/${ep.id}`)).data.intro?.end > 0);
+
+  // Credits the same way.
+  const putCredits = (body) => call('PUT', `/api/items/${ep.id}/credits`, body);
+  assert.equal((await putCredits({ start: 99999 })).status, 400);
+  assert.deepEqual((await putCredits({ start: 70.04 })).data.credits, { start: 70, manual: true });
+  assert.equal((await call('GET', `/api/items/${ep.id}/playback`)).data.credits.start, 70);
+  assert.equal((await putCredits({ none: true })).data.credits, null);
+  await putCredits({ auto: true });
+  await until(async () => (await call('GET', `/api/items/${ep.id}`)).data.credits?.start > 0);
+  assert.equal((await call('GET', `/api/items/${ep.id}`)).data.creditsSetByHand, false);
   assert.equal((await call('GET', `/api/items/${ep.id}`)).data.introSetByHand, false);
 });
 
