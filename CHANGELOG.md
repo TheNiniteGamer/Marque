@@ -4,6 +4,20 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.4.2
+
+Behind-the-scenes improvements for reliability:
+
+- **Safer database:** each save is forced onto the disk and the previous version kept as
+  `db.json.bak`. If the database is ever unreadable (e.g. after a power cut), Marquee uses the
+  previous copy, or restores the newest backup, instead of starting empty.
+- **Smoother playback while busy:** scanning, thumbnails, seek previews and intro detection run at
+  low priority, and intro detection waits while someone's video is being converted.
+- **Docker logs can't fill the disk** (capped at 30 MB per container).
+- **Automatic tidy-up:** cached files for videos that are gone are removed daily, and Settings →
+  Server shows the space each cache uses (with *Clean up now*).
+- **Settings → Logs:** recent warnings and errors, with a plain-language explanation and *Copy*.
+
 ## 0.4.1
 
 - **Collections, your way:** admins can reorder the titles in any collection (drag and drop, or

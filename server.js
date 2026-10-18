@@ -2,6 +2,10 @@
 'use strict';
 // Marquee — a small self-hosted media server. No dependencies beyond Node and ffmpeg.
 
+// Recent messages are kept for Settings → Logs (set up first, so nothing is missed).
+const logs = require('./lib/logs');
+logs.install();
+
 const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -30,6 +34,7 @@ const { OpenSubtitles } = require('./lib/opensubtitles');
 const { Parties } = require('./lib/party');
 const { Trickplay } = require('./lib/trickplay');
 const { Activity } = require('./lib/activity');
+const { Maintenance } = require('./lib/maintenance');
 const { KINDS: ENCODER_NAMES } = require('./lib/hwaccel');
 
 const PORT = Number(process.env.PORT) || 32500;
@@ -63,13 +68,15 @@ const matcher = new Matcher(store, path.join(DATA_DIR, 'images'));
 const scanner = new Scanner(store, DATA_DIR, matcher);
 const updater = new Updater(store, __dirname);
 const hwaccel = new HwAccel(store);
-const hls = new hlsLib.HlsManager(path.resolve(process.env.TRANSCODE_DIR || path.join(os.tmpdir(), `marquee-transcode-${PORT}`)), hwaccel);
+const TRANSCODE_DIR = path.resolve(process.env.TRANSCODE_DIR || path.join(os.tmpdir(), `marquee-transcode-${PORT}`));
+const hls = new hlsLib.HlsManager(TRANSCODE_DIR, hwaccel);
 const tokens = new MediaTokens(store);
 const opensubs = new OpenSubtitles(() => store.data.settings);
 const parties = new Parties();
 const trickplay = new Trickplay(DATA_DIR);
 const activity = new Activity();
-const intro = new IntroDetector(store, DATA_DIR);
+const maintenance = new Maintenance(store, DATA_DIR, { transcodeDir: TRANSCODE_DIR });
+const intro = new IntroDetector(store, DATA_DIR, { isBusy: () => transcodes.size > 0 || hls.active > 0 });
 scanner.on('done', (libraryId) => intro.enqueue({ libraryId }));
 const watcher = new FolderWatcher(store, scanner, Number(process.env.WATCH_INTERVAL ?? 15) * 1000);
 const backups = new Backups(store, {
@@ -707,6 +714,13 @@ route('GET', '/api/activity', async (req, res) => {
   });
 }, 'admin');
 
+// --- logs (admin) ---
+route('GET', '/api/logs', async (req, res, p, url) => json(res, 200, { entries: logs.recent({ all: url.searchParams.has('all') }) }), 'admin');
+
+// --- maintenance (admin): cache sizes and clean-up ---
+route('GET', '/api/maintenance', async (req, res) => json(res, 200, maintenance.sizes()), 'admin');
+route('POST', '/api/maintenance/cleanup', async (req, res) => json(res, 200, { ...maintenance.cleanup(), ...maintenance.sizes() }), 'admin');
+
 // --- seek preview thumbnails ---
 route('GET', '/api/items/:id/trickplay', async (req, res, { id }, url, user) => json(res, 200, trickplay.info(getItem(id, user))), 'media');
 route('GET', '/api/items/:id/trickplay/:n', async (req, res, { id, n }, url, user) => {
@@ -1175,11 +1189,28 @@ function applyAutoLibraries() {
   store.save();
 }
 
+// The database file existed but no copy of it could be read: put back the newest backup rather than
+// starting empty (which would look like a brand-new install).
+async function recoverLostDatabase() {
+  const latest = backups.list()[0];
+  if (!latest) {
+    console.error('[store] No backup to restore from: starting with an empty database.');
+    return;
+  }
+  try {
+    const r = await backups.restore(fs.createReadStream(path.join(backups.dir, latest.name)), { safetyCopy: false });
+    console.error(`[store] Restored the database from the backup made ${r.restoredFrom}.`);
+  } catch (err) {
+    console.error(`[store] Could not restore ${latest.name}: ${err.message}`);
+  }
+}
+
 async function main() {
   if (!(await media.checkFfmpeg())) {
     console.error('ffprobe/ffmpeg not found. Install ffmpeg (or set FFMPEG_PATH / FFPROBE_PATH).');
     process.exit(1);
   }
+  if (store.lost) await recoverLostDatabase();
   applyAutoLibraries();
   hwaccel.detect();
   server.listen(PORT, HOST, () => {
@@ -1191,6 +1222,7 @@ async function main() {
   scanner.enqueueAll();
   updater.startSchedule();
   watcher.start();
+  maintenance.start();
   setTimeout(() => matcher.backfillCollections().catch((err) => console.warn('[meta]', err.message)), 60_000).unref();
   backups.startSchedule();
   if (SCAN_INTERVAL_MIN > 0) setInterval(() => scanner.enqueueAll(), SCAN_INTERVAL_MIN * 60_000).unref();

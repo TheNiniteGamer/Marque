@@ -1,5 +1,12 @@
 # Marquee with Docker Compose. Settings come from the .env file next to this one
 # (copy .env.example to .env and edit it, or let start-marquee.bat do it for you on Windows).
+# Docker keeps what each container prints; cap it at 3 files of 10 MB so it can't fill the disk.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   marquee:
     build:
@@ -11,6 +18,7 @@ services:
     image: marquee:latest
     container_name: marquee
     restart: unless-stopped
+    logging: *logging
     ports:
       - "${MARQUEE_PORT:-32500}:32500"
     environment:
@@ -69,6 +77,7 @@ services:
     container_name: marquee-tailscale
     hostname: ${TS_HOSTNAME:-marquee}
     restart: unless-stopped
+    logging: *logging
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:-}
       TS_HOSTNAME: ${TS_HOSTNAME:-marquee}
@@ -87,6 +96,7 @@ services:
     profiles: [cloudflare]
     container_name: marquee-cloudflared
     restart: unless-stopped
+    logging: *logging
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}

@@ -499,3 +499,11 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .drag-handle { color: var(--muted, #888); letter-spacing: -2px; }
 .card.is-hidden { opacity: .5; }
 .reorder-noimg { width: 36px; aspect-ratio: 2/3; display: grid; place-items: center; background: var(--bg-3); border-radius: 4px; }
+.logs-list { display: grid; gap: 6px; margin-top: 10px; max-height: 420px; overflow: auto; font-size: 13px; }
+.log-entry { display: grid; grid-template-columns: auto auto 1fr; gap: 10px; align-items: start; padding: 6px 8px; border-radius: 6px; background: var(--bg-3); color: var(--text, #ddd); }
+.log-entry code { white-space: pre-wrap; word-break: break-word; font-size: 12px; color: var(--muted, #aaa); }
+.log-time { color: var(--muted, #999); white-space: nowrap; }
+.log-level { font-weight: 700; }
+.log-entry.error .log-level { color: var(--danger, #e5484d); }
+.log-entry.warning .log-level { color: var(--accent); }
+@media (max-width: 640px) { .log-entry { grid-template-columns: 1fr; gap: 2px; } }

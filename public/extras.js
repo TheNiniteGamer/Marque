@@ -1157,3 +1157,40 @@ async function viewActivity({ seq }) {
   activityTimer = setInterval(async () => { if (!(await load().catch(() => true))) clearInterval(activityTimer); }, 3000);
 }
 let activityTimer = null;
+
+// ---------- settings: logs ----------
+function logsSection() {
+  return html`
+    <h2 style="margin:28px 0 12px" id="logs">Logs</h2>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between">
+        <div class="seg" id="logs-filter"><button data-all="0" class="on">Problems</button><button data-all="1">Everything</button></div>
+        <button class="btn small" id="logs-copy" title="Copy these messages, e.g. to send to whoever helps you">Copy</button>
+      </div>
+      <div id="logs-list" class="logs-list muted">Loading…</div>
+    </div>`;
+}
+
+function bindLogsSection() {
+  let all = false, entries = [];
+  const time = (t) => new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  const load = async () => {
+    entries = (await api(`/api/logs${all ? '?all' : ''}`)).entries;
+    $('#logs-list').innerHTML = entries.length ? entries.slice(0, 200).map((e) => html`
+      <div class="log-entry ${e.level}">
+        <span class="log-time">${time(e.at)}</span><span class="log-level">${e.level === 'error' ? 'Error' : e.level === 'warning' ? 'Warning' : 'Info'}</span>
+        <div class="log-msg">${e.hint ? html`<b>${e.hint}</b><br>` : ''}<code>${e.message}</code></div>
+      </div>`.s).join('') : html`<p style="margin:0">${all ? 'No messages since the server started.' : '✓ No problems since the server started.'}</p>`.s;
+  };
+  $('#logs-filter').onclick = (e) => {
+    if (e.target.dataset.all == null) return;
+    all = e.target.dataset.all === '1';
+    $$('#logs-filter button').forEach((b) => b.classList.toggle('on', b === e.target));
+    load().catch((err) => toast(err.message, true));
+  };
+  $('#logs-copy').onclick = () => {
+    const text = entries.map((e) => `${new Date(e.at).toISOString()} ${e.level.toUpperCase()} ${e.message}`).join('\n') || 'No messages';
+    navigator.clipboard?.writeText(text).then(() => toast('Copied'), () => toast("Couldn't copy", true));
+  };
+  load().catch((err) => { $('#logs-list').textContent = err.message; });
+}

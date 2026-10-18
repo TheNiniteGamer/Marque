@@ -553,11 +553,18 @@ async function viewSearch({ query, seq }) {
 }
 
 // ---------- settings ----------
+function cacheSummary(m) {
+  const labels = { database: 'Database', artwork: 'Artwork', thumbs: 'Thumbnails', trickplay: 'Seek previews', fingerprints: 'Intro detection',
+    subtitles: 'Subtitle copies', downloadedSubtitles: 'Downloaded subtitles', conversions: 'Converting now' };
+  const parts = Object.entries(labels).filter(([k]) => m.sizes[k] > 0).map(([k, l]) => `${l} ${fmtSize(m.sizes[k])}`);
+  return parts.length ? parts.join(' · ') : 'Nothing yet';
+}
+
 async function viewSettings({ query, seq }) {
   view.onclick = null;
   if (state.user.role !== 'admin') { location.replace('#/account'); return; }
-  const [, s, users, metaSettings, updates, remote, backupInfo, transcoding, introInfo, problems] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'),
-    api('/api/settings'), api('/api/updates'), api('/api/remote'), api('/api/backups'), api('/api/transcoding'), api('/api/intro'), api('/api/problems')]);
+  const [, s, users, metaSettings, updates, remote, backupInfo, transcoding, introInfo, problems, maint] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'),
+    api('/api/settings'), api('/api/updates'), api('/api/remote'), api('/api/backups'), api('/api/transcoding'), api('/api/intro'), api('/api/problems'), api('/api/maintenance')]);
   state.status = s;
   const libs = state.libraries;
   if (!setView(seq, html`
@@ -599,8 +606,17 @@ async function viewSettings({ query, seq }) {
         <dt>Active streams</dt><dd>${s.activeTranscodes} transcoding</dd>
         <dt>Video downloader</dt><dd>${s.downloader.available ? html`yt-dlp ${s.downloader.version} — <a href="#/downloads">Downloads</a>` : 'yt-dlp not installed'}</dd>
         <dt>Data folder</dt><dd><code>${s.dataDir}</code></dd>
+        <dt>Space used</dt><dd>${cacheSummary(maint)}</dd>
       </dl>
-    </div>`)) return;
+      <div class="row"><button class="btn small" id="maint-clean">Clean up now</button>
+        <span class="muted" style="font-size:13px">Removes cached pictures and files for videos that are gone. Runs by itself once a day${maint.lastCleanup ? ` (last: ${fmtDate(maint.lastCleanup.at)})` : ''}.</span></div>
+    </div>
+    ${logsSection()}`)) return;
+  bindLogsSection();
+  $('#maint-clean').onclick = async (e) => {
+    e.target.disabled = true;
+    try { const r = await api('/api/maintenance/cleanup', { method: 'POST' }); toast(r.files ? `Removed ${r.files} file(s), ${fmtSize(r.bytes)}` : 'Nothing to clean up'); router(); } catch (err) { toast(err.message, true); }
+  };
 
   $('#add-lib').onclick = () => showLibraryForm();
   bindUsersSection(users);
