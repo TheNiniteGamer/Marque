@@ -1,0 +1,282 @@
+'use strict';
+// Admin pages: activity, logs, maintenance, settings, metadata, updates, transcoding, remote access and backups.
+// Registered by server.js, which passes the shared helpers and services in `app`.
+
+module.exports = function register(app) {
+  const {
+    logs, fs, os, pipeline, lib, metadata, hlsLib, findProblems,
+    ENCODER_NAMES, store, matcher, updater, hwaccel, hls, opensubs, activity,
+    maintenance, intro, backups, auth, transcodes, HttpError, json, readBody,
+    readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route,
+  } = app;
+
+  // --- activity (admin): who is watching what right now ---
+  route('GET', '/api/activity', async (req, res) => {
+    // Videos being converted, by item and user: progressive (one ffmpeg per viewer) and adaptive streams.
+    const conversions = [
+      ...[...transcodes].filter((p) => p.meta).map((p) => ({ itemId: p.meta.itemId, userId: p.meta.userId, kind: 'transcode', encoder: p.meta.encoder, quality: null })),
+      ...hls.status().filter((s) => s.running || s.paused).map((s) => ({ itemId: s.item, userId: s.userId, kind: 'hls', encoder: s.encoder, quality: s.quality })),
+    ];
+    const describe = (id) => {
+      const it = store.data.items[id];
+      if (!it) return null;
+      const s = lib.itemSummary(store, { id: '' }, it); // (no one's own progress needed here)
+      return { id, type: it.type, title: s.title, showTitle: s.showTitle, season: s.season, episode: s.episode, duration: s.duration, artV: s.artV };
+    };
+    const used = new Set();
+    const streams = activity.list().map((s) => {
+      const conv = conversions.find((c, i) => !used.has(i) && c.itemId === s.itemId && (!c.userId || c.userId === s.userId) && used.add(i));
+      return { ...s, item: describe(s.itemId), conversion: conv ? { ...conv, encoderName: conv.encoder ? ENCODER_NAMES[conv.encoder] : null } : null };
+    });
+    // Conversions with no player reporting (e.g. a Chromecast fetching the stream itself).
+    const others = conversions.filter((c, i) => !used.has(i)).map((c) => ({
+      ...c, encoderName: c.encoder ? ENCODER_NAMES[c.encoder] : null, item: describe(c.itemId), user: auth.byId(c.userId)?.username || null,
+    }));
+    json(res, 200, {
+      streams, others, cpu: activity.cpu(), memory: { total: os.totalmem(), free: os.freemem() },
+      encoder: { active: hwaccel.active, name: ENCODER_NAMES[hwaccel.active] },
+    });
+  }, 'admin');
+
+  // --- logs (admin) ---
+  route('GET', '/api/logs', async (req, res, p, url) => json(res, 200, { entries: logs.recent({ all: url.searchParams.has('all') }) }), 'admin');
+
+  // --- maintenance (admin): cache sizes and clean-up ---
+  route('GET', '/api/maintenance', async (req, res) => json(res, 200, maintenance.sizes()), 'admin');
+  route('POST', '/api/maintenance/cleanup', async (req, res) => json(res, 200, { ...maintenance.cleanup(), ...maintenance.sizes() }), 'admin');
+
+  // --- settings (admin) ---
+  const settingsView = () => {
+    const st = store.data.settings;
+    return {
+      tmdbKeySet: !!st.tmdbKey, tmdbKeyFromEnv: !st.tmdbKey && !!(process.env.TMDB_API_KEY || process.env.TMDB_TOKEN),
+      tmdbKeyHint: st.tmdbKey ? `••••${st.tmdbKey.slice(-4)}` : null,
+      language: st.language || process.env.METADATA_LANGUAGE || 'en-US',
+      autoMatch: st.autoMatch !== false,
+      updateCheck: st.updateCheck !== false,
+      introDetection: st.introDetection !== false,
+      providers: metadata.available(),
+      opensubtitles: { keySet: !!st.opensubtitles?.apiKey, keyHint: st.opensubtitles?.apiKey ? `••••${st.opensubtitles.apiKey.slice(-4)}` : null, username: st.opensubtitles?.username || '' },
+    };
+  };
+  route('GET', '/api/settings', async (req, res) => json(res, 200, settingsView()), 'admin');
+  route('PATCH', '/api/settings', async (req, res) => {
+    const body = await readBody(req);
+    const st = store.data.settings;
+    if (body.tmdbKey !== undefined) {
+      const key = String(body.tmdbKey || '').trim();
+      if (key) {
+        const t = await metadata.tmdb.test(key);
+        if (!t.ok) throw new HttpError(400, t.error);
+        st.tmdbKey = key;
+      } else delete st.tmdbKey;
+    }
+    if (body.language !== undefined) {
+      if (!/^[a-z]{2}(-[A-Z]{2})?$/.test(body.language)) throw new HttpError(400, 'Language must look like en-US');
+      st.language = body.language;
+    }
+    if (body.autoMatch !== undefined) st.autoMatch = !!body.autoMatch;
+    if (body.updateCheck !== undefined) st.updateCheck = !!body.updateCheck;
+    if (body.opensubtitles !== undefined) {
+      // { apiKey, username, password }: an empty apiKey removes the whole setup.
+      const o = body.opensubtitles || {};
+      const prev = st.opensubtitles || {};
+      const next = {
+        apiKey: o.apiKey !== undefined ? String(o.apiKey || '').trim() : prev.apiKey,
+        username: o.username !== undefined ? String(o.username || '').trim() : prev.username,
+        password: o.password ? String(o.password) : o.username === '' ? '' : prev.password,
+      };
+      if (!next.apiKey && o.apiKey === undefined) throw new HttpError(400, 'Paste the OpenSubtitles API key first');
+      if (!next.apiKey) delete st.opensubtitles;
+      else {
+        st.opensubtitles = next;
+        try { await opensubs.test(); } catch (err) { st.opensubtitles = prev.apiKey ? prev : undefined; if (!prev.apiKey) delete st.opensubtitles; throw err; }
+      }
+    }
+    if (body.introDetection !== undefined) {
+      st.introDetection = !!body.introDetection;
+      if (st.introDetection) setImmediate(() => intro.enqueue());
+    }
+    store.save();
+    json(res, 200, settingsView());
+  }, 'admin');
+  route('POST', '/api/settings/test-tmdb', async (req, res) => {
+    const body = await readBody(req);
+    json(res, 200, await metadata.tmdb.test(body.tmdbKey ? String(body.tmdbKey).trim() : undefined));
+  }, 'admin');
+
+  // --- metadata: search, match, edit (admin) ---
+  // :id is a movie, episode or show id.
+  const afterMetaChange = (id, user) => {
+    const { target, kind } = getTarget(id, user);
+    return kind === 'show' ? lib.showDetail(store, user, target) : lib.itemDetail(store, user, target);
+  };
+
+  route('GET', '/api/metadata/search', async (req, res, p, url) => {
+    const kind = url.searchParams.get('kind') === 'show' ? 'show' : 'movie';
+    const q = (url.searchParams.get('q') || '').trim();
+    if (!q) throw new HttpError(400, 'Enter a title to search for');
+    const year = Number(url.searchParams.get('year')) || null;
+    json(res, 200, { results: await matcher.search(kind, q, year, url.searchParams.get('provider') || null) });
+  }, 'admin');
+
+  route('GET', '/api/meta/:id', async (req, res, { id }, url, user) => {
+    const { target, kind } = getTarget(id, user);
+    json(res, 200, { ...matcher.describe(target, kind), providers: metadata.available().filter((pr) => pr.enabled && pr.kinds.includes(kind === 'episode' ? 'show' : kind)) });
+  }, 'admin');
+
+  route('PATCH', '/api/meta/:id', async (req, res, { id }, url, user) => {
+    const { target, kind } = getTarget(id, user);
+    matcher.edit(target, kind, await readBody(req));
+    json(res, 200, afterMetaChange(id, user));
+  }, 'admin');
+
+  route('POST', '/api/meta/:id/match', async (req, res, { id }, url, user) => {
+    const { target, kind } = getTarget(id, user);
+    const body = await readBody(req);
+    await matcher.apply(target, kind, String(body.provider || ''), String(body.id || ''));
+    json(res, 200, afterMetaChange(id, user));
+  }, 'admin');
+
+  route('POST', '/api/meta/:id/refresh', async (req, res, { id }, url, user) => {
+    const { target, kind } = getTarget(id, user);
+    await matcher.refresh(target, kind);
+    json(res, 200, afterMetaChange(id, user));
+  }, 'admin');
+
+  route('POST', '/api/meta/:id/unmatch', async (req, res, { id }, url, user) => {
+    const { target, kind } = getTarget(id, user);
+    matcher.unmatch(target, kind);
+    json(res, 200, afterMetaChange(id, user));
+  }, 'admin');
+
+  route('GET', '/api/meta/:id/images', async (req, res, { id }, url, user) => {
+    const { target, kind } = getTarget(id, user);
+    json(res, 200, await matcher.providerImages(target, kind).catch((err) => { throw new HttpError(502, err.message); }));
+  }, 'admin');
+
+  // Set artwork: JSON {url} to download, or the raw image bytes as the request body.
+  route('PUT', '/api/meta/:id/art/:kind', async (req, res, { id, kind: artKind }, url, user) => {
+    const { target, kind } = getTarget(id, user);
+    const type = String(req.headers['content-type'] || '');
+    try {
+      if (type.startsWith('image/')) await matcher.setArt(target, kind, artKind, { buffer: await readRaw(req, metadata.MAX_IMAGE) });
+      else await matcher.setArt(target, kind, artKind, { url: (await readBody(req)).url });
+    } catch (err) { throw err.status ? err : new HttpError(400, err.message); }
+    json(res, 200, afterMetaChange(id, user));
+  }, 'admin');
+
+  route('DELETE', '/api/meta/:id/art/:kind', async (req, res, { id, kind: artKind }, url, user) => {
+    const { target, kind } = getTarget(id, user);
+    matcher.resetArt(target, kind, artKind);
+    json(res, 200, afterMetaChange(id, user));
+  }, 'admin');
+
+  // --- updates (admin) ---
+
+  // --- transcoding + skip intro (admin) ---
+  const transcodingView = () => ({ ...hwaccel.status(), checking: !!hwaccel.checking, sessions: hls.status(), castUrl: store.data.settings.castUrl || '', castUrlFromEnv: process.env.CAST_URL || null,
+    remoteMaxQuality: store.data.settings.remoteMaxQuality || '' });
+  route('GET', '/api/transcoding', async (req, res) => json(res, 200, transcodingView()), 'admin');
+  route('PATCH', '/api/transcoding', async (req, res) => {
+    const body = await readBody(req);
+    const st = store.data.settings;
+    if (body.remoteMaxQuality !== undefined) {
+      if (body.remoteMaxQuality && !hlsLib.QUALITIES.some((q) => q.id === body.remoteMaxQuality)) throw new HttpError(400, 'Unknown quality');
+      if (body.remoteMaxQuality) st.remoteMaxQuality = body.remoteMaxQuality; else delete st.remoteMaxQuality;
+    }
+    if (body.castUrl !== undefined) {
+      const u = String(body.castUrl || '').trim().replace(/\/+$/, '');
+      if (u && !/^https?:\/\/[^/\s]+$/i.test(u)) throw new HttpError(400, 'Enter an address like http://192.168.1.20:32500');
+      if (u) st.castUrl = u; else delete st.castUrl;
+    }
+    let redetect = false;
+    if (body.hwaccel !== undefined) {
+      if (!['auto', ...Object.keys(require('../lib/hwaccel').KINDS)].includes(body.hwaccel)) throw new HttpError(400, 'Unknown encoder');
+      st.hwaccel = body.hwaccel;
+      redetect = true;
+    }
+    store.save();
+    if (redetect) await hwaccel.detect();
+    json(res, 200, transcodingView());
+  }, 'admin');
+  route('POST', '/api/transcoding/test', async (req, res) => { await hwaccel.detect(); json(res, 200, transcodingView()); }, 'admin');
+  // Set an episode's intro by hand ({ start, end } in seconds), mark it as having none ({ none: true }),
+  // or go back to automatic detection ({ auto: true }).
+  route('PUT', '/api/items/:id/intro', async (req, res, { id }, url, user) => {
+    const item = getItem(id, user);
+    if (item.type !== 'episode') throw new HttpError(400, 'Only TV episodes have intros');
+    const body = await readBody(req);
+    if (body.auto) {
+      delete item.intro;
+      intro.enqueue({ libraryId: item.libraryId });
+    } else if (body.none) {
+      item.intro = { manual: true, at: Date.now() };
+    } else {
+      const start = Number(body.start), end = Number(body.end);
+      const dur = item.media?.duration || Infinity;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > dur) {
+        throw new HttpError(400, 'The intro must end after it starts, within the episode');
+      }
+      item.intro = { manual: true, start: Math.round(start * 10) / 10, end: Math.round(end * 10) / 10, at: Date.now() };
+    }
+    store.save();
+    json(res, 200, lib.itemDetail(store, user, item));
+  }, 'admin');
+  route('GET', '/api/problems', async (req, res) => json(res, 200, findProblems(store, metadata)), 'admin');
+  // Same for where the end credits start: { start } | { none: true } | { auto: true }.
+  route('PUT', '/api/items/:id/credits', async (req, res, { id }, url, user) => {
+    const item = getItem(id, user);
+    if (item.type !== 'episode') throw new HttpError(400, 'Only TV episodes have credits detection');
+    const body = await readBody(req);
+    if (body.auto) {
+      delete item.credits;
+      intro.enqueue({ libraryId: item.libraryId });
+    } else if (body.none) {
+      item.credits = { manual: true, at: Date.now() };
+    } else {
+      const start = Number(body.start);
+      if (!Number.isFinite(start) || start <= 0 || start >= (item.media?.duration || Infinity)) throw new HttpError(400, 'The credits must start within the episode');
+      item.credits = { manual: true, start: Math.round(start * 10) / 10, at: Date.now() };
+    }
+    store.save();
+    json(res, 200, lib.itemDetail(store, user, item));
+  }, 'admin');
+  route('GET', '/api/intro', async (req, res) => json(res, 200, intro.status()), 'admin');
+  route('POST', '/api/intro/detect', async (req, res) => {
+    const body = await readBody(req);
+    intro.enqueue({ libraryId: body.libraryId || null, force: !!body.force });
+    json(res, 202, intro.status());
+  }, 'admin');
+
+  route('GET', '/api/updates', async (req, res) => json(res, 200, updater.status()), 'admin');
+  route('POST', '/api/updates/check', async (req, res) => { await updater.check(); json(res, 200, updater.status()); }, 'admin');
+  route('POST', '/api/updates/apply', async (req, res, p, url, user) => { updater.requestUpdate(user); json(res, 202, updater.status()); }, 'admin');
+
+  // --- remote access (admin) ---
+  route('GET', '/api/remote', async (req, res) => json(res, 200, {
+    configured: (process.env.REMOTE_ACCESS || '').split(',').map((x) => x.trim()).filter(Boolean),
+    seen: store.data.remoteSeen || null,
+    viaRemoteNow: viaHttpsProxy(req),
+  }), 'admin');
+
+  // --- backups (admin) ---
+  route('GET', '/api/backups', async (req, res) => json(res, 200, backups.status()), 'admin');
+  route('POST', '/api/backups', async (req, res) => json(res, 201, await backups.create('manual')), 'admin');
+  route('PATCH', '/api/backups/settings', async (req, res) => { backups.update(await readBody(req)); json(res, 200, backups.status()); }, 'admin');
+  // A fresh backup straight to the browser (nothing is stored on the server).
+  route('GET', '/api/backups/download', async (req, res) => {
+    const name = `marquee-backup-${new Date().toISOString().slice(0, 10)}.tar.gz`;
+    res.writeHead(200, { 'Content-Type': 'application/gzip', 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store' });
+    pipeline(backups.stream(), res, () => {});
+  }, 'admin');
+  route('GET', '/api/backups/file/:name', async (req, res, { name }) => {
+    sendFile(req, res, backups.file(name), { type: 'application/gzip', headers: { 'Content-Disposition': `attachment; filename="${name}"` } });
+  }, 'admin');
+  route('DELETE', '/api/backups/file/:name', async (req, res, { name }) => { backups.remove(name); json(res, 200, backups.status()); }, 'admin');
+  route('POST', '/api/backups/file/:name/restore', async (req, res, { name }) => {
+    json(res, 200, await backups.restore(fs.createReadStream(backups.file(name))));
+  }, 'admin');
+  // Restore from an uploaded file (the raw .tar.gz as the request body).
+  route('POST', '/api/backups/restore', async (req, res) => json(res, 200, await backups.restore(req)), 'admin');
+};

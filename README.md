@@ -279,7 +279,8 @@ Press `?` anywhere for the full list.
 ## Architecture
 
 ```
-server.js           HTTP server + REST API (node:http, no framework); route-level access control
+server.js           HTTP server (node:http, no framework): shared helpers, the router with route-level access control, start-up
+routes/             the REST API by area: auth.js (sign-in, profiles, users), library.js, playback.js, admin.js, downloads.js
 lib/auth.js         users, scrypt passwords, cookie sessions, library permissions
 lib/downloader.js   yt-dlp job queue (progress parsing, cancel/retry, self-update)
 lib/parse.js        filename → title/year/show/season/episode, sidecar subs, local art

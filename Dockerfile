@@ -20,6 +20,7 @@ RUN wget -qO /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/lat
 WORKDIR /app
 COPY package.json server.js ./
 COPY lib ./lib
+COPY routes ./routes
 COPY public ./public
 
 # /data holds the database, thumbnails and caches; media folders are mounted under /media.
