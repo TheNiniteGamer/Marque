@@ -507,3 +507,8 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .log-entry.error .log-level { color: var(--danger, #e5484d); }
 .log-entry.warning .log-level { color: var(--accent); }
 @media (max-width: 640px) { .log-entry { grid-template-columns: 1fr; gap: 2px; } }
+.p-seek .p-chapters { position: absolute; inset: 0; pointer-events: none; }
+.p-seek .p-chapters i { position: absolute; top: 50%; width: 2px; height: 8px; translate: -1px -50%; background: rgba(0,0,0,.75); z-index: 2; }
+.dls-line { align-items: center; gap: 8px; }
+.dls-line .input { width: 130px; flex: none; }
+.dls-line #dls-rate-mb { width: 90px; }

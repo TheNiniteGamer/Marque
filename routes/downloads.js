@@ -29,6 +29,9 @@ module.exports = function register(app) {
   }, 'download');
 
   route('POST', '/api/downloads/:id/cancel', async (req, res, { id }, url, user) => { getJob(id, user); json(res, 200, jobView(downloader.cancel(id))); }, 'download');
+  route('POST', '/api/downloads/:id/start', async (req, res, { id }, url, user) => { getJob(id, user); json(res, 200, jobView(downloader.startNow(id))); }, 'download');
+  // Download hours, speed limit and automatic yt-dlp updates (admins).
+  route('PATCH', '/api/downloads/settings', async (req, res) => { downloader.updateSettings(await readBody(req)); json(res, 200, downloader.status()); }, 'admin');
   route('POST', '/api/downloads/:id/retry', async (req, res, { id }, url, user) => { getJob(id, user); json(res, 200, jobView(downloader.retry(id))); }, 'download');
   route('DELETE', '/api/downloads/:id', async (req, res, { id }, url, user) => { getJob(id, user); downloader.remove(id); json(res, 200, { ok: true }); }, 'download');
   route('POST', '/api/downloads/update-tool', async (req, res) => json(res, 200, await downloader.selfUpdate()), 'admin');

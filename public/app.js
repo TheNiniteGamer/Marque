@@ -22,7 +22,7 @@ async function api(url, { method = 'GET', body } = {}) {
   });
   const data = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
   if (res.status === 401 && state.user) showAuth({ setupRequired: data?.setupRequired, message: 'Your session has ended. Please sign in again.' });
-  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+  if (!res.ok) throw Object.assign(new Error(data?.error || `Request failed (${res.status})`), { status: res.status, data });
   return data;
 }
 
@@ -115,7 +115,7 @@ function renderSidebar() {
     ${state.user?.role === 'admin' ? html`<a href="#/settings" data-nav="settings" class="${path === '/settings' ? 'active' : ''}">⚙ Settings</a>` : ''}
     <a href="#/account" class="${path === '/account' ? 'active' : ''}">👤 Account</a>
   `.s;
-  if (state.status) noteUpdateAvailable(state.status);
+  if (state.status) { noteUpdateAvailable(state.status); noteDownloads(state.status.myDownloads); }
 }
 
 // ---------- scan status polling ----------
@@ -128,6 +128,7 @@ async function pollStatus() {
     state.status = await api('/api/status');
     const s = state.status;
     noteUpdateAvailable(s);
+    noteDownloads(s.myDownloads);
     const ind = $('#scan-indicator');
     ind.hidden = !s.scanning;
     if (s.scanning && s.current) {
@@ -148,6 +149,25 @@ async function pollStatus() {
     if ((finished || after !== before) && !player && (path === '/' || path.startsWith('/library/') || path === '/settings')) router();
   } catch { /* server unreachable; try again later */ }
   pollTimer = setTimeout(pollStatus, state.status?.scanning ? 2000 : 15000);
+}
+
+// A notice when one of your downloads finishes (or gives up), and a count on the Downloads link.
+function noteDownloads(d) {
+  if (!d) return;
+  const link = $('.sidebar a[href="#/downloads"]');
+  if (link) {
+    link.querySelector('.count')?.remove();
+    if (d.active) link.insertAdjacentHTML('beforeend', html`<span class="count" title="Downloads in progress">${d.active}</span>`.s);
+  }
+  const seen = store.get('downloadsSeen', 0);
+  // First time on this device: start from now rather than announcing old downloads.
+  if (!seen) { store.set('downloadsSeen', Math.max(Date.now(), ...d.finished.map((j) => j.finishedAt))); return; }
+  const fresh = d.finished.filter((j) => j.finishedAt > seen);
+  if (fresh.length) store.set('downloadsSeen', Math.max(...fresh.map((j) => j.finishedAt)));
+  for (const j of fresh.slice(0, 3)) {
+    toast(j.status === 'done' ? (j.files ? `Downloaded: ${j.title}` : `Already downloaded: ${j.title}`) : `Download failed: ${j.title}`, j.status !== 'done');
+  }
+  if (fresh.length && parseHash().path === '/downloads') router();
 }
 
 // ---------- cards ----------
@@ -494,6 +514,7 @@ async function viewItem({ params: [id], seq }) {
           <div class="meta-line">
             ${it.year && !isEp ? html`<span>${it.year}</span>` : ''}
             ${it.airDate ? html`<span>${it.airDate}</span>` : ''}
+            ${it.channel ? html`<span title="Channel">📺 ${it.channel}</span>` : ''}
             ${it.duration ? html`<span>${fmtDuration(it.duration)}</span>` : ''}
             ${it.rating ? html`<span>★ ${it.rating}</span>` : ''}
             ${res ? html`<span class="chip">${res}</span>` : ''}
@@ -509,6 +530,7 @@ async function viewItem({ params: [id], seq }) {
               ${resumable ? html`<button class="btn" data-play="${id}" data-t="0">Play from start</button>` : ''}` : html`<span class="error-box">This file could not be read by ffprobe.</span>`}
             <button class="btn" id="item-watch">${p?.watched ? 'Mark unwatched' : 'Mark watched'}</button>
             <a class="btn" href="/api/items/${id}/stream?download=1" download title="Download the original file">⤓</a>
+            ${it.sourceUrl ? html`<a class="btn" href="${it.sourceUrl}" target="_blank" rel="noopener" title="Open the original video page">Original ↗</a>` : ''}
             ${detailActions(it)}
           </div>
           ${resumable ? html`<div class="resume-note">${fmtClock(it.duration - p.position)} remaining</div>` : ''}
@@ -849,7 +871,7 @@ class Player {
         <button class="p-btn" data-a="cast" title="Cast to a TV" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M1 18v3h3a3 3 0 0 0-3-3zm0-4v2a5 5 0 0 1 5 5h2a7 7 0 0 0-7-7zm0-4v2a9 9 0 0 1 9 9h2A11 11 0 0 0 1 10zm20-7H3a2 2 0 0 0-2 2v3h2V5h18v14h-7v2h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/></svg></button>
       </div>
       <div class="p-bottom">
-        <div class="p-seek"><div class="p-buffer"></div><input type="range" class="p-range" min="0" step="0.1" value="0" aria-label="Seek"><div class="p-hover-thumb" hidden></div><div class="p-hover-time" hidden></div></div>
+        <div class="p-seek"><div class="p-buffer"></div><div class="p-chapters"></div><input type="range" class="p-range" min="0" step="0.1" value="0" aria-label="Seek"><div class="p-hover-thumb" hidden></div><div class="p-hover-time" hidden></div></div>
         <div class="p-row">
           <button class="p-btn big" data-a="toggle" title="Play/Pause (Space)">▶</button>
           <button class="p-btn" data-a="back" title="Back 10s (←)">⟲</button>
@@ -907,8 +929,24 @@ class Player {
     this.setModeFromQuality();
     this.setupRemote();
     this.loadTrickplay();
+    this.renderChapters();
+    this.v.addEventListener('loadedmetadata', () => this.renderChapters());
     if (Cast.state() === 'CONNECTED') this.startCasting(start);
     else this.load(start);
+  }
+
+  // Chapter marks on the seek bar (from the video's own chapters, e.g. downloaded YouTube videos).
+  renderChapters() {
+    const box = $('.p-chapters', this.root);
+    const chapters = this.item.chapters || [];
+    box.innerHTML = this.total ? chapters.filter((c) => c.start > 0 && c.start < this.total)
+      .map((c) => html`<i style="left:${pct(c.start, this.total)}%" title="${c.title}"></i>`.s).join('') : '';
+  }
+
+  chapterAt(t) {
+    let found = null;
+    for (const c of this.item.chapters || []) if (c.start <= t) found = c.title;
+    return found;
   }
 
   // Seek preview thumbnails: the server makes them the first time a video is opened.
@@ -1570,7 +1608,8 @@ class Player {
     const preview = (f) => {
       hover.hidden = false;
       hover.style.left = `${f * 100}%`;
-      hover.textContent = fmtClock(f * this.total);
+      const chapter = this.chapterAt(f * this.total);
+      hover.textContent = chapter ? `${fmtClock(f * this.total)} · ${chapter}` : fmtClock(f * this.total);
       this.showThumb(thumb, f);
     };
     const hidePreview = () => { hover.hidden = true; thumb.hidden = true; };

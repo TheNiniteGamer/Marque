@@ -87,7 +87,7 @@ const backups = new Backups(store, {
   onRestored: () => { auth.prune(); scanner.enqueueAll(); },
 });
 const auth = new Auth(store);
-const downloader = new Downloader(store, { onFinished: (job) => scanner.enqueue(job.libraryId) });
+const downloader = new Downloader(store, { dataDir: DATA_DIR, onFinished: (job) => scanner.enqueue(job.libraryId) });
 const transcodes = new Set();
 
 // ---------- helpers ----------
@@ -424,7 +424,7 @@ const server = http.createServer(async (req, res) => {
   } catch (err) {
     const status = err.status || 500;
     if (status === 500) console.error(`[http] ${req.method} ${url.pathname}:`, err);
-    if (!res.headersSent) json(res, status, { error: err.message || 'Internal error', ...(err.setupRequired ? { setupRequired: true } : {}) });
+    if (!res.headersSent) json(res, status, { error: err.message || 'Internal error', ...(err.setupRequired ? { setupRequired: true } : {}), ...(err.duplicate ? { duplicate: true } : {}) });
     else res.destroy();
   }
 });
@@ -509,6 +509,7 @@ async function main() {
   updater.startSchedule();
   watcher.start();
   maintenance.start();
+  downloader.startAutoUpdate();
   setTimeout(() => matcher.backfillCollections().catch((err) => console.warn('[meta]', err.message)), 60_000).unref();
   backups.startSchedule();
   if (SCAN_INTERVAL_MIN > 0) setInterval(() => scanner.enqueueAll(), SCAN_INTERVAL_MIN * 60_000).unref();

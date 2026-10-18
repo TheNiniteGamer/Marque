@@ -4,6 +4,24 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.4.3
+
+YouTube downloader:
+- **Nothing downloaded twice:** Marquee keeps a record of what it has downloaded. Pasting a link you
+  already have says so (with *Download again* to override), and playlists skip videos you have.
+- **Video details:** the description, upload date, channel, a link to the original and chapters
+  are saved with each download and shown in Marquee. Chapters appear as marks on the seek bar.
+  Downloaded videos are no longer matched to unrelated movies on TMDB. (Videos downloaded before
+  this update don't have these details.)
+- **Download hours and speed limit** (Downloads → Download settings, admins). Downloads added
+  outside the hours wait; *Start now* overrides that for one.
+- **yt-dlp keeps itself up to date** (once a day, when nothing is downloading).
+- **Automatic retries:** failed downloads try again after 1 and 5 minutes (not for errors like
+  "private video" or "removed"), and continue partly downloaded files.
+- **"Downloaded: …" notice** when your download finishes, and a count on the Downloads link.
+- Fixed: a download added in the first second after the server started could fail with "yt-dlp is
+  not installed".
+
 ## 0.4.2
 
 Behind-the-scenes improvements for reliability:

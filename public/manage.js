@@ -261,8 +261,16 @@ function showUserForm(user = null) {
 // ---------- downloads ----------
 const STATUS_LABEL = { queued: 'Queued', running: 'Downloading', done: 'Done', failed: 'Failed', canceled: 'Canceled' };
 
-function jobRow(j) {
+const clock = (t) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+function jobRow(j, dl) {
   const active = j.status === 'queued' || j.status === 'running';
+  // Why a queued download isn't running yet.
+  const waitingForHours = j.status === 'queued' && !j.retryAt && !j.startNow && !dl.inWindow;
+  let note = '';
+  if (j.status === 'queued' && j.retryAt) note = `Trying again at ${clock(j.retryAt)} (attempt ${(j.attempts || 0) + 1} of 3)`;
+  else if (waitingForHours) note = `Waiting for download hours (${dl.settings.windowStart}–${dl.settings.windowEnd})`;
+  else if (j.status === 'done' && j.skipped) note = j.files.length ? `${j.skipped} already downloaded before, skipped` : 'Already downloaded before: nothing new';
   const lib = state.libraries.find((l) => l.id === j.libraryId);
   return html`
     <div class="panel dl-row" data-job="${j.id}">
@@ -270,6 +278,7 @@ function jobRow(j) {
         <div class="dl-title" title="${j.url}">${j.title || j.url}</div>
         <div class="muted dl-meta">
           <span class="status ${j.status}">${STATUS_LABEL[j.status] || j.status}</span>
+          ${note ? html`<span>${note}</span>` : ''}
           ${j.status === 'running' ? html`<span>${j.progress.toFixed(1)}%</span>${j.speed ? html`<span>${j.speed}</span>` : ''}${j.eta ? html`<span>ETA ${j.eta}</span>` : ''}` : ''}
           ${j.playlist ? html`<span>Playlist · ${j.files.length} saved${j.status === 'running' && j.current ? ` · now: ${j.current}` : ''}</span>` : ''}
           ${lib ? html`<span>→ ${lib.name}${j.folder ? ` / ${j.folder}` : ''}</span>` : ''}
@@ -277,10 +286,11 @@ function jobRow(j) {
           <span>${fmtDate(j.createdAt)}</span>
         </div>
         ${active ? html`<div class="bar"><i style="width:${j.status === 'running' ? j.progress : 0}%"></i></div>` : ''}
-        ${j.error ? html`<div class="dl-error">${j.error}</div>` : ''}
+        ${j.error ? html`<div class="dl-error">${j.status === 'queued' ? 'Last attempt: ' : ''}${j.error}</div>` : ''}
       </div>
       <div class="row">
         ${j.status === 'done' && lib ? html`<a class="btn small" href="#/library/${lib.id}">Open library</a>` : ''}
+        ${j.status === 'queued' && (waitingForHours || j.retryAt) ? html`<button class="btn small" data-jact="start">Start now</button>` : ''}
         ${active ? html`<button class="btn small" data-jact="cancel">Cancel</button>` : ''}
         ${j.status === 'failed' || j.status === 'canceled' ? html`<button class="btn small" data-jact="retry">Retry</button>` : ''}
         ${!active ? html`<button class="btn small danger" data-jact="remove" aria-label="Remove from list">✕</button>` : ''}
@@ -315,16 +325,30 @@ async function viewDownloads({ seq }) {
       </div>
       <label class="check"><input type="checkbox" name="playlist"> If the link is part of a playlist, download the whole playlist</label>
       <div class="form-error" id="dl-error"></div>
+      <div id="dl-again" hidden><button class="btn small" type="button" id="dl-force">Download again anyway</button></div>
       <div class="row"><button class="btn primary" type="submit" ${data.available ? '' : 'disabled'}>⤓ Download</button>
         <span class="muted" style="font-size:13px">Only download videos you have the right to save. Downloads appear in the library automatically when finished.</span></div>
     </form>`}
+    ${admin && data.available ? html`<details class="panel form dl-settings" style="max-width:none" ${data.settings.windowStart || data.settings.rateLimit ? 'open' : ''}>
+      <summary><b>Download settings</b> <span class="muted">${[data.settings.windowStart ? `only ${data.settings.windowStart}–${data.settings.windowEnd}` : 'any time', data.settings.rateLimit ? `max ${data.settings.rateLimit} MB/s` : 'full speed'].join(' · ')}</span></summary>
+      <div class="row dls-line"><label class="check"><input type="checkbox" id="dls-window" ${data.settings.windowStart ? 'checked' : ''}> Only download between</label>
+        <input class="input" type="time" id="dls-start" value="${data.settings.windowStart || '01:00'}" aria-label="From"> and
+        <input class="input" type="time" id="dls-end" value="${data.settings.windowEnd || '07:00'}" aria-label="Until"></div>
+      <div class="row dls-line"><label class="check"><input type="checkbox" id="dls-rate" ${data.settings.rateLimit ? 'checked' : ''}> Limit the speed to</label>
+        <input class="input" type="number" id="dls-rate-mb" min="0.1" step="0.1" value="${data.settings.rateLimit || 2}" aria-label="MB per second"> MB/s</div>
+      <label class="check"><input type="checkbox" id="dls-auto" ${data.settings.autoUpdate ? 'checked' : ''}> Keep yt-dlp up to date automatically (checks once a day)
+        ${data.lastToolUpdate ? html`<span class="muted"> — last check ${fmtDate(data.lastToolUpdate.at)}${data.lastToolUpdate.ok ? '' : ' (failed)'}</span>` : ''}</label>
+      <p class="muted" style="margin:0;font-size:13px">Downloads added outside these hours wait in the queue; “Start now” overrides that for one download.
+        Failed downloads are tried again automatically (up to 3 times) and continue where they stopped.</p>
+      <div class="row"><button class="btn small primary" type="button" id="dls-save">Save</button></div>
+    </details>` : ''}
     <h2 style="margin:24px 0 12px">Queue & history</h2>
     <div id="dl-jobs"></div>`)) return;
 
   const renderJobs = () => {
     const box = $('#dl-jobs');
     if (!box) return;
-    box.innerHTML = data.jobs.length ? data.jobs.map((j) => jobRow(j).s).join('') : html`<div class="panel muted">Nothing downloaded yet.</div>`.s;
+    box.innerHTML = data.jobs.length ? data.jobs.map((j) => jobRow(j, data).s).join('') : html`<div class="panel muted">Nothing downloaded yet.</div>`.s;
   };
   renderJobs();
 
@@ -348,13 +372,21 @@ async function viewDownloads({ seq }) {
       const f = form.elements;
       const body = { url: f.url.value, libraryId: f.libraryId.value, folder: f.folder.value, quality: f.quality.value, playlist: f.playlist.checked };
       store.set('download', { libraryId: body.libraryId, folder: body.folder, quality: body.quality });
-      try {
-        await api('/api/downloads', { method: 'POST', body });
-        f.url.value = '';
-        $('#dl-error').textContent = '';
-        toast('Added to the download queue');
-        poll();
-      } catch (err) { $('#dl-error').textContent = err.message; }
+      const send = async (force) => {
+        try {
+          await api('/api/downloads', { method: 'POST', body: { ...body, force } });
+          f.url.value = '';
+          $('#dl-error').textContent = '';
+          $('#dl-again').hidden = true;
+          toast(data.inWindow ? 'Added to the download queue' : `Added: it will download during download hours (${data.settings.windowStart}–${data.settings.windowEnd})`);
+          poll();
+        } catch (err) {
+          $('#dl-error').textContent = err.message;
+          $('#dl-again').hidden = !err.data?.duplicate; // "Download again anyway"
+          $('#dl-force').onclick = () => send(true);
+        }
+      };
+      send(false);
     };
   }
   if ($('#ytdlp-update')) {
@@ -368,6 +400,14 @@ async function viewDownloads({ seq }) {
       router();
     };
   }
+  if ($('#dls-save')) $('#dls-save').onclick = async () => {
+    const win = $('#dls-window').checked;
+    const body = {
+      windowStart: win ? $('#dls-start').value : null, windowEnd: win ? $('#dls-end').value : null,
+      rateLimit: $('#dls-rate').checked ? Number($('#dls-rate-mb').value) : null, autoUpdate: $('#dls-auto').checked,
+    };
+    try { await api('/api/downloads/settings', { method: 'PATCH', body }); toast('Saved'); router(); } catch (err) { toast(err.message, true); }
+  };
   $('#dl-jobs').onclick = async (e) => {
     const b = e.target.closest('[data-jact]');
     if (!b) return;

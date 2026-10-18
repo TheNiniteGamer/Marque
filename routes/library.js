@@ -4,7 +4,7 @@
 
 module.exports = function register(app) {
   const {
-    fs, os, path, randomId, canSeeLibrary, lib, metadata, collections,
+    fs, os, path, randomId, canSeeLibrary, canDownload, lib, metadata, collections,
     DATA_DIR, MEDIA_ROOT, hostLabel, store, scanner, updater, hls, opensubs,
     activity, downloader, transcodes, HttpError, json, readBody, getItem, getShow,
     getLibrary, librarySummary, validateLibraryInput, removeLibraryData, clientIp, isRemote, getTarget, route,
@@ -15,6 +15,12 @@ module.exports = function register(app) {
     name: 'Marquee', version: require('../package.json').version, hostname: os.hostname(),
     metadataProviders: metadata.available(), ...scanner.status(), activeTranscodes: transcodes.size + hls.active,
     downloader: downloader.status(), subtitleSearch: opensubs.configured(),
+    // Your own downloads: how many are in progress, and which finished lately (for the "done" notice).
+    myDownloads: canDownload(user) ? {
+      active: downloader.jobs.filter((j) => j.userId === user.id && ['queued', 'running'].includes(j.status)).length,
+      finished: downloader.jobs.filter((j) => j.userId === user.id && ['done', 'failed'].includes(j.status) && j.finishedAt > Date.now() - 86400_000)
+        .map((j) => ({ id: j.id, title: j.title || j.url, status: j.status, finishedAt: j.finishedAt, files: j.files.length })),
+    } : null,
     ...(user.role === 'admin' ? { dataDir: DATA_DIR, mediaRoot: MEDIA_ROOT, updateAvailable: updater.updateAvailable(), significantUpdate: updater.significantUpdate(), updating: updater.helper().state === 'updating' } : {}),
   }));
 
