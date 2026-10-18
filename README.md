@@ -64,7 +64,8 @@ still listed in `.env`.
 ### Other drives
 
 To add folders from any drive in the web interface (instead of listing each folder in `.env`),
-share the whole drive with Marquee once. In `.env`:
+share the whole drive with Marquee once. In `.env` (if your `.env` is older than these settings,
+running `start-marquee.bat` adds them at the end of it for you):
 
 ```ini
 DRIVE_1=E:/

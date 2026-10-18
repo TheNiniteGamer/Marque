@@ -29,6 +29,9 @@ Folders and drives:
   (these used to become one show called "Kids"). Shows set up like that are rebuilt on the next
   scan; watch history is kept, but fixes made by hand to those particular shows need redoing.
 - Episodes named like `Show - 05 [1080p].mkv` get their episode number.
+- **New settings reach your `.env`:** `.env` is only created once, so settings added by updates
+  (like `DRIVE_1`) were missing from it. `start-marquee.bat` and updates now add any new settings
+  to the end of your `.env`, with their explanations, without changing anything already in it.
 
 ## 0.4.3
 

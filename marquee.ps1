@@ -8,12 +8,13 @@
     marquee.ps1 Watch          update helper: lets the web page's "Update now" button work
     marquee.ps1 InstallHelper  run the helper automatically when you sign in to Windows
     marquee.ps1 RemoveHelper   stop and remove the helper
+    marquee.ps1 SyncEnv        add settings that are new in .env.example to your .env
 
   Works with Windows PowerShell 5.1 (built into Windows 10/11) and PowerShell 7.
 #>
 param(
   [Parameter(Position = 0)]
-  [ValidateSet('Start', 'Stop', 'Update', 'Logs', 'Watch', 'InstallHelper', 'RemoveHelper')]
+  [ValidateSet('Start', 'Stop', 'Update', 'Logs', 'Watch', 'InstallHelper', 'RemoveHelper', 'SyncEnv')]
   [string]$Command = 'Start',
   [switch]$NoPrompt,   # never ask questions or open windows (used by the helper and tests)
   [switch]$Once        # Watch: check one time and exit (used by tests)
@@ -49,6 +50,39 @@ function Get-Setting([string]$name, [string]$default) { if ($DotEnv[$name]) { re
 $Repo = Get-Setting 'MARQUEE_REPO' 'TheNiniteGamer/Marque'
 $Branch = Get-Setting 'MARQUEE_BRANCH' 'main'
 $Port = Get-Setting 'MARQUEE_PORT' '32500'
+
+# Your .env is copied from .env.example once and then left alone, so settings added by later updates
+# would never reach it. This appends any setting .env doesn't mention yet (with its explanation from
+# .env.example); nothing already in .env is changed. Returns the names that were added.
+function Sync-EnvFile {
+  $envFile = Join-Path $Root '.env'
+  $example = Join-Path $Root '.env.example'
+  if (-not (Test-Path -LiteralPath $envFile) -or -not (Test-Path -LiteralPath $example)) { return @() }
+  $keyRe = '^\s*#?\s*([A-Z][A-Z0-9_]*)\s*='
+  $current = [IO.File]::ReadAllText($envFile)
+  $have = @{}
+  foreach ($line in ($current -split "\r?\n")) { if ($line -cmatch $keyRe) { $have[$Matches[1]] = $true } }
+  $added = @()
+  $blocks = @()
+  # .env.example is made of paragraphs (comments + settings) separated by blank lines.
+  $paras = ([IO.File]::ReadAllText($example) -replace "\r\n", "`n") -split "\n[ \t]*\n"
+  foreach ($para in $paras) {
+    $lines = @($para -split "\n" | Where-Object { $_.Trim() })
+    $keys = @($lines | Where-Object { $_ -cmatch $keyRe } | ForEach-Object { [void]($_ -cmatch $keyRe); $Matches[1] })
+    $missing = @($keys | Where-Object { -not $have.ContainsKey($_) })
+    if (-not $missing.Count) { continue }
+    $keep = $lines | Where-Object { -not ($_ -cmatch $keyRe) -or $missing -contains $Matches[1] }
+    $blocks += ($keep -join "`r`n")
+    foreach ($k in $missing) { $have[$k] = $true; $added += $k }
+  }
+  if (-not $added.Count) { return @() }
+  $text = ''
+  if ($current.Length -and -not $current.EndsWith("`n")) { $text += "`r`n" }
+  $text += "`r`n# ---- Added by a Marquee update on $((Get-Date).ToString('yyyy-MM-dd')) ----`r`n`r`n"
+  $text += ($blocks -join "`r`n`r`n") + "`r`n"
+  [IO.File]::AppendAllText($envFile, $text, (New-Object Text.UTF8Encoding $false))
+  return $added
+}
 
 # Remote access helpers are switched on just by filling in their key in .env.
 function Set-RemoteProfiles {
@@ -195,6 +229,13 @@ function Start-Marquee {
     Set-RemoteProfiles
     Set-GpuFiles
     Set-CastUrl
+  } else {
+    $new = @(Sync-EnvFile)
+    if ($new.Count) {
+      Say "New settings were added to the end of your .env: $($new -join ', ')"
+      Say 'They are optional; open .env in Notepad to fill them in.'
+      $script:DotEnv = Read-DotEnv
+    }
   }
   Say 'Building and starting Marquee (the first time takes a few minutes)...'
   Invoke-Compose @('up', '-d', '--build') 'Starting Marquee'
@@ -261,6 +302,8 @@ function Update-Marquee {
   Set-Status 'updating' 'Downloading the latest version...' @{ startedAt = (Get-Date).ToUniversalTime().ToString('o'); finishedAt = $null }
   try {
     $r = Update-Code
+    # The newly downloaded script adds settings that are new in .env.example to your .env.
+    try { & (Join-Path $Root 'marquee.ps1') SyncEnv -NoPrompt } catch { Say "Could not add new settings to .env: $($_.Exception.Message)" }
     $short = if ($r.after) { $r.after.Substring(0, [Math]::Min(7, $r.after.Length)) } else { 'unknown' }
     Say "Version: $short"
     Wait-Docker
@@ -347,6 +390,10 @@ try {
     'Watch' { Watch-Updates }
     'InstallHelper' { Install-Helper }
     'RemoveHelper' { Remove-Helper }
+    'SyncEnv' {
+      $new = @(Sync-EnvFile)
+      if ($new.Count) { Say "New settings were added to the end of your .env: $($new -join ', ')" } else { Say 'Your .env already has every setting.' }
+    }
   }
 } catch {
   Write-Host ''
