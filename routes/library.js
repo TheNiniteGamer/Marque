@@ -8,6 +8,7 @@ module.exports = function register(app) {
     DATA_DIR, MEDIA_ROOT, hostLabel, store, scanner, updater, hls, opensubs,
     activity, downloader, transcodes, HttpError, json, readBody, getItem, getShow,
     getLibrary, librarySummary, validateLibraryInput, removeLibraryData, clientIp, isRemote, getTarget, route,
+    matcher, fromHostPath, folderPlaces,
   } = app;
 
   // --- server + libraries ---
@@ -120,6 +121,67 @@ module.exports = function register(app) {
     collections.removeMember(store, id, target);
     json(res, 200, collections.detail(store, user, id));
   }, 'admin');
+  // Many titles at once: { ids: [...] }.
+  route('POST', '/api/collections/:id/members', async (req, res, { id }, url, user) => {
+    collections.addMembers(store, id, (await readBody(req)).ids);
+    json(res, 200, collections.detail(store, user, id));
+  }, 'admin');
+  route('POST', '/api/collections/:id/members/remove', async (req, res, { id }, url, user) => {
+    collections.removeMembers(store, id, (await readBody(req)).ids);
+    json(res, 200, collections.detail(store, user, id));
+  }, 'admin');
+  // Series found in video titles ("… Ep 3"), offered as new collections.
+  route('GET', '/api/collection-suggestions', async (req, res, p, url, user) => json(res, 200, collections.suggest(store, user)), 'admin');
+
+  // --- select several titles and act on them all ---
+  // { ids, action }: watched, unwatched, watchlist-add, watchlist-remove (anyone);
+  // refresh, genre-add, genre-remove with { genre } (admins).
+  const BULK_ADMIN = new Set(['refresh', 'genre-add', 'genre-remove']);
+  route('POST', '/api/bulk', async (req, res, p, url, user) => {
+    const body = await readBody(req);
+    const ids = Array.isArray(body.ids) ? [...new Set(body.ids.map(String))] : [];
+    if (!ids.length) throw new HttpError(400, 'Nothing selected');
+    if (ids.length > 5000) throw new HttpError(400, 'Too many titles at once');
+    const action = String(body.action || '');
+    if (BULK_ADMIN.has(action) && user.role !== 'admin') throw new HttpError(403, 'Only admins can do that');
+    const targets = ids.map((id) => getTarget(id, user));
+    const episodesOf = ({ target, kind }) => (kind === 'show' ? lib.episodesOf(store, target.id).map((e) => e.id) : [target.id]);
+    switch (action) {
+      case 'watched': case 'unwatched':
+        lib.setWatched(store, user, targets.flatMap(episodesOf), action === 'watched');
+        break;
+      case 'watchlist-add': case 'watchlist-remove':
+        for (const { target, kind } of targets) if (kind !== 'episode') lib.setWatchlist(store, user, target.id, action === 'watchlist-add');
+        break;
+      case 'genre-add': case 'genre-remove': {
+        const genre = String(body.genre || '').trim().slice(0, 60);
+        if (!genre) throw new HttpError(400, 'Which genre?');
+        const same = (g) => g.toLowerCase() === genre.toLowerCase();
+        for (const { target, kind } of targets) {
+          if (kind === 'episode') continue;
+          const current = target.edits?.genres ?? target.meta?.genres ?? [];
+          const next = action === 'genre-add' ? (current.some(same) ? current : [...current, genre]) : current.filter((g) => !same(g));
+          if (next.length !== current.length) matcher.edit(target, kind, { genres: next.length ? next : null });
+        }
+        break;
+      }
+      case 'refresh':
+        // Can take a while (one lookup per title), so it carries on after answering.
+        (async () => {
+          const seen = new Set();
+          for (const { target, kind } of targets) {
+            const t = kind === 'episode' ? store.data.shows[target.showId] : target;
+            if (!t || seen.has(t.id)) continue;
+            seen.add(t.id);
+            await matcher.refresh(t, kind === 'episode' ? 'show' : kind).catch((err) => console.warn(`[metadata] refresh ${t.title}: ${err.message}`));
+          }
+        })();
+        break;
+      default:
+        throw new HttpError(400, `Unknown action: ${action}`);
+    }
+    json(res, 200, { ok: true, count: ids.length });
+  });
 
   route('POST', '/api/items/:id/progress', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);
@@ -148,7 +210,9 @@ module.exports = function register(app) {
 
   // --- folder picker for adding libraries (admin) ---
   route('GET', '/api/fs', async (req, res, p, url) => {
-    const dir = path.resolve(url.searchParams.get('path') || MEDIA_ROOT || os.homedir());
+    const asked = url.searchParams.get('path');
+    let dir = path.resolve(asked || MEDIA_ROOT || os.homedir());
+    if (asked && !fs.existsSync(dir)) dir = fromHostPath(asked) || dir;
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (err) { throw new HttpError(400, `Cannot read ${dir}: ${err.code}`); }
     const dirs = entries.filter((e) => !e.name.startsWith('.') && (e.isDirectory() || (e.isSymbolicLink() && (() => {
@@ -156,6 +220,12 @@ module.exports = function register(app) {
     })()))).map((e) => e.name).sort((a, b) => a.localeCompare(b));
     const parent = path.dirname(dir);
     const labels = Object.fromEntries(dirs.map((d) => [d, hostLabel(path.join(dir, d))]).filter(([, v]) => v));
-    json(res, 200, { path: dir, label: hostLabel(dir), parent: parent === dir ? null : parent, dirs, labels, home: MEDIA_ROOT || os.homedir() });
+    json(res, 200, { path: dir, label: hostLabel(dir), parent: parent === dir ? null : parent, dirs, labels, home: MEDIA_ROOT || os.homedir(), places: folderPlaces() });
+  }, 'admin');
+  // How many videos a library made from this folder would find (it includes every folder inside it).
+  route('GET', '/api/fs/preview', async (req, res, p, url) => {
+    const dir = path.resolve(url.searchParams.get('path') || '');
+    if (!fs.existsSync(dir)) throw new HttpError(400, 'Folder not found');
+    json(res, 200, await scanner.preview(dir));
   }, 'admin');
 };

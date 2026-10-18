@@ -55,6 +55,44 @@ function hostLabel(p) {
   }
   return null;
 }
+// The other way round: "E:/Movies" typed in the web page -> "/drives/1/Movies" in the container.
+function fromHostPath(p) {
+  const norm = (x) => x.replace(/\\/g, '/').replace(/\/+$/, '');
+  const want = norm(String(p || '').trim());
+  if (!want) return null;
+  // Windows paths are not case-sensitive.
+  const same = (a, b) => (/^[a-z]:/i.test(b) ? a.toLowerCase() === b.toLowerCase() : a === b);
+  for (const [inner, host] of [...MEDIA_LABELS].sort((a, b) => b[1].length - a[1].length)) {
+    const h = norm(host);
+    if (same(want, h) || (/^[a-z]:$/i.test(h) && same(want, `${h}/`))) return inner;
+    if (want.length > h.length && same(want.slice(0, h.length + 1), `${h}/`)) return path.join(inner, ...want.slice(h.length + 1).split('/'));
+  }
+  return null;
+}
+// Places the folder picker offers as shortcuts: the folders and drives shared with Docker, the
+// drive letters on Windows, and mounted disks on Linux and macOS.
+function folderPlaces() {
+  const places = [];
+  const add = (p, label) => { if (!places.some((x) => x.path === p)) places.push({ path: p, label }); };
+  for (const [inner, host] of MEDIA_LABELS) if (fs.existsSync(inner)) add(inner, /^[a-z]:$/i.test(host) ? `${host.toUpperCase()} drive` : host);
+  if (process.platform === 'win32') {
+    for (const c of 'CDEFGHIJKLMNOPQRSTUVWXYZ') if (fs.existsSync(`${c}:\\`)) add(`${c}:\\`, `${c}: drive`);
+  } else {
+    const user = os.userInfo().username;
+    for (const base of ['/mnt', '/media', `/media/${user}`, `/run/media/${user}`, '/Volumes']) {
+      let dirs = [];
+      try { dirs = fs.readdirSync(base, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith('.')); } catch { continue; }
+      for (const e of dirs) {
+        const full = path.join(base, e.name);
+        if (e.name === user || MEDIA_LABELS.some(([inner]) => inner === full)) continue;
+        add(full, hostLabel(full) || full);
+      }
+    }
+  }
+  if (MEDIA_ROOT) add(MEDIA_ROOT, hostLabel(MEDIA_ROOT) || MEDIA_ROOT);
+  add(os.homedir(), 'Home folder');
+  return places;
+}
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const THUMB_DIR = path.join(DATA_DIR, 'thumbs');
 const SUB_CACHE = path.join(DATA_DIR, 'subs');
@@ -201,9 +239,24 @@ function validateLibraryInput(body, partial = false) {
   }
   if (!partial || body.paths !== undefined) {
     if (!Array.isArray(body.paths) || !body.paths.length) throw new HttpError(400, 'At least one folder is required');
-    out.paths = [...new Set(body.paths.map((p) => String(p).trim()).filter(Boolean).map((p) => path.resolve(p)))];
+    // A folder can be typed as it's called on the PC ("E:/Movies") when it's shared with Docker.
+    const resolve = (p) => (fs.existsSync(path.resolve(p)) ? path.resolve(p) : fromHostPath(p) || path.resolve(p));
+    const typed = [...new Set(body.paths.map((p) => String(p).trim()).filter(Boolean))];
+    for (const p of typed) {
+      const r = resolve(p);
+      if (fs.existsSync(r) && fs.statSync(r).isDirectory()) continue;
+      // In Docker, a Windows folder only exists if its drive is shared in .env.
+      throw new HttpError(400, MEDIA_LABELS.length && /^[a-z]:[\\/]/i.test(p)
+        ? `Folder not found: ${p}. Marquee runs in Docker and can only see folders on the drives listed in .env (DRIVE_1 to DRIVE_4, MOVIES_DIR, TV_DIR…). Add the drive there, then run start-marquee.bat again.`
+        : `Folder not found: ${p}`);
+    }
+    out.paths = [...new Set(typed.map(resolve))];
+    // The same PC folder can be reachable twice in Docker (as D:/Movies and inside the whole D: drive).
+    const seen = new Map();
     for (const p of out.paths) {
-      if (!fs.existsSync(p) || !fs.statSync(p).isDirectory()) throw new HttpError(400, `Folder not found: ${p}`);
+      const key = (hostLabel(p) || p).toLowerCase();
+      if (seen.has(key)) throw new HttpError(400, `${hostLabel(p) || p} is in the list twice`);
+      seen.set(key, p);
     }
   }
   return out;
@@ -359,7 +412,7 @@ const app = {
   subs, lib, metadata, Matcher, Updater, Backups, HwAccel, hlsLib,
   MediaTokens, IntroDetector, FolderWatcher, findProblems, collections, OpenSubtitles, Parties, Trickplay,
   Activity, Maintenance, ENCODER_NAMES, PORT, HOST, DATA_DIR, MEDIA_ROOT, SCAN_INTERVAL_MIN,
-  MEDIA_LABELS, hostLabel, PUBLIC_DIR, THUMB_DIR, SUB_CACHE, SUB_DOWNLOADS, store, matcher,
+  MEDIA_LABELS, hostLabel, fromHostPath, folderPlaces, PUBLIC_DIR, THUMB_DIR, SUB_CACHE, SUB_DOWNLOADS, store, matcher,
   scanner, updater, hwaccel, TRANSCODE_DIR, hls, tokens, opensubs, parties,
   trickplay, activity, maintenance, intro, watcher, backups, auth, downloader,
   transcodes, HttpError, json, readBody, readRaw, MIME, sendFile, getItem,

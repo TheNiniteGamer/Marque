@@ -4,6 +4,32 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.5.0
+
+Organising your library:
+- **☑ Select:** pick several titles at once (click, Shift+click for a range, Ctrl+A for all) in a
+  library, a collection, My List or search results, then add them to a collection (or make a new
+  one from them), mark them watched or unwatched, add them to My List, add or remove a genre, or
+  refresh their metadata. On the Collections page, admins can select collections to move them to
+  another section, change how they're ordered, or hide/delete them.
+- **Collection order rules:** order a collection by release date, **episode number in the title**
+  ("Ep 12", "Episode 12", "S2E5", "Part 3", "#12", or a number at the end), title, or date added,
+  reversed if you like, or arrange it by hand. New titles fall into place by the rule.
+- **Movies, TV and YouTube collections are listed separately**, each section arranged on its own.
+  Marquee works out where a collection belongs from its titles; admins can choose with *Show under*.
+- **⌕ Find series** (Collections page): finds videos whose titles share a name before an episode
+  number ("Hardcore Survival Ep 1", "… Ep 2") and turns them into collections ordered by episode.
+
+Folders and drives:
+- **Whole drives in the folder picker:** share a drive with Docker once (`DRIVE_1=E:/` in `.env`,
+  read-only) and pick any folder on it in Settings → Libraries. The picker lists your drives and
+  shared folders, accepts a typed path like `E:/Movies`, and shows how many videos a folder holds,
+  including the folders inside it.
+- **TV shows in folders of their own** are found properly, e.g. `TV/Kids/Bluey/Season 1/…`
+  (these used to become one show called "Kids"). Shows set up like that are rebuilt on the next
+  scan; watch history is kept, but fixes made by hand to those particular shows need redoing.
+- Episodes named like `Show - 05 [1080p].mkv` get their episode number.
+
 ## 0.4.3
 
 YouTube downloader:

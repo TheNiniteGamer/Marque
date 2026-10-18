@@ -187,7 +187,7 @@ function posterCard(x, ctx = '') {
   else if ((x.type === 'show' && x.episodeCount && !x.unwatchedCount) || x.progress?.watched) badge = html`<span class="badge check" title="Watched">✓</span>`;
   knownItems.set(x.id, x);
   return html`
-    <div class="card">
+    <div class="card" data-sel="${x.id}">
       <div class="art">
         <a class="cover" href="${hrefFor(x)}"><img loading="lazy" src="${artUrl('poster', x)}" alt="${x.title}"></a>
         ${badge}${progressBar(x)}
@@ -205,7 +205,7 @@ function wideCard(x, ctx = '') {
   const title = isEp ? x.showTitle : x.title;
   const sub = isEp ? [epLabel(x), x.title].filter(Boolean).join(' — ') : [x.year, x.progress?.position ? `${fmtClock(x.duration - x.progress.position)} left` : ''].filter(Boolean).join(' · ');
   return html`
-    <div class="card wide">
+    <div class="card wide" data-sel="${x.id}">
       <div class="art">
         <a class="cover" href="${hrefFor(x)}"><img loading="lazy" src="${artUrl(kind, x)}" alt="${title}"></a>
         ${x.progress?.watched ? html`<span class="badge check">✓</span>` : ''}${progressBar(x)}
@@ -281,6 +281,7 @@ async function viewLibrary({ params: [id], query, seq }) {
       .filter((x) => !t || x.title.toLowerCase().includes(t));
     current = (cols.length && groupingOn() ? groupByCollection(matching, cols) : matching).sort(sorters[prefs.sort] || sorters.title);
     $('#lib-count').textContent = `${current.length}`;
+    queueMicrotask(markSelected);
     const grid = $('#lib-grid');
     grid.style.setProperty('--card-w', `${prefs.size}px`);
     grid.innerHTML = current.length ? current.map((x) => posterCard(x).s).join('')
@@ -308,6 +309,7 @@ async function viewLibrary({ params: [id], query, seq }) {
       </select>
       <input type="range" id="lib-size" min="110" max="230" step="10" value="${prefs.size}" title="Poster size" aria-label="Poster size">
       <button class="btn small" id="lib-shuffle" title="Play something random from this view">⤮ Shuffle</button>
+      ${selectButton()}
       ${cols.length ? html`<div class="seg" id="lib-group" title="Show titles that are in a collection as the collection, or every title on its own">
         <button data-g="1" class="${groupingOn() ? 'on' : ''}">▦ Collections</button><button data-g="0" class="${groupingOn() ? '' : 'on'}">All titles</button></div>
         <a class="btn small" href="#/collections?library=${id}">Browse collections (${cols.length})</a>` : ''}
@@ -316,6 +318,7 @@ async function viewLibrary({ params: [id], query, seq }) {
     ${genre ? html`<div class="filter-note">Showing <b>${genre}</b> · <a href="#/library/${id}">clear</a></div>` : ''}
     <div class="lib-wrap"><div class="grid sized" id="lib-grid"></div><nav class="jump" id="lib-jump" aria-label="Jump to letter" hidden></nav></div>`)) return;
   render();
+  bindSelect({ root: () => $('#lib-grid'), kind: 'titles' });
   const save = () => store.set(`lib:${id}`, prefs);
   $('#lib-sort').onchange = (e) => { prefs.sort = e.target.value; save(); render(); };
   $('#lib-size').oninput = (e) => { prefs.size = Number(e.target.value); save(); $('#lib-grid').style.setProperty('--card-w', `${prefs.size}px`); };
@@ -566,12 +569,13 @@ async function viewSearch({ query, seq }) {
   if (!q.trim()) return setView(seq, html`<div class="empty">Type to search your libraries.</div>`);
   const r = await api(`/api/search?q=${encodeURIComponent(q)}`);
   const total = r.movies.length + r.shows.length + r.episodes.length;
-  setView(seq, html`
-    <h1 style="margin-bottom:20px">Results for “${q}”</h1>
+  if (!setView(seq, html`
+    <div class="toolbar"><h1>Results for “${q}”</h1>${total ? selectButton() : ''}</div>
     ${!total ? html`<div class="empty">No matches.</div>` : ''}
     ${r.movies.length ? html`<section class="hub"><div class="hub-head"><h2>Movies</h2></div><div class="grid">${r.movies.map(posterCard)}</div></section>` : ''}
     ${r.shows.length ? html`<section class="hub"><div class="hub-head"><h2>Shows</h2></div><div class="grid">${r.shows.map(posterCard)}</div></section>` : ''}
-    ${r.episodes.length ? html`<section class="hub"><div class="hub-head"><h2>Episodes</h2></div><div class="grid wide">${r.episodes.map(wideCard)}</div></section>` : ''}`);
+    ${r.episodes.length ? html`<section class="hub"><div class="hub-head"><h2>Episodes</h2></div><div class="grid wide">${r.episodes.map(wideCard)}</div></section>` : ''}`)) return;
+  bindSelect({ root: () => view, kind: 'titles' });
 }
 
 // ---------- settings ----------
@@ -692,9 +696,9 @@ function showLibraryForm(lib = null) {
           </div>`)}
         </label>
         <div class="row"><button type="button" class="btn small" id="add-path">＋ Add another folder</button>
-          <span class="muted" style="font-size:13px">A library can combine folders from several drives — they show up as one collection.</span></div>
+          <span class="muted" style="font-size:13px">A library can combine folders from several drives — they show up as one collection. Folders inside the ones you pick are searched too.</span></div>
         <p class="muted" style="margin:0;font-size:13px">Movies: <code>Movie Name (Year).mkv</code> or <code>Movie Name (Year)/file.mkv</code>.
-          TV: <code>Show Name/Season 01/Show Name - S01E01.mkv</code>.</p>
+          TV: <code>Show Name/Season 01/Show Name - S01E01.mkv</code> — shows can also sit in folders of their own, like <code>Kids/Bluey/Season 1/…</code>.</p>
         <div class="form-error" id="form-error"></div>
         <div class="row"><button class="btn primary" type="submit">${lib ? 'Save' : 'Add library'}</button><button class="btn" type="button" id="cancel-form">Cancel</button></div>
       </form>`.s;
@@ -735,26 +739,54 @@ function showLibraryForm(lib = null) {
   slot.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Folder picker: drives and shared folders on the left, the folder's subfolders on the right, and a
+// count of the videos a library would find in it (subfolders included).
 function pickFolder(start) {
   return new Promise((resolve) => {
     const root = $('#modal-root');
-    let cur = null;
+    let cur = null, previewFor = null;
     const close = (val) => { root.innerHTML = ''; document.removeEventListener('keydown', onKey); resolve(val); };
     const onKey = (e) => { if (e.key === 'Escape') close(null); };
     document.addEventListener('keydown', onKey);
+    const showPreview = async (p) => {
+      previewFor = p;
+      const el = $('#pick-preview');
+      el.textContent = 'Looking for videos in this folder and the folders inside it…';
+      try {
+        const r = await api(`/api/fs/preview?path=${encodeURIComponent(p)}`);
+        if (previewFor !== p || !$('#pick-preview')) return;
+        const inside = r.folders ? ` and the ${r.folders} folder${r.folders === 1 ? '' : 's'} inside it` : '';
+        el.innerHTML = r.videos
+          ? html`<b>${r.partial ? 'At least ' : ''}${r.videos} video${r.videos === 1 ? '' : 's'}</b> in this folder${inside} — a library made from it gets all of them.
+              <span class="muted" title="${r.sample.join('\n')}">e.g. ${r.sample.slice(0, 2).join(', ')}</span>`.s
+          : html`No videos here${r.folders ? ` or in the ${r.folders} folder${r.folders === 1 ? '' : 's'} inside it` : ''}${r.partial ? ' (stopped looking — this folder is very large)' : ''}.`.s;
+      } catch { if (previewFor === p && $('#pick-preview')) el.textContent = ''; }
+    };
     const load = async (p) => {
       try { cur = await api(`/api/fs${p ? `?path=${encodeURIComponent(p)}` : ''}`); }
-      catch (err) { toast(err.message, true); if (!cur) cur = await api('/api/fs'); }
+      catch (err) { toast(err.message, true); if (!cur) cur = await api('/api/fs'); else return; }
+      const inPlace = (pl) => cur.path === pl.path || cur.path.startsWith(pl.path.replace(/[\\/]$/, '') + (pl.path.includes('\\') ? '\\' : '/'));
+      // Only the closest one is highlighted (a drive can sit inside the media folder).
+      const here = (cur.places || []).filter(inPlace).sort((a, b) => b.path.length - a.path.length)[0];
       root.innerHTML = html`
         <div class="modal-backdrop" id="mb">
-          <div class="modal" role="dialog" aria-label="Choose a folder">
-            <header><h2>Choose a folder</h2><div class="cwd">${cur.label ? `${cur.label}  (${cur.path})` : cur.path}</div></header>
-            <div class="modal-body dir-list">
-              ${cur.parent ? html`<button data-dir="${cur.parent}">⬆ ..</button>` : ''}
-              ${cur.dirs.map((d) => html`<button data-dir="${cur.path.replace(/\/$/, '')}/${d}">📁 ${d}${cur.labels?.[d] ? html` <span class="muted">— ${cur.labels[d]}</span>` : ''}</button>`)}
-              ${cur.dirs.length ? '' : html`<div class="muted" style="padding:12px">No subfolders</div>`}
+          <div class="modal wide" role="dialog" aria-label="Choose a folder">
+            <header><h2>Choose a folder</h2>
+              <form id="pick-go" class="row" style="margin-top:8px"><input class="input" id="pick-path" style="flex:1" value="${cur.label || cur.path}" aria-label="Folder path" spellcheck="false"><button class="btn small">Go</button></form>
+              ${cur.label ? html`<div class="cwd muted">${cur.path}</div>` : ''}</header>
+            <div class="modal-body picker">
+              <nav class="places" aria-label="Drives and folders">
+                <div class="muted places-head">Drives & folders</div>
+                ${(cur.places || []).map((pl) => html`<button data-dir="${pl.path}" class="${pl === here ? 'on' : ''}" title="${pl.path}">${/drive$/.test(pl.label) ? '💽' : pl.label === 'Home folder' ? '🏠' : '📁'} ${pl.label}</button>`)}
+              </nav>
+              <div class="dir-list">
+                ${cur.parent ? html`<button data-dir="${cur.parent}">⬆ ..</button>` : ''}
+                ${cur.dirs.map((d) => html`<button data-dir="${cur.path.replace(/[\\/]$/, '')}${cur.path.includes('\\') ? '\\' : '/'}${d}">📁 ${d}${cur.labels?.[d] ? html` <span class="muted">— ${cur.labels[d]}</span>` : ''}</button>`)}
+                ${cur.dirs.length ? '' : html`<div class="muted" style="padding:12px">No folders inside this one</div>`}
+              </div>
             </div>
-            <footer><button class="btn small" data-dir="${cur.home}" style="margin-right:auto">Home</button>
+            <div class="pick-preview" id="pick-preview" aria-live="polite"></div>
+            <footer><span class="muted pick-hint">Missing a drive? See “Other drives” in the README.</span>
               <button class="btn" id="pick-cancel">Cancel</button><button class="btn primary" id="pick-ok">Select this folder</button></footer>
           </div>
         </div>`.s;
@@ -763,6 +795,8 @@ function pickFolder(start) {
         if (e.target.id === 'pick-ok') return close(cur.path);
         const d = e.target.closest('[data-dir]'); if (d) load(d.dataset.dir);
       };
+      $('#pick-go').onsubmit = (e) => { e.preventDefault(); load($('#pick-path').value.trim()); };
+      showPreview(cur.path);
     };
     load(start);
   });
@@ -1715,6 +1749,7 @@ async function router() {
   if (!isPlay) closePlayer();
   if (path !== '/search' && !isPlay) $('#search-input').value = '';
   renderSidebar();
+  endSelect();
   const seq = ++renderSeq;
   const changedPage = path !== lastPath;
   if (changedPage && lastPath && !lastPath.startsWith('/play/')) scrollMemo.set(lastPath, window.scrollY);

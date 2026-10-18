@@ -390,9 +390,10 @@ function bindMetadataSection() {
 async function viewWatchlist({ seq }) {
   const list = await api('/api/watchlist');
   setView(seq, html`
-    <div class="toolbar"><h1>My List<span class="count">${list.length}</span></h1></div>
+    <div class="toolbar"><h1>My List<span class="count">${list.length}</span></h1>${list.length ? selectButton() : ''}</div>
     ${list.length ? html`<div class="grid">${list.map(posterCard)}</div>`
       : html`<div class="empty"><h2>Nothing here yet</h2><p>Use the ⋯ menu on any movie or show, or the ♡ button on its page, to save it for later.</p></div>`}`);
+  bindSelect({ root: () => $('#view'), kind: 'titles' });
 }
 
 // ---------- keyboard shortcut help ----------
@@ -897,7 +898,8 @@ function groupByCollection(items, cols) {
 const groupingOn = () => store.get('groupCollections', true);
 
 function collectionCard(c) {
-  return html`<div class="card ${c.hidden ? 'is-hidden' : ''}">
+  knownItems.set(c.id, c);
+  return html`<div class="card ${c.hidden ? 'is-hidden' : ''}" data-sel="${c.id}">
     <div class="art"><a class="cover" href="#/collection/${c.id}">
       ${c.cover ? html`<img loading="lazy" src="${artUrl('poster', c.cover)}" alt="${c.name}">` : html`<div class="collection-empty">▦</div>`}</a>
       <span class="badge" title="Titles in this collection">${c.count}</span></div>
@@ -910,6 +912,9 @@ function collectionChips(x) {
   return x.collections?.length ? html`<div class="row collection-chips">${x.collections.map((c) => html`<a class="chip link" href="#/collection/${c.id}">▦ ${c.name}</a>`)}</div>` : '';
 }
 
+// Collections are listed in sections: Movies, TV and YouTube (each collection's section is worked out
+// from its titles, or picked by an admin).
+const SECTION_HEAD = { movies: 'Movie collections', shows: 'TV collections', videos: 'YouTube collections' };
 async function viewCollections({ query, seq }) {
   const libraryId = query.get('library');
   const admin = state.user.role === 'admin';
@@ -919,27 +924,80 @@ async function viewCollections({ query, seq }) {
   const hiddenCount = all.filter((c) => c.hidden).length;
   const lib = libraryId && state.libraries.find((l) => l.id === libraryId);
   const base = `#/collections${libraryId ? `?library=${libraryId}` : ''}`;
+  const sections = Object.keys(SECTION_HEAD).map((k) => [k, list.filter((c) => c.section === k)]).filter(([, l]) => l.length);
   if (!setView(seq, html`
     <div class="toolbar"><h1>${lib ? `${lib.name} · ` : ''}Collections<span class="count">${list.length}</span></h1>
       ${lib ? html`<a class="btn small" href="#/library/${lib.id}">‹ Back to ${lib.name}</a>` : ''}
-      ${admin && list.length > 1 ? html`<button class="btn small" id="cols-arrange">⇅ Arrange</button>` : ''}
+      ${sections.length > 1 ? html`<div class="seg" id="cols-jump">${sections.map(([k, l]) => html`<button data-jump="${k}">${SECTION_LABEL[k]} (${l.length})</button>`)}</div>` : ''}
+      ${admin && list.length ? selectButton() : ''}
       ${admin && hiddenCount ? html`<a class="btn small" href="${showHidden ? base : `${base}${libraryId ? '&' : '?'}hidden`}">${showHidden ? 'Hide hidden' : `Show hidden (${hiddenCount})`}</a>` : ''}
+      ${admin ? html`<button class="btn small" id="col-find" title="Look for series in video titles (“… Ep 3”) and offer them as collections">⌕ Find series</button>` : ''}
       ${admin ? html`<button class="btn small primary" id="col-new">＋ New collection</button>` : ''}</div>
-    <div id="cols-body">${list.length ? html`<div class="grid">${list.map(collectionCard)}</div>` : html`<div class="empty"><h2>No collections yet</h2>
-      <p>Film series like “The Matrix Collection” appear here automatically once two of their movies are matched with TMDB.${admin ? ' You can also make your own with ＋ New collection, or from a movie’s ⋯ menu.' : ''}</p></div>`}</div>`)) return;
-  if ($('#col-new')) $('#col-new').onclick = async () => {
+    <div id="cols-body">${list.length ? sections.map(([k, l]) => html`
+      <section class="hub col-section" id="sec-${k}">
+        <div class="hub-head"><h2>${SECTION_HEAD[k]} <span class="muted" style="font-weight:400;font-size:14px">${l.length}</span></h2>
+          ${admin && l.length > 1 ? html`<button class="btn small" data-arrange="${k}">⇅ Arrange</button>` : ''}</div>
+        <div class="grid" data-grid="${k}">${l.map(collectionCard)}</div>
+      </section>`) : html`<div class="empty"><h2>No collections yet</h2>
+      <p>Film series like “The Matrix Collection” appear here automatically once two of their movies are matched with TMDB.${admin ? ' You can also make your own with ＋ New collection, by selecting titles in a library (☑ Select), or with ⌕ Find series for YouTube series.' : ''}</p></div>`}</div>`)) return;
+  if ($('#cols-jump')) $('#cols-jump').onclick = (e) => { const k = e.target.dataset.jump; if (k) $(`#sec-${k}`)?.scrollIntoView({ behavior: 'smooth' }); };
+  if (!admin) return;
+  bindSelect({ root: () => $('#cols-body'), kind: 'collections' });
+  $('#col-find').onclick = () => openSeriesFinder();
+  $('#col-new').onclick = async () => {
     const name = prompt('Name of the new collection');
     if (!name) return;
     try { const c = await api('/api/collections', { method: 'POST', body: { name } }); location.hash = `#/collection/${c.id}`; } catch (err) { toast(err.message, true); }
   };
-  if ($('#cols-arrange')) $('#cols-arrange').onclick = () => reorderList($('#cols-body'), {
-    items: list.map((c) => ({ id: c.id, title: c.name, sub: c.kind === 'auto' ? 'From TMDB' : `${c.count} titles`, img: c.cover ? artUrl('poster', c.cover) : null })),
-    note: 'Drag collections into the order you want them listed (for everyone), or use the arrows.',
-    // Collections not shown here (other libraries, hidden) keep their place after these.
-    save: (order) => api('/api/collection-order', { method: 'PUT', body: { order } }),
-    reset: () => api('/api/collection-order', { method: 'PUT', body: { order: null } }),
-    resetLabel: 'Back to alphabetical',
+  $('#cols-body').onclick = (e) => {
+    const k = e.target.closest('[data-arrange]')?.dataset.arrange;
+    if (!k) return;
+    const mine = list.filter((c) => c.section === k);
+    const section = $(`#sec-${k} .grid`);
+    reorderList(section, {
+      items: mine.map((c) => ({ id: c.id, title: c.name, sub: c.kind === 'auto' ? 'From TMDB' : `${c.count} titles`, img: c.cover ? artUrl('poster', c.cover) : null })),
+      note: `Drag ${SECTION_HEAD[k].toLowerCase()} into the order you want them listed (for everyone), or use the arrows.`,
+      // The other sections (and collections not shown here) keep their places.
+      save: (order) => {
+        const others = all.map((c) => c.id).filter((id) => !order.includes(id));
+        return api('/api/collection-order', { method: 'PUT', body: { order: [...order, ...others] } });
+      },
+      reset: () => api('/api/collection-order', { method: 'PUT', body: { order: null } }),
+      resetLabel: 'Back to alphabetical (all sections)',
+    });
+  };
+}
+
+// "Find series": groups of videos whose titles share a name before "Ep 1", "Part 2"… offered as new
+// collections ordered by episode number.
+async function openSeriesFinder() {
+  const found = await api('/api/collection-suggestions');
+  const m = openModal({
+    title: 'Find series',
+    wide: true,
+    body: found.length ? html`<p class="muted" style="margin-top:0">Videos whose titles share a name before an episode number (“… Ep 3”, “Part 2”, “#12”). Tick the ones to turn into collections; they'll be ordered by episode number, and new episodes join them when you add them by hand or with ☑ Select.</p>
+      <div class="form">${found.map((f, i) => html`<div class="series-row"><input type="checkbox" data-i="${i}" checked aria-label="Make a collection of ${f.name}">
+        <div style="flex:1;min-width:0"><input class="input" data-name="${i}" value="${f.name}" aria-label="Collection name" style="width:min(360px,100%)">
+          <span class="muted">${f.count} videos${f.channel ? ` · ${f.channel}` : ''} · ${SECTION_LABEL[f.section]}</span>
+          <div class="muted" style="font-size:12px;margin-top:4px">${f.titles.join(' · ')}${f.count > f.titles.length ? ' …' : ''}</div></div></div>`)}</div>`.s
+      : html`<p>No new series found. This looks for at least two videos whose titles share a name followed by an episode number, like “Hardcore Survival Ep 1” and “Hardcore Survival Ep 2”, that aren't already in one collection.</p>`.s,
+    footer: found.length ? html`<button class="btn" data-close>Cancel</button><button class="btn primary" id="sf-create">Create collections</button>`.s : html`<button class="btn primary" data-close>OK</button>`.s,
   });
+  for (const b of $$('footer [data-close]', m.el)) b.onclick = () => m.close();
+  if (!found.length) return;
+  $('#sf-create', m.el).onclick = async () => {
+    const picked = $$('input[data-i]', m.el).filter((x) => x.checked).map((x) => Number(x.dataset.i));
+    if (!picked.length) return toast('Nothing ticked', true);
+    try {
+      for (const i of picked) {
+        const name = $(`[data-name="${i}"]`, m.el).value.trim() || found[i].name;
+        await api('/api/collections', { method: 'POST', body: { name, members: found[i].memberIds, sort: 'episode', section: found[i].section } });
+      }
+      toast(`Made ${picked.length} collection${picked.length === 1 ? '' : 's'}`);
+      m.close();
+      router();
+    } catch (err) { toast(err.message, true); }
+  };
 }
 
 async function viewCollection({ params: [id], seq }) {
@@ -948,23 +1006,35 @@ async function viewCollection({ params: [id], seq }) {
   const auto = c.kind === 'auto';
   if (!setView(seq, html`
     <div class="toolbar"><h1>${c.name}<span class="count">${c.count}</span></h1>
-      <span class="muted">${auto ? `From TMDB${c.tmdbName && c.tmdbName !== c.name ? ` (“${c.tmdbName}”)` : ''}${c.changed ? ' · changed by an admin' : ''}` : 'Collection'}${c.customOrder ? ' · arranged' : ''}</span>
-      ${admin && c.items.length > 1 ? html`<button class="btn small" id="col-reorder">⇅ Reorder</button>` : ''}
+      <span class="muted">${auto ? `From TMDB${c.tmdbName && c.tmdbName !== c.name ? ` (“${c.tmdbName}”)` : ''}${c.changed ? ' · changed by an admin' : ''}` : 'Collection'} · ${SECTION_LABEL[c.section]}</span>
+      ${admin && c.items.length ? selectButton() : ''}
       ${admin ? html`<button class="btn small" id="col-rename">Rename</button>` : ''}
       ${admin && auto && c.changed ? html`<button class="btn small" id="col-reset" title="Undo every change made to this TMDB collection">Reset to TMDB</button>` : ''}
       ${admin ? html`<button class="btn small danger" id="col-delete">${auto ? (c.hidden ? 'Show again' : 'Hide') : 'Delete'}</button>` : ''}</div>
     ${c.hidden ? html`<div class="filter-note">This collection is hidden from everyone. Use “Show again” to bring it back.</div>` : ''}
+    ${admin ? html`<div class="row col-options">
+      <label>Order <select id="col-sort">${Object.entries(SORT_LABEL).map(([k, l]) => html`<option value="${k}" ${c.sort === k ? 'selected' : ''}>${l}</option>`)}</select></label>
+      ${c.sort !== 'custom' ? html`<button class="btn small ${c.reverse ? 'on' : ''}" id="col-reverse" aria-pressed="${c.reverse ? 'true' : 'false'}" title="Show the order the other way round (last first)">⇵ ${c.reverse ? 'Reversed' : 'Reverse'}</button>` : ''}
+      ${c.items.length > 1 ? html`<button class="btn small" id="col-reorder" title="Drag the titles into any order">✋ Arrange by hand</button>` : ''}
+      <label>Show under <select id="col-section"><option value="" ${c.sectionSetByHand ? '' : 'selected'}>Automatic</option>
+        ${Object.entries(SECTION_LABEL).map(([k, l]) => html`<option value="${k}" ${c.sectionSetByHand && c.section === k ? 'selected' : ''}>${l}</option>`)}</select></label>
+      ${c.sort === 'episode' ? html`<span class="muted" style="font-size:13px">Uses numbers in the titles: “Ep 12”, “Episode 12”, “S2E5”, “Part 3”, “#12”, or a number at the end.</span>` : ''}
+    </div>` : ''}
     <div id="col-body">${c.items.length ? html`<div class="grid">${c.items.map((x) => posterCard(x, admin ? `collection:${c.id}` : ''))}</div>`
       : html`<div class="empty"><p>This collection is empty. Use “Add to collection…” in the ⋯ menu of a movie or show.</p></div>`}</div>
-    ${admin ? html`<p class="muted" style="font-size:13px">Tip: each title's ⋯ menu here can remove it or make its poster the collection's cover.</p>` : ''}`)) return;
+    ${admin ? html`<p class="muted" style="font-size:13px">Tip: ☑ Select removes several titles at once; each title's ⋯ menu can also make its poster the collection's cover.</p>` : ''}`)) return;
   if (!admin) return;
   const patch = async (body, msg) => { try { await api(`/api/collections/${id}`, { method: 'PATCH', body }); toast(msg); router(); } catch (err) { toast(err.message, true); } };
+  bindSelect({ root: () => $('#col-body'), kind: 'titles', collectionId: id });
+  $('#col-sort').onchange = (e) => patch({ sort: e.target.value }, `Ordered by ${SORT_LABEL[e.target.value].toLowerCase()}`);
+  if ($('#col-reverse')) $('#col-reverse').onclick = () => patch({ reverse: !c.reverse }, 'Order reversed');
+  $('#col-section').onchange = (e) => patch({ section: e.target.value || null }, e.target.value ? `Shown under ${SECTION_LABEL[e.target.value]}` : 'Section decided from the titles');
   if ($('#col-reorder')) $('#col-reorder').onclick = () => reorderList($('#col-body'), {
     items: c.items.map((x) => ({ id: x.id, title: x.title, sub: x.year || '', img: artUrl('poster', x) })),
-    note: 'Drag titles into the order you want, or use the arrows. Everyone sees this order.',
+    note: 'Drag titles into the order you want, or use the arrows. Everyone sees this order; titles added later go at the end.',
     save: (order) => api(`/api/collections/${id}/order`, { method: 'PUT', body: { order } }),
     reset: c.customOrder ? () => api(`/api/collections/${id}/order`, { method: 'PUT', body: { order: null } }) : null,
-    resetLabel: 'Back to release order',
+    resetLabel: 'Stop arranging by hand (back to release date)',
   });
   $('#col-rename').onclick = () => {
     const name = prompt(auto ? `New name (leave empty to use TMDB's name, “${c.tmdbName}”)` : 'New name', c.name);

@@ -49,7 +49,8 @@ services:
       MEDIA_LABELS: >-
         /media/movies=${MOVIES_DIR:-}|/media/movies2=${MOVIES_DIR_2:-}|/media/movies3=${MOVIES_DIR_3:-}|/media/movies4=${MOVIES_DIR_4:-}|
         /media/tv=${TV_DIR:-}|/media/tv2=${TV_DIR_2:-}|/media/tv3=${TV_DIR_3:-}|/media/tv4=${TV_DIR_4:-}|
-        /media/youtube=${YOUTUBE_DIR:-}
+        /media/youtube=${YOUTUBE_DIR:-}|
+        /drives/1=${DRIVE_1:-}|/drives/2=${DRIVE_2:-}|/drives/3=${DRIVE_3:-}|/drives/4=${DRIVE_4:-}
     volumes:
       # Database, thumbnails and caches (a Docker-managed volume; survives updates).
       - marquee-data:/data
@@ -67,6 +68,12 @@ services:
       - "${TV_DIR_4:-./media/unused/tv4}:/media/tv4"
       # Where the YouTube downloader saves videos.
       - "${YOUTUBE_DIR:-./media/youtube}:/media/youtube"
+      # Whole drives you can pick folders from in Settings -> Libraries -> Browse (DRIVE_1 ... DRIVE_4
+      # in .env, e.g. DRIVE_1=E:/). Read-only: Marquee only watches from them.
+      - "${DRIVE_1:-./media/unused/drive1}:/drives/1:ro"
+      - "${DRIVE_2:-./media/unused/drive2}:/drives/2:ro"
+      - "${DRIVE_3:-./media/unused/drive3}:/drives/3:ro"
+      - "${DRIVE_4:-./media/unused/drive4}:/drives/4:ro"
 
   # ---- Watching away from home (optional; switched on by filling in a key in .env) ----
 

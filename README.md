@@ -61,6 +61,22 @@ You can also manage folders by hand in **Settings → Edit** on a library, using
 **＋ Add another folder** and **Browse…**. Folders you remove there stay removed, even if they're
 still listed in `.env`.
 
+### Other drives
+
+To add folders from any drive in the web interface (instead of listing each folder in `.env`),
+share the whole drive with Marquee once. In `.env`:
+
+```ini
+DRIVE_1=E:/
+DRIVE_2=F:/
+```
+
+Run `start-marquee.bat` again. **Settings → Add library → Browse…** then lists *E: drive* and
+*F: drive* on the left, and you can pick any folder on them (or type a path like `E:/Movies`).
+Marquee only reads from these drives. The picker shows how many videos a folder holds, counting
+the folders inside it — a library always includes everything below the folder you pick, so
+`TV/Kids/Bluey/Season 1/…` and `TV/Anime/Naruto/…` are found as the shows *Bluey* and *Naruto*.
+
 **Changing other settings later:** edit `.env`, then run `start-marquee.bat` again.
 
 ### Watching away from home
@@ -161,7 +177,7 @@ never gets access to Docker itself.
 | Feature | What Marquee does |
 | --- | --- |
 | **Accounts** | Sign-in screen, with an admin account created on first run. Admins add users, choose which libraries each one can see, and decide who can use the downloader. Each user has their own watch history, Continue Watching and resume points. |
-| **Libraries** | Movie and TV Show libraries, each combining one or more folders, which can be on different drives. Add, edit and remove them in Settings with a built-in folder picker. |
+| **Libraries** | Movie and TV Show libraries, each combining one or more folders, which can be on different drives. Everything inside the folders is found, including shows in folders of their own (`Kids/Bluey/…`). Add, edit and remove them in Settings with a built-in folder picker that lists your drives, accepts typed paths and shows how many videos a folder holds; whole drives can be shared with Docker (see *Other drives*). |
 | **Scanning** | Probes new or changed files with `ffprobe`, removes deleted ones, and rescans periodically. If a drive is offline, its items and watch history are kept. |
 | **Filename matching** | `Movie (Year).ext`, release-style names like `Movie.2019.1080p.BluRay.x264`, `Show/Season 01/Show - S01E02 - Title.ext`, `1x02`, `S01E01-E02`, Specials folders. |
 | **Online metadata** | Posters, backgrounds, summaries, genres, ratings, cast and episode titles. TV shows use **TVmaze** (no key needed). Movies and TV can also use **TMDB**: paste a free API key in *Settings → Metadata*. Pick the metadata language there too. New items are matched automatically. |
@@ -181,7 +197,8 @@ never gets access to Docker itself.
 | **Watch together** | 👥 in the player makes a watch party and gives you a link. Everyone with an account who opens it stays in sync: play, pause, skipping and the next episode. |
 | **Subtitles** | Sidecar `.srt`/`.vtt`, embedded text subtitles, and Blu-ray / DVD picture subtitles (PGS, VobSub), which the server draws into the video. Missing ones can be found on **OpenSubtitles.com** from the player (*Subtitles → Search online…*) once an admin adds a free API key in *Settings → Metadata*. |
 | **Quality limit away from home** | *Settings → Transcoding*: cap the quality for people watching through Tailscale, Cloudflare or from outside, so one viewer can't use up your upload. |
-| **Collections** | Film series from TMDB (e.g. “The Matrix Collection”) are grouped automatically, and admins can make their own with *⋯ → Add to collection…*. Movies in a collection show as the collection on the home page and in libraries; switch a library to *All titles* (or untick it under *Account*) to see every movie on its own. Admins can override anything: rename (TMDB ones too), add or remove titles, **⇅ Reorder** the titles by dragging or with arrows, pick the cover (*⋯ → Use as the collection's cover*), hide TMDB collections, *Reset to TMDB*, and **⇅ Arrange** the list of collections. |
+| **Collections** | Film series from TMDB (e.g. “The Matrix Collection”) are grouped automatically, and admins can make their own with *⋯ → Add to collection…* or by selecting titles (**☑ Select**). Collections are listed in separate **Movies, TV and YouTube** sections (worked out from their titles, or chosen with *Show under*). Each collection has an **order**: release date, **episode number in the title** (“Ep 12”, “S2E5”, “Part 3”…), title, date added, reversed, or **arranged by hand**. **⌕ Find series** turns videos like “Hardcore Survival Ep 1, Ep 2…” into collections. Movies in a collection show as the collection on the home page and in libraries; switch a library to *All titles* (or untick it under *Account*) to see every movie on its own. Admins can override anything: rename (TMDB ones too), add or remove titles, pick the cover (*⋯ → Use as the collection's cover*), hide TMDB collections, *Reset to TMDB*, and **⇅ Arrange** each section. |
+| **Select several** | **☑ Select** in a library, collection, My List or search: click titles (Shift+click for a range, Ctrl+A for all), then add them to a collection or a new one, mark watched/unwatched, add to My List, add or remove a genre, or refresh metadata — all at once. |
 | **Extras** | Trailers, featurettes and behind-the-scenes clips show on their movie or show page instead of in the library (see the folder layout below). |
 | **New files appear by themselves** | Marquee notices files added, removed or renamed in your folders within about 15 seconds, including on Windows drives in Docker. Files still being copied are picked up once they're finished. |
 | **Logs and housekeeping** | *Settings → Logs* shows recent warnings and errors with plain-language explanations. *Settings → Server* shows the space caches use; unused cached files are cleaned up daily. The database is saved crash-safely (with a `.bak` copy) and restored from the newest backup if it's ever unreadable. |
@@ -291,7 +308,7 @@ lib/hls.js          adaptive streaming: VOD playlists, on-demand segment convers
 lib/intro.js        intro and credits detection (Chromaprint audio fingerprints compared across a season)
 lib/tokens.js       signed, expiring playback links for cast devices and native players
 lib/watcher.js      notices folder changes (polls folder times; works on Docker bind mounts and network drives)
-lib/collections.js  automatic (TMDB) and hand-made collections
+lib/collections.js  automatic (TMDB) and hand-made collections, order rules (episode numbers in titles), sections, series finder
 lib/party.js        watch together: shared play state pushed to members over Server-Sent Events
 lib/opensubtitles.js  subtitle search/download from OpenSubtitles.com
 lib/problems.js     library health check (offline folders, duplicates, missing episodes…)
@@ -303,7 +320,8 @@ lib/matcher.js      matching, refresh/unmatch, user edits and custom artwork (ed
 lib/subtitles.js    SRT→VTT, cue time-shifting
 lib/store.js        JSON-file database with atomic writes
 public/             single-page web client (vanilla JS): app.js (browse/play), manage.js (accounts, downloads),
-                    extras.js (menus, edit/match dialogs, My List, settings panels, shortcuts), cast.js (Google Cast),
+                    extras.js (menus, edit/match dialogs, My List, settings panels, shortcuts), select.js (☑ Select and
+                    bulk actions), cast.js (Google Cast),
                     vendor/hls.js (Apache-2.0, for adaptive streaming in browsers without native HLS)
 Dockerfile, docker-compose.yml, *.bat   container image and Windows helpers
 ```
