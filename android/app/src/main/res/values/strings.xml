@@ -70,4 +70,6 @@
     <string name="quality_original">Original</string>
     <string name="quality_auto">Auto (adjusts to your connection)</string>
     <string name="adaptive_failed">Adaptive streaming didn\'t work on this phone — playing the original instead.</string>
+    <string name="sound">Sound</string>
+    <string name="night_mode">Night mode</string>
 </resources>

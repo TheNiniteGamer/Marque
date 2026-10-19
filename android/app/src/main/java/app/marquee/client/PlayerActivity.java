@@ -79,6 +79,10 @@ public class PlayerActivity extends Activity {
     private boolean autoSkipIntro, autoSkipped, creditsShown;
     // Skip Intro / Skip Credits fade after skipFade seconds (0 = stay); they come back with the controls.
     int skipFade = 10;
+    // Night mode: speech lifted, loud scenes evened out (Android 9+, on the player's own sound).
+    boolean nightMode;
+    private android.media.audiofx.DynamicsProcessing night;
+    private int nightSession;
     private String skipPart;
     private long skipSince;
     private boolean skipFading;
@@ -145,6 +149,7 @@ public class PlayerActivity extends Activity {
             subsOn = req.optBoolean("subsOn", false);
             autoSkipIntro = req.optBoolean("autoSkipIntro", false);
             skipFade = req.optInt("skipFade", 10);
+            nightMode = req.optBoolean("nightMode", false);
             qualityPref = req.optString("quality", "");
             load(req.getString("id"), req.optDouble("start", 0));
         } catch (Exception e) {
@@ -320,6 +325,7 @@ public class PlayerActivity extends Activity {
     private void onPrepared(MediaPlayer m) {
         mp = m;
         applySpeed();
+        applyNight();
         if (seekable() && pendingSeek > 0) video.seekTo((int) (pendingSeek * 1000));
         if (direct && !hls && audioIndex > 0) selectDirectAudio(audioIndex);
         video.start();
@@ -539,6 +545,47 @@ public class PlayerActivity extends Activity {
     }
 
 
+    /** From the Audio & Subtitles panel; the account remembers it for every player. */
+    void setNight(boolean on) {
+        nightMode = on;
+        applyNight();
+        final String url = base + "/api/auth/prefs";
+        io.execute(() -> {
+            try { Net.putJson(url, new JSONObject().put("nightMode", on)); } catch (Exception ignored) { }
+        });
+    }
+
+    /** Each new video has its own sound session, so the effect is set up again for it. */
+    private void applyNight() {
+        if (Build.VERSION.SDK_INT < 28 || mp == null) return;
+        try {
+            int session = mp.getAudioSessionId();
+            if (night != null && nightSession != session) { night.release(); night = null; }
+            if (night == null && nightMode) {
+                night = new android.media.audiofx.DynamicsProcessing(0, session, nightConfig());
+                nightSession = session;
+            }
+            if (night != null) night.setEnabled(nightMode);
+        } catch (Exception e) {
+            night = null; // the device doesn't offer it: plain sound
+        }
+    }
+
+    @android.annotation.TargetApi(28)
+    private static android.media.audiofx.DynamicsProcessing.Config nightConfig() {
+        android.media.audiofx.DynamicsProcessing.Config c = new android.media.audiofx.DynamicsProcessing.Config.Builder(
+            android.media.audiofx.DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION, 2, true, 3, true, 1, false, 0, true).build();
+        // Less rumble, more voice.
+        c.setPreEqBandAllChannelsTo(0, new android.media.audiofx.DynamicsProcessing.EqBand(true, 150, -6));
+        c.setPreEqBandAllChannelsTo(1, new android.media.audiofx.DynamicsProcessing.EqBand(true, 4000, 4));
+        c.setPreEqBandAllChannelsTo(2, new android.media.audiofx.DynamicsProcessing.EqBand(true, 20000, 0));
+        // Quiet parts up, loud parts down.
+        android.media.audiofx.DynamicsProcessing.MbcBand b = new android.media.audiofx.DynamicsProcessing.MbcBand(true, 20000, 8, 220, 4, -30, 6, -90, 1, 0, 8);
+        c.setMbcBandAllChannelsTo(0, b);
+        c.setLimiterAllChannelsTo(new android.media.audiofx.DynamicsProcessing.Limiter(true, true, 0, 2, 150, 10, -2, 0));
+        return c;
+    }
+
     /** From the Audio & Subtitles panel. */
     void setSpeed(float s) {
         speed = s;
@@ -718,6 +765,7 @@ public class PlayerActivity extends Activity {
         ui.removeCallbacksAndMessages(null);
         controlsUi.release();
         mediaControls.release();
+        if (night != null) night.release();
         if (item != null && video.getCurrentPosition() > 0) report(true);
         video.stopPlayback();
         // Stop the server's conversion right away instead of waiting for it to time out.

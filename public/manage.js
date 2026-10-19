@@ -162,6 +162,7 @@ async function viewTvSettings({ seq }) {
       <h2>Playing</h2>
       ${tvToggle('data-acct', 'autoplayNext', playerPref('autoplayNext'), 'Play the next episode automatically')}
       ${tvToggle('data-acct', 'autoSkipIntro', playerPref('autoSkipIntro'), 'Skip intros automatically')}
+      ${tvToggle('data-acct', 'nightMode', playerPref('nightMode'), 'Night mode: clearer dialogue, quieter loud scenes')}
       ${tvToggle('data-local', 'subsOn', store.get('subsOn', false), 'Turn on subtitles by default')}
       <div class="tv-choice"><span>Skip Intro / Skip Credits buttons fade after</span>
         <div class="seg">${[[5, '5 s'], [10, '10 s'], [15, '15 s'], [30, '30 s'], [0, 'Never']].map(([v, l]) => html`<button type="button" data-fade="${v}" class="${fade === v ? 'on' : ''}">${l}</button>`)}</div></div>
@@ -219,6 +220,7 @@ async function viewAccount({ query, seq }) {
       <h2>Player</h2>
       <label class="check"><input type="checkbox" data-acct="autoplayNext" ${playerPref('autoplayNext') ? 'checked' : ''}> Play the next episode automatically (a 10-second countdown at the credits)</label>
       <label class="check"><input type="checkbox" data-acct="autoSkipIntro" ${playerPref('autoSkipIntro') ? 'checked' : ''}> Skip intros automatically</label>
+      <label class="check"><input type="checkbox" data-acct="nightMode" ${playerPref('nightMode') ? 'checked' : ''}> Night mode: clearer dialogue and quieter loud scenes</label>
       <label>Skip Intro / Skip Credits buttons
         <select data-acct="skipFade">${[[5, 'Fade after 5 seconds'], [10, 'Fade after 10 seconds'], [15, 'Fade after 15 seconds'], [30, 'Fade after 30 seconds'], [0, 'Stay until the intro or credits end']]
           .map(([v, l]) => html`<option value="${v}" ${playerPref('skipFade') === v ? 'selected' : ''}>${l}</option>`)}</select></label>

@@ -52,7 +52,7 @@ module.exports = function register(app) {
     const burn = burnParam(item, url);
     let finished = false;
     const run = (encoder) => {
-      const proc = media.transcode(item, { start, audioIndex, encoder, burn });
+      const proc = media.transcode(item, { start, audioIndex, encoder, burn, night: url.searchParams.get('night') === '1' });
       proc.meta = { itemId: item.id, userId: user.id, encoder: media.canCopyVideo(item.media?.video) && burn == null ? null : encoder };
       transcodes.add(proc);
       let stderr = '';
@@ -108,7 +108,7 @@ module.exports = function register(app) {
   // ?sid=<session>&audio=<track>&q=<quality, to offer just one>&mt=<token> (or at=<device token>, Roku)
   const hlsQuery = (url) => {
     const q = new URLSearchParams();
-    for (const k of ['sid', 'audio', 'burn', 'mt', 'at']) if (url.searchParams.get(k)) q.set(k, url.searchParams.get(k));
+    for (const k of ['sid', 'audio', 'burn', 'night', 'mt', 'at']) if (url.searchParams.get(k)) q.set(k, url.searchParams.get(k));
     return `?${q}`;
   };
   const hlsItem = (id, user) => {
@@ -134,7 +134,7 @@ module.exports = function register(app) {
     const item = hlsItem(id, user);
     const file = await hls.segment(item, {
       quality, sid: url.searchParams.get('sid'), audio: Math.max(0, Number(url.searchParams.get('audio')) || 0),
-      burn: burnParam(item, url), maxHeight: remoteLimit(req, item)?.maxHeight, userId: user.id,
+      burn: burnParam(item, url), night: url.searchParams.get('night') === '1', maxHeight: remoteLimit(req, item)?.maxHeight, userId: user.id,
     }, Number(m[1]));
     sendFile(req, res, file, { type: 'video/mp2t', headers: { 'Cache-Control': 'no-cache' } });
   }, 'media');

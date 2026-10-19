@@ -112,7 +112,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(`marquee:${k}`, JSON.stringify(v)); } catch { /* ignore */ } },
 };
 // Player settings saved with your account (Account → Player), so TVs and phones follow them too.
-const PLAYER_DEFAULTS = { autoplayNext: true, autoSkipIntro: false, skipFade: 10 };
+const PLAYER_DEFAULTS = { autoplayNext: true, autoSkipIntro: false, skipFade: 10, nightMode: false };
 function playerPref(k) { return state.user?.prefs?.[k] ?? PLAYER_DEFAULTS[k]; }
 async function savePlayerPrefs(change) {
   const r = await api('/api/auth/prefs', { method: 'PUT', body: change });
@@ -1120,7 +1120,7 @@ async function viewPlay({ params: [id], query }) {
   // Inside the Android app, videos open in the phone's native player (watch parties stay in the web player).
   if (window.MarqueeAndroid?.play && !partyId) {
     window.MarqueeAndroid.play(JSON.stringify({ id: item.id, start, autoplayNext: playerPref('autoplayNext'), subsOn: store.get('subsOn', false),
-      autoSkipIntro: playerPref('autoSkipIntro'), skipFade: playerPref('skipFade'), quality: store.get('quality', '') }));
+      autoSkipIntro: playerPref('autoSkipIntro'), skipFade: playerPref('skipFade'), nightMode: playerPref('nightMode'), quality: store.get('quality', '') }));
     if (state.inAppNav) history.back(); else location.replace(`#/item/${item.id}`);
     return;
   }
@@ -1225,6 +1225,7 @@ class Player {
           <select data-a="quality" title="Quality" hidden></select>
           <button class="p-btn" data-a="mute" title="Mute (m)">🔊</button>
           <input type="range" class="p-volume" min="0" max="1" step="0.05" aria-label="Volume">
+          <button class="p-btn p-hide-sm ${playerPref('nightMode') ? 'on' : ''}" data-a="night" title="Night mode: clearer dialogue, quieter loud scenes">☾</button>
           <select data-a="speed" class="p-speed" title="Playback speed (&lt; &gt;)">${[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((r) => html`<option value="${r}" ${r === 1 ? 'selected' : ''}>${r === 1 ? 'Normal' : `${r}×`}</option>`)}</select>
           ${document.pictureInPictureEnabled ? html`<button class="p-btn p-hide-sm" data-a="pip" title="Picture-in-picture (p)">⧉</button>` : ''}
           ${it.type === 'episode' && state.user.role === 'admin' ? html`<button class="p-btn p-hide-sm" data-a="intro-edit" title="Edit this episode's intro">✂</button>` : ''}
@@ -1234,6 +1235,7 @@ class Player {
       </div>`.s;
     $('#player-root').append(this.root);
     this.v = $('video', this.root);
+    if (playerPref('nightMode')) this.setNight(true);
     this.range = $('.p-range', this.root);
     this.range.max = this.duration || 0;
     this.v.volume = store.get('volume', 1);
@@ -1331,6 +1333,33 @@ class Player {
   subOptions() {
     return html`<option value="">Subtitles off</option>${this.item.subtitles.map((s) => html`<option value="${s.id}" ${s.id === this.subId ? 'selected' : ''}>${s.label}</option>`)}
       ${state.status?.subtitleSearch && ['movie', 'episode'].includes(this.item.type) ? html`<option value="__search">Search online…</option>` : ''}`;
+  }
+
+  // Night mode: rumble cut, speech lifted, loud and quiet evened out (Web Audio, so it works for
+  // direct play too). Once routed through Web Audio the video stays routed; off is a straight path.
+  setNight(on) {
+    this.night = on;
+    if (!this.audioCtx && !on) return;
+    try {
+      if (!this.audioCtx) {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const src = ctx.createMediaElementSource(this.v);
+        const hp = Object.assign(ctx.createBiquadFilter(), { type: 'highpass' }); hp.frequency.value = 90;
+        const eq = Object.assign(ctx.createBiquadFilter(), { type: 'peaking' }); eq.frequency.value = 2200; eq.Q.value = 1.2; eq.gain.value = 4;
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -28; comp.knee.value = 12; comp.ratio.value = 5; comp.attack.value = 0.008; comp.release.value = 0.22;
+        const gain = ctx.createGain(); gain.gain.value = 1.8;
+        this.audioCtx = ctx;
+        this.nightChain = [src, hp, eq, comp, gain];
+        this.v.addEventListener('play', () => ctx.resume().catch(() => {}));
+      }
+      const [src, hp, eq, comp, gain] = this.nightChain;
+      for (const n of this.nightChain) n.disconnect();
+      const out = this.audioCtx.destination;
+      if (on) { src.connect(hp); hp.connect(eq); eq.connect(comp); comp.connect(gain); gain.connect(out); } else src.connect(out);
+      this.audioCtx.resume().catch(() => {});
+    } catch { /* no Web Audio: plain sound */ }
+    $('[data-a=night]', this.root)?.classList.toggle('on', on);
   }
 
   // Episodes: the show remembers the sound and subtitle languages picked.
@@ -1936,6 +1965,7 @@ class Player {
       else if (a === 'next') this.playNext();
       else if (a === 'cancel-next') { clearInterval(this.upNextTimer); $('.p-upnext', this.root)?.remove(); }
       else if (a === 'pip') this.togglePip();
+      else if (a === 'night') { this.setNight(!this.night); savePlayerPrefs({ nightMode: this.night }).catch(() => {}); toast(this.night ? 'Night mode on: clearer dialogue, quieter loud scenes' : 'Night mode off'); }
       else if (a === 'skip-intro' && this.skipPart === 'credits') this.close(); // leaving in the credits counts as watched
       else if (a === 'skip-intro' && this.skipPart === 'recap') { this.seek(this.item.recap.end); $('[data-a=skip-intro]', this.root).hidden = true; }
       else if (a === 'skip-intro' && this.item.intro) { this.seek(this.item.intro.end); $('[data-a=skip-intro]', this.root).hidden = true; }

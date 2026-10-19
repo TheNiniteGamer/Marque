@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Build;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -550,6 +551,12 @@ final class PlayerControls {
             if (sp == a.speed) speedAt = i;
         }
         addColumn(a.getString(R.string.speed), speeds, speedAt, i -> a.setSpeed(PlayerActivity.SPEEDS[i]));
+        if (Build.VERSION.SDK_INT >= 28) {
+            List<String> sound = new ArrayList<>();
+            sound.add(a.getString(R.string.normal));
+            sound.add(a.getString(R.string.night_mode));
+            addColumn(a.getString(R.string.sound), sound, a.nightMode ? 1 : 0, i -> a.setNight(i == 1));
+        }
         if (cols.isEmpty()) return;
         panelCol = cols.size() > 1 && subs != null && subs.length() > 0 && audio != null && audio.length() > 1 ? 1 : 0;
         panelRow = chosen.get(panelCol);

@@ -136,6 +136,7 @@ body.tv .person-card:focus-visible { outline: none; }
 .shelf > .rank-card { scroll-snap-align: start; }
 .rank-num { position: absolute; left: 0; bottom: -0.06em; font: 900 clamp(110px, 12vw, 190px)/0.8 var(--display); letter-spacing: -.06em;
   color: #0b0b0b; -webkit-text-stroke: 3px #8c8c8c; pointer-events: none; }
+.player .p-btn.on { color: var(--accent); }
 .age-badge { display: inline-block; padding: 0 6px; border: 1px solid rgba(255,255,255,.55); border-radius: 3px; font-size: .85em; line-height: 1.5; color: #e6e6e6; }
 .hero-mute { position: absolute; z-index: 2; right: var(--pad); bottom: max(32%, 200px); width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.7); background: rgba(0,0,0,.3); color: #fff; cursor: pointer; display: grid; place-items: center; }
 .hero-mute svg { width: 20px; height: 20px; }

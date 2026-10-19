@@ -71,7 +71,7 @@ sub init()
     m.upNextIndex = 0
     m.tp = invalid
     m.tpAskedAt = -1000
-    m.prefs = { autoplayNext: true, autoSkipIntro: false, skipFade: 10 }
+    m.prefs = { autoplayNext: true, autoSkipIntro: false, skipFade: 10, nightMode: false }
     m.skipPart = ""
     m.skipSince = 0
     m.autoSkipped = false
@@ -113,6 +113,7 @@ sub onPlayback(event as Object)
         if p.autoplayNext <> invalid then m.prefs.autoplayNext = mqIsTrue(p.autoplayNext)
         if p.autoSkipIntro <> invalid then m.prefs.autoSkipIntro = mqIsTrue(p.autoSkipIntro)
         if p.skipFade <> invalid then m.prefs.skipFade = mqNum(p.skipFade)
+        if p.nightMode <> invalid then m.prefs.nightMode = mqIsTrue(p.nightMode)
     end if
     start()
 end sub
@@ -164,6 +165,8 @@ sub start()
     m.duration = mqNum(x.duration)
     if m.duration <= 0 and x.media <> invalid then m.duration = mqNum(x.media.duration)
     if canPlayDirectly(x) then m.mode = "direct" else m.mode = "hls"
+    ' Night mode (clearer dialogue) is done by the server, so it needs the converted stream.
+    if m.prefs.nightMode then m.mode = "hls"
     ' The sound language last picked for this show (the server converts with that track).
     pref = x.tracks
     if pref <> invalid and pref.audio <> invalid and x.audioTracks <> invalid then
@@ -225,6 +228,7 @@ sub load(at as Float)
     else
         q = "?sid=" + mqStr(m.pb.sid) + "&audio=" + m.audio.ToStr()
         if m.burn <> invalid then q = q + "&burn=" + mqStr(m.burn)
+        if m.prefs.nightMode then q = q + "&night=1"
         c.url = mqMediaUrl("/api/items/" + x.id + "/hls/master.m3u8" + q)
         c.streamFormat = "hls"
     end if
