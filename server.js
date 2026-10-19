@@ -16,6 +16,7 @@ const zlib = require('node:zlib');
 const { Store, randomId } = require('./lib/store');
 const { Scanner } = require('./lib/scanner');
 const { Auth, publicUser, canSeeLibrary, canDownload } = require('./lib/auth');
+const { canSeeTitle, allowedFor } = require('./lib/ratings');
 const { Downloader } = require('./lib/downloader');
 const media = require('./lib/media');
 const subs = require('./lib/subtitles');
@@ -224,12 +225,12 @@ function sendFile(req, res, file, { type, headers = {} } = {}) {
 // Lookups that also enforce the user's library access (hidden items look like they don't exist).
 function getItem(id, user) {
   const it = store.data.items[id];
-  if (!it || !canSeeLibrary(user, it.libraryId)) throw new HttpError(404, 'Item not found');
+  if (!canSeeTitle(store, user, it)) throw new HttpError(404, 'Item not found');
   return it;
 }
 function getShow(id, user) {
   const s = store.data.shows[id];
-  if (!s || !canSeeLibrary(user, s.libraryId)) throw new HttpError(404, 'Show not found');
+  if (!canSeeTitle(store, user, s)) throw new HttpError(404, 'Show not found');
   return s;
 }
 function getLibrary(id, user) {
@@ -248,8 +249,8 @@ function librarySummary(l, user) {
   const admin = user.role === 'admin';
   return {
     id: l.id, name: l.name, type: l.type, createdAt: l.createdAt, scannedAt: l.scannedAt || null,
-    count: l.type === 'show' ? Object.values(store.data.shows).filter((s) => s.libraryId === l.id).length : items.length,
-    episodeCount: l.type === 'show' ? items.length : undefined,
+    count: l.type === 'show' ? Object.values(store.data.shows).filter((s) => s.libraryId === l.id && allowedFor(store, user, s)).length : items.filter((i) => allowedFor(store, user, i)).length,
+    episodeCount: l.type === 'show' ? items.filter((i) => allowedFor(store, user, i)).length : undefined,
     ...(admin ? {
       paths: l.paths,
       missingPaths: l.paths.filter((p) => !fs.existsSync(p)),
@@ -315,7 +316,7 @@ async function resolveArt(kind, id, user) {
     const dur = it.media?.duration || 0;
     return media.thumbnail(it.file, path.join(THUMB_DIR, `${it.id}.jpg`), dur ? Math.min(dur * 0.15, 300) : 5).catch(() => null);
   };
-  if (item && canSeeLibrary(user, item.libraryId)) {
+  if (canSeeTitle(store, user, item)) {
     if (kind === 'thumb') return exists(item.edits?.thumb) || exists(item.meta?.still) || frame(item);
     const parentShow = item.showId && store.data.shows[item.showId];
     const showArt = (k) => parentShow && (exists(parentShow.edits?.[k]) || exists(parentShow.meta?.[k]) || exists(parentShow[k]));
@@ -323,7 +324,7 @@ async function resolveArt(kind, id, user) {
     if (kind === 'backdrop') return exists(item.edits?.backdrop) || exists(item.meta?.backdrop) || exists(item.backdrop) || showArt('backdrop') ||
       exists(item.edits?.thumb) || exists(item.meta?.still) || frame(item);
   }
-  if (show && canSeeLibrary(user, show.libraryId)) {
+  if (canSeeTitle(store, user, show)) {
     const eps = lib.episodesOf(store, show.id);
     if (kind === 'poster') return exists(show.edits?.poster) || exists(show.meta?.poster) || exists(show.poster) || frame(eps[0]);
     return exists(show.edits?.backdrop) || exists(show.meta?.backdrop) || exists(show.backdrop) || frame(eps[0]);
@@ -428,7 +429,7 @@ function remoteLimit(req, item) {
 
 function getTarget(id, user) {
   const r = matcher.resolve(id);
-  if (!canSeeLibrary(user, r.target.libraryId)) throw new HttpError(404, 'Not found');
+  if (!canSeeTitle(store, user, r.target)) throw new HttpError(404, 'Not found');
   return r;
 }
 
@@ -596,7 +597,7 @@ async function main() {
   watcher.start();
   maintenance.start();
   downloader.startAutoUpdate();
-  setTimeout(() => matcher.backfillCollections().catch((err) => console.warn('[meta]', err.message)), 60_000).unref();
+  setTimeout(() => matcher.backfillCollections().then(() => matcher.backfillRatings()).catch((err) => console.warn('[meta]', err.message)), 60_000).unref();
   backups.startSchedule();
   // With new files noticed by the folder watcher, full rescans (which look at every file) are only a
   // safety net, so they run at most every 6 hours.

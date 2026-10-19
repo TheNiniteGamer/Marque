@@ -107,6 +107,11 @@ h2 { font-size: 20px; margin: 0; }
 .hero-overview { margin: 0; font-size: clamp(15px, 1.2vw, 19px); line-height: 1.45; text-shadow: 0 1px 4px rgba(0,0,0,.6);
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+/* A maturity rating ("PG-13", "TV-Y7"), boxed as on the big streamers. */
+/* Kids profiles: a label on "Who's watching?" and by the logo. */
+.pp-kids { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); padding: 1px 8px; border-radius: 10px; background: #ffd23f; color: #111; font: 800 12px/1.5 var(--display); letter-spacing: .06em; }
+body.kids .brand::after { content: "KIDS"; margin-left: 10px; padding: 2px 9px; border-radius: 12px; background: #ffd23f; color: #111; font-size: 12px; letter-spacing: .06em; vertical-align: middle; }
+.age-badge { display: inline-block; padding: 0 6px; border: 1px solid rgba(255,255,255,.55); border-radius: 3px; font-size: .85em; line-height: 1.5; color: #e6e6e6; }
 .hero-mute { position: absolute; z-index: 2; right: var(--pad); bottom: max(32%, 200px); width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.7); background: rgba(0,0,0,.3); color: #fff; cursor: pointer; display: grid; place-items: center; }
 .hero-mute svg { width: 20px; height: 20px; }
 /* Short screens: TVs show pages at about 960×540 (the Android TV app, TV browsers), and some laptops.

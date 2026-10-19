@@ -342,7 +342,7 @@ function showPreview(card) {
         ${isEp ? html`<span>${epLabel(x).replace(' · ', ':')} · ${x.title}</span>` : ''}
         ${x.year && !isEp ? html`<span>${x.year}</span>` : ''}
         <span>${isShow ? `${x.seasonCount} season${x.seasonCount === 1 ? '' : 's'}` : fmtDuration(x.duration)}</span>
-        ${x.rating ? html`<span>★ ${x.rating}</span>` : ''}
+        ${x.contentRating ? html`<span class="age-badge">${x.contentRating}</span>` : ''}${x.rating ? html`<span>★ ${x.rating}</span>` : ''}
       </div>
       ${fmtLeft(x) ? html`<div class="hp-left">${fmtLeft(x)}</div>` : ''}
       ${x.genres?.length ? html`<div class="hp-genres">${x.genres.slice(0, 3).join(' • ')}</div>` : ''}
@@ -412,7 +412,7 @@ function heroBanner(h) {
       <div class="hero-meta">
         ${h.year ? html`<span>${h.year}</span>` : ''}
         <span>${isShow ? `${h.seasonCount} season${h.seasonCount === 1 ? '' : 's'}` : fmtDuration(h.duration)}</span>
-        ${h.rating ? html`<span>★ ${h.rating}</span>` : ''}
+        ${h.contentRating ? html`<span class="age-badge">${h.contentRating}</span>` : ''}${h.rating ? html`<span>★ ${h.rating}</span>` : ''}
         ${h.genres?.length ? html`<span>${h.genres.slice(0, 3).join(' · ')}</span>` : ''}
       </div>
       <p class="hero-overview">${h.overview}</p>
@@ -709,7 +709,7 @@ async function viewShow({ params: [id], query, seq }) {
           <span>${show.seasonCount} season${show.seasonCount === 1 ? '' : 's'}</span>
           <span>${show.episodeCount} episodes</span>
           ${show.unwatchedCount && !allWatched ? html`<span class="muted">${show.unwatchedCount} unwatched</span>` : ''}
-          ${show.rating ? html`<span>★ ${show.rating}</span>` : ''}
+          ${show.contentRating ? html`<span class="age-badge">${show.contentRating}</span>` : ''}${show.rating ? html`<span>★ ${show.rating}</span>` : ''}
         </div>
         ${resuming ? progressLine(up, `${epLabel(up).replace(' · ', ':')} · ${up.title}`) : ''}
         ${show.overview ? html`<p class="overview">${show.overview}</p>` : ''}
@@ -780,7 +780,7 @@ async function viewItem({ params: [id], seq }) {
           ${it.airDate ? html`<span>${it.airDate}</span>` : ''}
           ${it.channel ? html`<span title="Channel">${it.channel}</span>` : ''}
           ${it.duration ? html`<span>${fmtDuration(it.duration)}</span>` : ''}
-          ${it.rating ? html`<span>★ ${it.rating}</span>` : ''}
+          ${it.contentRating ? html`<span class="age-badge">${it.contentRating}</span>` : ''}${it.rating ? html`<span>★ ${it.rating}</span>` : ''}
           ${res ? html`<span class="tag">${res}</span>` : ''}
           ${p?.watched ? html`<span class="tag">✓ Watched</span>` : ''}
         </div>

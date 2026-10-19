@@ -117,7 +117,7 @@ function openModal({ title, body, footer = '', wide = false, onClose }) {
 }
 
 const KIND_LABEL = { movie: 'movie', show: 'show', episode: 'episode' };
-const FIELD_LABEL = { title: 'Title', sortTitle: 'Sort title', year: 'Year', tagline: 'Tagline', overview: 'Summary', genres: 'Genres' };
+const FIELD_LABEL = { title: 'Title', sortTitle: 'Sort title', year: 'Year', tagline: 'Tagline', overview: 'Summary', genres: 'Genres', contentRating: 'Age rating (e.g. PG, TV-Y7, 12)' };
 const ART_LABEL = { poster: 'Poster', backdrop: 'Background', thumb: 'Thumbnail' };
 
 // ---------- edit details ----------

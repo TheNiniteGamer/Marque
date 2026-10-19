@@ -2,6 +2,10 @@
 /* Marquee web client — accounts, users and downloads. Loaded before app.js; the functions here
    use helpers from app.js (html, api, $, toast, ...) only when called. */
 
+// Kids profiles: the oldest ratings a person may watch (same choices as the server's lib/ratings.js).
+const MATURITY = [[7, 'Little kids (G, TV-Y7)'], [10, 'Kids (PG, TV-PG)'], [13, 'Older kids (PG-13)'], [16, 'Teens (TV-14, 15)']];
+const maturityLabel = (age) => (MATURITY.find(([a]) => a === age) || [age, `up to age ${age}`])[1];
+
 // ---------- sign in / first-run setup ----------
 function showAuth({ setupRequired = false, message = '' } = {}) {
   closePlayer();
@@ -101,6 +105,7 @@ async function signOut() {
 function renderUserMenu() {
   const u = state.user;
   const root = $('#user-menu');
+  document.body.classList.toggle('kids', !!u && u.maxAge != null); // the "KIDS" label by the logo
   if (!u) { root.innerHTML = ''; return; }
   root.innerHTML = html`
     <button class="avatar" id="user-btn" aria-haspopup="true" aria-expanded="false" title="${u.username}" aria-label="${u.username}: account menu" style="background:${avatarColor(u.username)}">${u.username.slice(0, 1).toUpperCase()}</button>
@@ -343,7 +348,7 @@ function usersSection(users) {
             <span class="chip" style="margin-left:6px">${u.role === 'admin' ? 'Admin' : 'User'}</span></div>
           <div class="muted" style="font-size:13px">
             ${u.libraries === null ? 'All libraries' : u.libraries.length ? u.libraries.map(libName).filter(Boolean).join(', ') : 'No libraries'}
-            · Downloads ${u.canDownload ? 'allowed' : 'off'} · Last sign-in: ${fmtDate(u.lastLoginAt)}
+            · Downloads ${u.canDownload ? 'allowed' : 'off'}${u.maxAge != null ? html` · <b>Kids: ${maturityLabel(u.maxAge)}</b>` : ''} · Last sign-in: ${fmtDate(u.lastLoginAt)}
           </div>
         </div>
         <div class="row">
@@ -391,6 +396,13 @@ function showUserForm(user = null) {
         <label class="check"><input type="checkbox" name="canDownload" ${user?.canDownload ? 'checked' : ''}> Can download videos (YouTube downloader)</label>
         <label class="check"><input type="checkbox" name="noPin" ${user?.noPin ? 'checked' : ''}> Show on “Who's watching?” without a PIN (e.g. for children)</label>
       </fieldset>
+      <fieldset class="access" id="age-fields">
+        <legend>Maturity (kids profiles)</legend>
+        <label>Can watch
+          <select name="maxAge">${[[null, 'Everything'], ...MATURITY].map(([v, l]) => html`<option value="${v ?? ''}" ${(user?.maxAge ?? null) === v ? 'selected' : ''}>${l}</option>`)}</select></label>
+        <label class="check"><input type="checkbox" name="allowUnrated" ${user?.allowUnrated !== false ? 'checked' : ''}> Also titles without a rating (YouTube, home videos, titles not matched online)</label>
+        <p class="muted" style="margin:0;font-size:13px">Titles rated above this are hidden for this person everywhere: home, libraries, search and the TV apps. Ratings come from TMDB (G, PG, TV-Y7…); set one by hand in a title's ⋯ → Edit.</p>
+      </fieldset>
       <p class="muted" id="admin-note" style="margin:0;font-size:13px" hidden>Administrators can see every library and use all features.</p>
       <div class="form-error" id="user-error"></div>
       <div class="row"><button class="btn primary" type="submit">${user ? 'Save' : 'Create user'}</button><button class="btn" type="button" id="user-cancel">Cancel</button></div>
@@ -400,6 +412,7 @@ function showUserForm(user = null) {
   const sync = () => {
     const admin = f.role.value === 'admin';
     $('#access-fields').disabled = admin;
+    $('#age-fields').disabled = admin;
     $('#admin-note').hidden = !admin;
     $$('input[name=lib]', form).forEach((c) => { c.disabled = admin || f.access.value !== 'some'; });
   };
@@ -413,6 +426,8 @@ function showUserForm(user = null) {
       libraries: f.access.value === 'all' ? null : $$('input[name=lib]:checked', form).map((c) => c.value),
       canDownload: f.canDownload.checked,
       noPin: f.noPin.checked,
+      maxAge: f.maxAge.value === '' ? null : Number(f.maxAge.value),
+      allowUnrated: f.allowUnrated.checked,
     };
     if (!self) body.role = f.role.value;
     if (f.password.value) body.password = f.password.value;
@@ -605,7 +620,7 @@ async function showProfilePicker({ atStart = false } = {}) {
       <h1>Who's watching?</h1>
       <div class="pp-list">${list.map((p) => html`<button class="pp-profile ${p.id === data.current ? 'current' : ''}" data-pid="${p.id}">
         <span class="pp-avatar" style="background:${avatarColor(p.username)}">${p.username.slice(0, 1).toUpperCase()}${p.needsPin && p.id !== data.current
-          ? html`<span class="pp-lock" title="Needs a PIN">${icon('lock')}</span>` : ''}</span><span>${p.username}</span></button>`)}</div>
+          ? html`<span class="pp-lock" title="Needs a PIN">${icon('lock')}</span>` : ''}${p.kids ? html`<span class="pp-kids">KIDS</span>` : ''}</span><span>${p.username}</span></button>`)}</div>
       <form class="pp-pin" hidden><label>PIN for <b class="pp-name"></b>
         <input class="input" name="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off"></label>
         <div class="row"><button class="btn primary">Continue</button><button class="btn" type="button" data-pp="back">Back</button></div>
