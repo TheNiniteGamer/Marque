@@ -238,6 +238,14 @@ module.exports = function register(app) {
     sendFile(req, res, file, { headers: { 'Cache-Control': 'private, max-age=604800' } });
   }, 'media');
 
+  // --- thumbs up / down (a film or show; an episode counts for its show) ---
+  route('PUT', '/api/thumbs/:id', async (req, res, { id }, url, user) => {
+    const { target } = getTarget(id, user);
+    const body = await readBody(req);
+    const key = target.type === 'episode' ? target.showId : target.id;
+    json(res, 200, { thumb: lib.setThumb(store, user, key, Number(body?.value) || 0) });
+  });
+
   // --- the sound / subtitle languages a person picked, remembered per show ---
   route('PUT', '/api/items/:id/tracks', async (req, res, { id }, url, user) => {
     const it = getItem(id, user);

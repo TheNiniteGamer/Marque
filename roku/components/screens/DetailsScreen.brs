@@ -54,6 +54,7 @@ sub onLoaded(event as Object)
     else
         parts.Push(mqDuration(x.duration))
     end if
+    if x.contentRating <> invalid then parts.Push(mqStr(x.contentRating))
     if x.rating <> invalid then parts.Push("★ " + mqStr(x.rating))
     m.meta.text = parts.Join("   ")
     m.overview.text = mqStr(x.overview)
@@ -96,6 +97,10 @@ sub onLoaded(event as Object)
     end if
     if kind = "show" or kind = "movie" then
         if mqIsTrue(x.inWatchlist) then m.actions.Push({ label: "Remove from My List", act: "list" }) else m.actions.Push({ label: "Add to My List", act: "list" })
+        ' Thumbs up / down (pressing the chosen one again clears it).
+        thumb = mqNum(x.thumb)
+        if thumb = 1 then m.actions.Push({ label: "Liked (undo)", act: "thumb", value: 0 }) else m.actions.Push({ label: "I like this", act: "thumb", value: 1 })
+        if thumb = -1 then m.actions.Push({ label: "Not for me (undo)", act: "thumb", value: 0 }) else m.actions.Push({ label: "Not for me", act: "thumb", value: -1 })
     end if
     watched = false
     if kind = "show" then
@@ -131,6 +136,8 @@ sub onButton()
         method = "PUT"
         if mqIsTrue(x.inWatchlist) then method = "DELETE"
         mqApi("/api/watchlist/" + x.id, "onChanged", method)
+    else if a.act = "thumb" then
+        mqApi("/api/thumbs/" + x.id, "onChanged", "PUT", { value: a.value })
     else if a.act = "watched" then
         if x.type = "show" then
             mqApi("/api/shows/" + x.id + "/watched", "onChanged", "POST", { watched: not m.watched })

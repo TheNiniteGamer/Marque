@@ -78,6 +78,8 @@ const ICONS = {
   stack: '<rect x="3" y="7" width="14" height="13" rx="1.5"/><path d="M7 4h13a1 1 0 011 1v12"/>',
   link: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
+  up: '<path d="M7 11v9H4v-9zM7 11l4-8a2 2 0 012.6 2.4L12.5 9H18a2 2 0 012 2.3l-1.2 7A2 2 0 0116.8 20H7"/>',
+  down: '<path d="M7 13V4H4v9zM7 13l4 8a2 2 0 002.6-2.4L12.5 15H18a2 2 0 002-2.3l-1.2-7A2 2 0 0016.8 4H7"/>',
 };
 const icon = (name) => raw(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`);
 // A steady colour per person for avatars and profile squares.
@@ -582,7 +584,9 @@ async function viewLibrary({ params: [id], query, seq }) {
 // Buttons shared by the pop-ups: My List and the ⋯ menu (edit, fix match, collections… for admins).
 function listButton(x) {
   if (x.type === 'episode' || x.type === 'extra') return '';
-  return html`<button class="round" id="list-toggle" aria-label="${x.inWatchlist ? 'Remove from My List' : 'Add to My List'}" title="${x.inWatchlist ? 'Remove from My List' : 'Add to My List'}">${icon(x.inWatchlist ? 'check' : 'plus')}</button>`;
+  return html`<button class="round" id="list-toggle" aria-label="${x.inWatchlist ? 'Remove from My List' : 'Add to My List'}" title="${x.inWatchlist ? 'Remove from My List' : 'Add to My List'}">${icon(x.inWatchlist ? 'check' : 'plus')}</button>
+    <button class="round thumb ${x.thumb === 1 ? 'on' : ''}" data-thumb="1" aria-pressed="${x.thumb === 1}" aria-label="I like this" title="I like this">${icon('up')}</button>
+    <button class="round thumb ${x.thumb === -1 ? 'on' : ''}" data-thumb="-1" aria-pressed="${x.thumb === -1}" aria-label="Not for me" title="Not for me (keeps it out of suggestions)">${icon('down')}</button>`;
 }
 function dlgTop(x) {
   knownItems.set(x.id, x);
@@ -593,6 +597,17 @@ function dlgTop(x) {
 }
 function bindDetailActions(x) {
   if ($('#list-toggle')) $('#list-toggle').onclick = () => toggleWatchlist(x).catch((err) => toast(err.message, true));
+  // Thumbs up / down: pressing the lit one again clears it.
+  for (const b of $$('[data-thumb]', viewEl)) {
+    b.onclick = async () => {
+      const want = Number(b.dataset.thumb) === x.thumb ? 0 : Number(b.dataset.thumb);
+      try {
+        x.thumb = (await api(`/api/thumbs/${x.id}`, { method: 'PUT', body: { value: want } })).thumb;
+        for (const o of $$('[data-thumb]', viewEl)) { const on = Number(o.dataset.thumb) === x.thumb; o.classList.toggle('on', on); o.setAttribute('aria-pressed', String(on)); }
+        toast(x.thumb === 1 ? 'Thanks — more like this' : x.thumb === -1 ? "Got it — we won't suggest this" : 'Rating removed');
+      } catch (err) { toast(err.message, true); }
+    };
+  }
   $('#dlg-close').onclick = closeDetail;
 }
 // Genres, cast, collections and library, on the right of the pop-up.

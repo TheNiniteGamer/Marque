@@ -113,6 +113,7 @@ sub showInfo(item as Dynamic)
     parts = []
     if item.year <> invalid then parts.Push(mqStr(item.year))
     if kind = "show" then parts.Push(mqStr(item.seasonCount) + " seasons") else parts.Push(mqDuration(item.duration))
+    if item.contentRating <> invalid then parts.Push(mqStr(item.contentRating))
     if item.rating <> invalid then parts.Push("★ " + mqStr(item.rating))
     left = mqTimeLeft(item)
     if left <> "" then parts.Push(left)
