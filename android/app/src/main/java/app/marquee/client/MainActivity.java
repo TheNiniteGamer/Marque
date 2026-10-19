@@ -1,6 +1,7 @@
 package app.marquee.client;
 
 import android.app.Activity;
+import android.app.SearchManager;
 import android.app.DownloadManager;
 import android.app.UiModeManager;
 import android.content.ActivityNotFoundException;
@@ -11,6 +12,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.speech.RecognizerIntent;
+import android.view.KeyEvent;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
@@ -34,6 +37,7 @@ import android.widget.Toast;
 public class MainActivity extends Activity {
     private static final int REQ_FILE = 1;
     private static final int REQ_PLAYER = 2;
+    private static final int REQ_VOICE = 3;
 
     private WebView web;
     private View errorView;
@@ -71,11 +75,47 @@ public class MainActivity extends Activity {
         web.setWebChromeClient(new Chrome(this));
         web.setDownloadListener(this::download);
 
+        String asked = searchQuery(getIntent());
         if (state != null) web.restoreState(state);
-        else web.loadUrl(startUrl());
+        else web.loadUrl(asked != null ? startUrl() + "#/search?q=" + Uri.encode(asked) : startUrl());
         if (tv) web.requestFocus();
         // A newer app on the server? (Asks once per version; Account → Check for updates any time.)
         if (state == null) Updater.check(this, base, false);
+    }
+
+    /** "Hey Google, search Marquee for …" (or the system search) opening the app. */
+    private static String searchQuery(Intent i) {
+        if (i == null || i.getAction() == null) return null;
+        if (!Intent.ACTION_SEARCH.equals(i.getAction()) && !"com.google.android.gms.actions.SEARCH_ACTION".equals(i.getAction())) return null;
+        String q = i.getStringExtra(SearchManager.QUERY);
+        return q != null && !q.trim().isEmpty() ? q.trim() : null;
+    }
+
+    private void showSearch(String q) {
+        if (web != null) web.evaluateJavascript("window.marqueeVoiceResult && window.marqueeVoiceResult(" + org.json.JSONObject.quote(q) + ")", null);
+    }
+
+    /** Listens with Android's speech recogniser (on a TV: the Google app's voice search). */
+    void startVoice() {
+        Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, getString(R.string.voice_prompt))
+            .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        try {
+            startActivityForResult(i, REQ_VOICE);
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(this, R.string.voice_unavailable, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    // The remote's search key starts voice search.
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent e) {
+        if (e.getKeyCode() == KeyEvent.KEYCODE_SEARCH && web != null && errorView.getVisibility() != View.VISIBLE) {
+            if (e.getAction() == KeyEvent.ACTION_UP) startVoice();
+            return true;
+        }
+        return super.dispatchKeyEvent(e);
     }
 
     private String startUrl() { return base + (tv ? "/?tv=1" : "/"); }
@@ -126,6 +166,9 @@ public class MainActivity extends Activity {
         if (requestCode == REQ_FILE && fileCallback != null) {
             fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
             fileCallback = null;
+        } else if (requestCode == REQ_VOICE) {
+            java.util.ArrayList<String> heard = data != null ? data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS) : null;
+            if (resultCode == RESULT_OK && heard != null && !heard.isEmpty()) showSearch(heard.get(0));
         } else if (requestCode == REQ_PLAYER && web != null) {
             // Let the page refresh progress / Continue Watching.
             web.evaluateJavascript("window.dispatchEvent(new Event('marquee-native-closed'))", null);
@@ -156,7 +199,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        Updater.onStatus(this, intent);
+        if (Updater.onStatus(this, intent)) return;
+        String q = searchQuery(intent);
+        if (q != null) showSearch(q);
     }
 
     @Override
@@ -252,6 +297,12 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String version() {
             return a.appVersion();
+        }
+
+        /** The mic button by the search box. */
+        @JavascriptInterface
+        public void voiceSearch() {
+            a.runOnUiThread(a::startVoice);
         }
 
         /** Account → Check for updates. */

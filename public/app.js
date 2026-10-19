@@ -74,6 +74,7 @@ const ICONS = {
   sound: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 8.5a5 5 0 010 7M19.5 6a8.5 8.5 0 010 12"/>',
   home: '<path d="M12 3l9 8h-3v9h-5v-6h-2v6H6v-9H3z" fill="currentColor" stroke="none"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
   stack: '<rect x="3" y="7" width="14" height="13" rx="1.5"/><path d="M7 4h13a1 1 0 011 1v12"/>',
   link: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/>',
@@ -162,6 +163,16 @@ function openSearch() { $('#search-form').classList.add('open'); $('#search-inpu
 $('#search-btn').addEventListener('click', openSearch);
 $('#search-input').addEventListener('blur', () => { if (!$('#search-input').value) $('#search-form').classList.remove('open'); });
 document.addEventListener('click', (e) => { if (e.target.closest('[data-tab="search"]')) openSearch(); });
+// Voice search: the Android TV app listens (the mic button, the remote's search key, or "Hey Google,
+// search Marquee for…") and hands back what was said.
+const voiceSearch = () => window.MarqueeAndroid?.voiceSearch?.();
+$('#voice-btn').hidden = !(tv.on && window.MarqueeAndroid?.voiceSearch);
+$('#voice-btn').addEventListener('click', voiceSearch);
+document.addEventListener('click', (e) => { if (e.target.closest('[data-voice]')) voiceSearch(); });
+window.marqueeVoiceResult = (text) => {
+  const q = String(text || '').trim();
+  if (q) location.hash = `#/search?q=${encodeURIComponent(q)}`;
+};
 // The bar is see-through over the banner and turns solid once the page scrolls.
 window.addEventListener('scroll', () => document.body.classList.toggle('scrolled', window.scrollY > 10), { passive: true });
 
@@ -864,7 +875,10 @@ async function viewSearch({ query, seq }) {
   const q = query.get('q') || '';
   if ($('#search-input') !== document.activeElement) $('#search-input').value = q;
   if (q) $('#search-form').classList.add('open');
-  if (!q.trim()) return setView(seq, html`<div class="empty">Type to search your libraries.</div>`);
+  if (!q.trim()) {
+    return setView(seq, $('#voice-btn').hidden ? html`<div class="empty">Type to search your libraries.</div>`
+      : html`<div class="empty">Type to search your libraries, or <button class="btn" data-voice>${icon('mic')} Search by voice</button></div>`);
+  }
   const r = await api(`/api/search?q=${encodeURIComponent(q)}`);
   const total = r.movies.length + r.shows.length + r.episodes.length;
   if (!setView(seq, html`

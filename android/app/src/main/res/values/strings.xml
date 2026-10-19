@@ -72,4 +72,6 @@
     <string name="adaptive_failed">Adaptive streaming didn\'t work on this phone — playing the original instead.</string>
     <string name="sound">Sound</string>
     <string name="night_mode">Night mode</string>
+    <string name="voice_prompt">What would you like to watch?</string>
+    <string name="voice_unavailable">Voice search isn\'t available on this device</string>
 </resources>
