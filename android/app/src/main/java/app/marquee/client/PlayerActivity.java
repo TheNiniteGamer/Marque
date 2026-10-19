@@ -243,7 +243,7 @@ public class PlayerActivity extends Activity {
 
         subId = null;
         cues = new ArrayList<>();
-        subs.setText("");
+        showSubtitle("");
         JSONArray list = it.optJSONArray("subtitles");
         if (subsOn && list != null && list.length() > 0) {
             // Text subtitles first: picture ones (Blu-ray / DVD) need the video converted.
@@ -403,7 +403,7 @@ public class PlayerActivity extends Activity {
             int buffered = video.getBufferPercentage();
             if (seekable() && duration > 0) seek.setSecondaryProgress((int) (duration * buffered / 100));
         }
-        subs.setText(cues.isEmpty() ? "" : Vtt.textAt(cues, (long) (t * 1000)));
+        showSubtitle(cues.isEmpty() ? "" : Vtt.textAt(cues, (long) (t * 1000)));
         updateIntro(t);
         updatePlayIcon();
         if (System.currentTimeMillis() - lastReport > 10000) report(); // also while paused
@@ -449,6 +449,13 @@ public class PlayerActivity extends Activity {
             if (tvUi != null) tvUi.showUpNext(n, false);
             else showUpNext(n, autoplayNext ? 10 : -1, true);
         }
+    }
+
+    /** The subtitle line; the box (with its dark background) is hidden when there's nothing to show. */
+    private void showSubtitle(String text) {
+        if (text == null) text = "";
+        if (!text.contentEquals(subs.getText())) subs.setText(text);
+        subs.setVisibility(text.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     private String label(double t) { return PlaybackPlan.clock(t) + " / " + PlaybackPlan.clock(duration); }
@@ -543,7 +550,7 @@ public class PlayerActivity extends Activity {
     private void setSubtitles(String id, boolean reopen) {
         subId = id;
         cues = new ArrayList<>();
-        subs.setText("");
+        showSubtitle("");
         // Picture subtitles are drawn into the video by the server, so switching them changes the stream.
         int newBurn = -1;
         JSONArray list = item.optJSONArray("subtitles");

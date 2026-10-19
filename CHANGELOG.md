@@ -4,6 +4,12 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.7.7
+
+- **Android TV / Android player:** the empty dark box at the bottom of the picture is gone. It was
+  the subtitle box, which showed its background even with no subtitle on screen; it now only
+  appears while a subtitle line is showing. (Android TV app 1.1.1, phone app 1.5.1.)
+
 ## 0.7.6
 
 **Android TV player redone** to work like the Roku one (Android TV app 1.1.0: install the new
