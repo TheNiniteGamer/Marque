@@ -13,7 +13,9 @@ sub init()
     m.libraries = []
     m.focus = m.rows
     m.top.observeField("focusedChild", "onFocusChange")
-    m.heroButtons.observeField("buttonSelected", "onHeroButton")
+    m.heroIndex = 0
+    m.heroCount = 0
+    m.heroButtons.observeField("focusedChild", "paintHeroButtons")
     m.rows.observeField("rowItemFocused", "onRowFocused")
     m.rows.observeField("rowItemSelected", "onRowSelected")
     m.menuList.observeField("itemSelected", "onMenuSelected")
@@ -58,8 +60,8 @@ sub onHome(event as Object)
     m.rows.content = root
     if m.hero <> invalid then
         labels = ["More info"]
-        if m.hero.play <> invalid then labels = [mqStr(m.hero.play.label), "More info"]
-        m.heroButtons.buttons = labels
+        if m.hero.play <> invalid then labels = ["▶  " + mqStr(m.hero.play.label), "More info"]
+        setHeroButtons(labels)
         m.heroButtons.visible = true
     else
         m.heroButtons.visible = false
@@ -147,9 +149,43 @@ sub open(item as Object)
     end if
 end sub
 
-sub onHeroButton()
+sub setHeroButtons(labels as Object)
+    m.heroCount = labels.Count()
+    if m.heroIndex >= m.heroCount then m.heroIndex = 0
+    for i = 0 to 1
+        m.top.findNode("hb" + i.ToStr()).visible = i < m.heroCount
+        if i < m.heroCount then
+            text = m.top.findNode("hbText" + i.ToStr())
+            text.text = labels[i]
+            w = text.boundingRect().width
+            if w < 40 then w = Len(labels[i]) * 22
+            m.top.findNode("hbBg" + i.ToStr()).width = w + 80
+        end if
+    end for
+    paintHeroButtons()
+end sub
+
+' The highlighted button is white, the other grey. While moving through the rows the top shows the
+' highlighted title instead, so the banner's buttons are hidden until you go back up.
+sub paintHeroButtons()
+    focused = m.heroButtons.hasFocus()
+    if focused then m.heroButtons.opacity = 1.0 else m.heroButtons.opacity = 0.0
+    for i = 0 to m.heroCount - 1
+        on = focused and i = m.heroIndex
+        bg = m.top.findNode("hbBg" + i.ToStr())
+        text = m.top.findNode("hbText" + i.ToStr())
+        if on then
+            bg.color = "0xFFFFFFFF"
+            text.color = "0x000000FF"
+        else
+            bg.color = "0x6D6D6EB3"
+            text.color = "0xFFFFFFFF"
+        end if
+    end for
+end sub
+
+sub onHeroButton(i as Integer)
     if m.hero = invalid then return
-    i = m.heroButtons.buttonSelected
     if m.hero.play <> invalid and i = 0 then
         start = -1
         if m.hero.play.t <> invalid then start = 0
@@ -207,6 +243,22 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         end if
         return false
     end if
+    if m.heroButtons.hasFocus() then
+        if key = "left" and m.heroIndex > 0 then
+            m.heroIndex = m.heroIndex - 1
+            paintHeroButtons()
+            return true
+        else if key = "right" then
+            if m.heroIndex < m.heroCount - 1 then
+                m.heroIndex = m.heroIndex + 1
+                paintHeroButtons()
+            end if
+            return true
+        else if key = "OK" then
+            onHeroButton(m.heroIndex)
+            return true
+        end if
+    end if
     if key = "left" then
         openMenu()
         return true
@@ -218,12 +270,14 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     if key = "down" and m.heroButtons.hasFocus() then
         m.focus = m.rows
         m.rows.setFocus(true)
+        paintHeroButtons()
         onRowFocused()
         return true
     end if
     if key = "up" and m.rows.hasFocus() and m.hero <> invalid then
         m.focus = m.heroButtons
         m.heroButtons.setFocus(true)
+        paintHeroButtons()
         showInfo(m.hero)
         return true
     end if

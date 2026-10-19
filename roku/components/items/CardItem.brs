@@ -17,6 +17,10 @@ sub onSize()
     m.bg.height = h
     m.art.width = w
     m.art.height = h
+    ' Crop to fill the card (Roku only keeps the picture's shape when the load size is set).
+    m.art.loadWidth = w
+    m.art.loadHeight = h
+    m.top.clippingRect = [0, 0, w, h]
     m.scrim.width = w
     m.scrim.height = h * 0.65
     m.scrim.translation = [0, h * 0.35]

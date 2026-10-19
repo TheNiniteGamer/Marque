@@ -7,16 +7,16 @@
     <field id="refresh" type="boolean" onChange="onRefresh" />
   </interface>
   <children>
-    <Poster id="backdrop" width="1920" height="1080" loadDisplayMode="scaleToZoom" />
+    <Poster id="backdrop" width="1920" height="1080" loadWidth="1920" loadHeight="1080" loadDisplayMode="scaleToZoom" />
     <Poster uri="pkg:/images/fade_left.png" width="1920" height="1080" />
     <Poster uri="pkg:/images/fade_bottom.png" translation="[0,560]" width="1920" height="520" />
-    <Group translation="[96,110]">
+    <LayoutGroup translation="[96,100]" itemSpacings="[10,18,8,14]">
       <Label id="eyebrow" color="0xE6E6E6FF" font="font:SmallBoldSystemFont" />
-      <Label id="title" translation="[0,40]" width="1100" wrap="true" maxLines="2" color="0xFFFFFFFF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="80" /></Label>
-      <Label id="meta" translation="[0,230]" width="1100" color="0xDEDEDEFF" font="font:MediumBoldSystemFont" />
-      <Label id="progress" translation="[0,280]" width="1100" color="0xBDBDBDFF" font="font:SmallSystemFont" />
-      <Label id="overview" translation="[0,325]" width="1000" wrap="true" maxLines="4" color="0xE6E6E6FF" font="font:MediumSystemFont" />
-    </Group>
+      <Label id="title" width="1100" wrap="true" maxLines="2" color="0xFFFFFFFF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="72" /></Label>
+      <Label id="meta" width="1100" color="0xDEDEDEFF" font="font:MediumBoldSystemFont" />
+      <Label id="progress" width="1100" color="0xBDBDBDFF" font="font:SmallSystemFont" />
+      <Label id="overview" width="1000" wrap="true" maxLines="3" color="0xE6E6E6FF" font="font:MediumSystemFont" />
+    </LayoutGroup>
     <ButtonGroup id="buttons" translation="[96,640]" minWidth="460" buttonHeight="70" itemSpacings="[12]"
       textColor="0xFFFFFFFF" focusedTextColor="0x000000FF" focusBitmapUri="pkg:/images/white.png" focusFootprintBitmapUri="pkg:/images/grey.png"
       iconUri="" focusedIconUri="" textFont="font:MediumBoldSystemFont" focusedTextFont="font:MediumBoldSystemFont" />
