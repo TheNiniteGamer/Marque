@@ -2,6 +2,7 @@
 // Sign-in, "Who's watching?" profiles and user accounts.
 // Registered by server.js, which passes the shared helpers and services in `app`.
 
+const os = require('node:os');
 const { playerPrefs, cleanPrefs } = require('../lib/auth');
 
 module.exports = function register(app) {
@@ -12,7 +13,12 @@ module.exports = function register(app) {
 
   // --- auth ---
   // Public: also used by the Android app to recognise Marquee servers on the network.
-  route('GET', '/api/health', async (req, res) => json(res, 200, { ok: true, name: 'Marquee', version: require('../package.json').version }), 'public');
+  // `server`: the PC's name, so TVs and phones looking for Marquee on the network can show which one it is.
+  const serverName = (() => {
+    const n = (process.env.MARQUEE_NAME || os.hostname() || '').trim();
+    return n && !/^[0-9a-f]{12}$/.test(n) ? n.slice(0, 60) : null; // (a Docker container's id isn't a name)
+  })();
+  route('GET', '/api/health', async (req, res) => json(res, 200, { ok: true, name: 'Marquee', version: require('../package.json').version, server: serverName }), 'public');
 
   route('GET', '/api/auth/me', async (req, res, p, url, user) => {
     if (!user) return json(res, 401, { error: 'Not signed in', setupRequired: !auth.hasUsers() });

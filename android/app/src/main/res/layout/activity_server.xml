@@ -30,11 +30,36 @@
         android:textColor="@color/muted"
         android:textSize="14sp" />
 
+    <TextView
+        android:id="@+id/status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:textColor="@color/muted"
+        android:textSize="14sp" />
+
+    <ListView
+        android:id="@+id/servers"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_weight="1"
+        android:divider="@color/line"
+        android:dividerHeight="1dp"
+        android:listSelector="@drawable/server_row" />
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/or_type"
+        android:textColor="@color/muted"
+        android:textSize="14sp" />
+
     <EditText
         android:id="@+id/address"
         android:layout_width="match_parent"
         android:layout_height="52dp"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="8dp"
         android:background="@drawable/input_bg"
         android:hint="@string/address_hint"
         android:imeOptions="actionGo"
@@ -68,20 +93,4 @@
         android:textColor="@color/text"
         android:textSize="16sp" />
 
-    <TextView
-        android:id="@+id/status"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:textColor="@color/muted"
-        android:textSize="14sp" />
-
-    <ListView
-        android:id="@+id/servers"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="8dp"
-        android:layout_weight="1"
-        android:divider="@color/line"
-        android:dividerHeight="1dp" />
 </LinearLayout>

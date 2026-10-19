@@ -22,8 +22,9 @@ To update, upload the new zip the same way (it replaces the old one).
 
 ## Sign in
 
-1. Marquee looks for the server on your network (port 32500). Pick it, or choose *Type the server's address*
-   and enter it (e.g. `192.168.1.20:32500`).
+1. Marquee looks for servers on your network as soon as it opens (port 32500), listing each one
+   as it answers, e.g. *Marquee on Living room PC · 192.168.1.20*. Pick yours. If it isn't found,
+   choose *Search again* or *Type the server's address* (e.g. `192.168.1.20:32500`).
 2. The TV shows a **code**. On your phone or computer, open Marquee → **Account** →
    **Watch on a TV**, type the code and press *Link TV*. The Roku signs in as you within a few
    seconds and stays signed in (unlink it on that page to sign it out).

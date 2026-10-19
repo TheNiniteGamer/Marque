@@ -16,7 +16,14 @@ import java.util.concurrent.TimeUnit;
 public final class Discovery {
     public static final class Found {
         public final String url, name, version;
-        Found(String url, String name, String version) { this.url = url; this.name = name; this.version = version; }
+        /** The PC's name (empty from older servers). */
+        public final String server;
+        Found(String url, String name, String version, String server) { this.url = url; this.name = name; this.version = version; this.server = server; }
+        /** "Marquee on Living room PC · 192.168.1.20" for lists. */
+        public String label() {
+            String host = url.replace("http://", "").replace(":" + ServerAddress.DEFAULT_PORT, "");
+            return (server.isEmpty() ? "Marquee" : "Marquee on " + server) + "  ·  " + host;
+        }
     }
 
     public interface Listener { void onFound(Found f); }
@@ -45,7 +52,8 @@ public final class Discovery {
             if (!o.optBoolean("ok", false)) return null;
             String name = o.optString("name", "Marquee");
             if (!name.isEmpty() && !name.equals("Marquee")) return null;
-            return new Found(url, "Marquee", o.optString("version", ""));
+            String server = o.isNull("server") ? "" : o.optString("server", "");
+            return new Found(url, "Marquee", o.optString("version", ""), server);
         } catch (Exception e) {
             return null;
         }

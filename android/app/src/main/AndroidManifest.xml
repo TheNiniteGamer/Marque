@@ -27,7 +27,7 @@
         <activity
             android:name=".ServerActivity"
             android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="adjustResize|stateHidden" />
 
         <activity
             android:name=".PlayerActivity"

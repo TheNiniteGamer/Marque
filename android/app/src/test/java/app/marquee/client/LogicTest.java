@@ -59,6 +59,9 @@ public class LogicTest {
     @Test public void healthParsing() {
         assertNotNull(Discovery.parseHealth("u", "{\"ok\":true,\"name\":\"Marquee\",\"version\":\"0.1.0\"}"));
         assertNotNull(Discovery.parseHealth("u", "{\"ok\":true}")); // older servers
+        assertEquals("Marquee on Den PC  ·  192.168.1.20",
+            Discovery.parseHealth("http://192.168.1.20:32500", "{\"ok\":true,\"name\":\"Marquee\",\"server\":\"Den PC\"}").label());
+        assertEquals("Marquee  ·  192.168.1.20", Discovery.parseHealth("http://192.168.1.20:32500", "{\"ok\":true,\"server\":null}").label());
         assertNull(Discovery.parseHealth("u", "{\"ok\":true,\"name\":\"SomethingElse\"}"));
         assertNull(Discovery.parseHealth("u", "<html>"));
         assertNull(Discovery.parseHealth("u", "{\"ok\":false}"));

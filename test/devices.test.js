@@ -13,7 +13,7 @@ let srv, admin, movieId;
 test.before(async () => {
   clip(path.join(ROOT, 'Movies', 'Heat (1995)', 'Heat (1995).mp4'));
   clip(path.join(ROOT, 'Movies', 'Heat (1995)', 'Heat (1995)-trailer.mp4'));
-  srv = await startServer({ DATA_DIR: path.join(ROOT, 'data'), AUTO_LIBRARIES: `Movies:movie:${path.join(ROOT, 'Movies')}` });
+  srv = await startServer({ MARQUEE_NAME: 'Living room PC', DATA_DIR: path.join(ROOT, 'data'), AUTO_LIBRARIES: `Movies:movie:${path.join(ROOT, 'Movies')}` });
   admin = srv.client();
   await admin('POST', '/api/auth/setup', { username: 'admin', password: 'password1' });
   await until(async () => (await admin('GET', '/api/libraries')).data[0]?.scannedAt);
@@ -83,4 +83,10 @@ test('player settings follow the account to every device', async () => {
   assert.equal((await admin('GET', '/api/auth/me')).data.user.prefsSaved, true);
   // Players (the Roku's included) get them with the playback details.
   assert.deepEqual((await admin('GET', `/api/items/${movieId}/playback`)).data.prefs, { autoplayNext: false, autoSkipIntro: false, skipFade: 5 });
+});
+
+test('TVs looking for Marquee on the network see which PC it is', async () => {
+  const h = await (await call('GET', '/api/health')).json();
+  assert.equal(h.name, 'Marquee');
+  assert.equal(h.server, 'Living room PC');
 });

@@ -33,7 +33,7 @@
             android:name="app.marquee.client.ServerActivity"
             android:exported="false"
             android:screenOrientation="landscape"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="adjustResize|stateHidden" />
 
         <activity
             android:name="app.marquee.client.PlayerActivity"

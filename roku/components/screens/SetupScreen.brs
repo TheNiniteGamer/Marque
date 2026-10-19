@@ -2,24 +2,41 @@ sub init()
     m.status = m.top.findNode("status")
     m.list = m.top.findNode("list")
     m.found = []
+    m.searching = false
     m.top.observeField("focusedChild", "onFocusChange")
     m.list.observeField("itemSelected", "onSelected")
-    fillList()
-    m.discover = CreateObject("roSGNode", "DiscoverTask")
-    m.discover.observeField("found", "onFound")
-    m.discover.control = "RUN"
+    search()
 end sub
 
 sub onFocusChange()
     if m.top.hasFocus() then m.list.setFocus(true)
 end sub
 
+' Looks through the network; servers appear in the list as they answer.
+sub search()
+    m.found = []
+    m.searching = true
+    m.status.text = "Looking for Marquee on your network…"
+    fillList()
+    m.discover = CreateObject("roSGNode", "DiscoverTask")
+    m.discover.observeField("found", "onFound")
+    m.discover.observeField("checked", "onProgress")
+    m.discover.observeField("finished", "onFinished")
+    m.discover.control = "RUN"
+end sub
+
+' Found servers first ("Marquee on Living room PC · 192.168.1.20"), then the other choices.
 sub fillList()
     root = CreateObject("roSGNode", "ContentNode")
     for each f in m.found
         n = root.createChild("ContentNode")
-        n.title = "Marquee at " + f.url.Replace("http://", "")
+        host = f.url.Replace("http://", "").Replace(":32500", "")
+        if f.server <> "" then n.title = "Marquee on " + f.server + "   ·   " + host else n.title = "Marquee   ·   " + host
     end for
+    if not m.searching then
+        n = root.createChild("ContentNode")
+        n.title = "Search again"
+    end if
     n = root.createChild("ContentNode")
     n.title = "Type the server's address"
     m.list.content = root
@@ -27,20 +44,47 @@ end sub
 
 sub onFound()
     m.found = m.discover.found
-    if m.found.Count() = 0 then
-        m.status.text = "No Marquee server was found on this network. Type its address: it's shown on the PC running Marquee, e.g. 192.168.1.20:32500."
-    else if m.found.Count() = 1 then
+    fillList()
+    m.list.jumpToItem = 0
+    showStatus()
+end sub
+
+sub onProgress()
+    if m.searching then showStatus()
+end sub
+
+sub onFinished()
+    m.searching = false
+    fillList()
+    showStatus()
+end sub
+
+sub showStatus()
+    count = m.found.Count()
+    if m.searching then
+        progress = ""
+        total = m.discover.total
+        if total > 0 then progress = "  (" + Int(m.discover.checked * 100 / total).ToStr() + "%)"
+        if count = 0 then
+            m.status.text = "Looking for Marquee on your network…" + progress
+        else
+            m.status.text = "Found Marquee: choose it to continue. Still looking for others…" + progress
+        end if
+    else if count = 0 then
+        m.status.text = "No Marquee server was found on this network. Check that the PC running Marquee is on, then search again, or type its address (it's shown on that PC, e.g. 192.168.1.20:32500)."
+    else if count = 1 then
         m.status.text = "Found Marquee. Choose it to continue."
     else
-        m.status.text = "Found " + m.found.Count().ToStr() + " Marquee servers. Choose yours."
+        m.status.text = "Found " + count.ToStr() + " Marquee servers. Choose yours."
     end if
-    fillList()
 end sub
 
 sub onSelected()
     i = m.list.itemSelected
     if i < m.found.Count() then
         tryServer(m.found[i].url)
+    else if not m.searching and i = m.found.Count() then
+        search()
     else
         askAddress()
     end if

@@ -4,6 +4,16 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.7.3
+
+**Setting up a TV finds Marquee for you.**
+- The Roku channel (1.3.0) and the Android / Android TV apps (1.4.2 / 1.0.2) start looking for
+  Marquee on your network as soon as they open, and list each server the moment it answers,
+  with the PC's name: *Marquee on Living room PC · 192.168.1.20*. Pick it with the remote; typing
+  the address is still there underneath. The Roku shows how far it has got and offers *Search
+  again*; on Android TV the first server found gets the focus, so OK connects.
+- The name shown is the PC's name, or `MARQUEE_NAME` in `.env` (e.g. `MARQUEE_NAME=Den PC`).
+
 ## 0.7.2
 
 - **Skip Intro and Skip Credits fade away** after 10 seconds, and come back when you bring up the

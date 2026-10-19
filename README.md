@@ -283,6 +283,7 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `TRANSCODE_DIR` | system temp folder | Where adaptive-streaming segments are written while you watch |
 | `HLS_MAX_SESSIONS` | `6` | Adaptive streams converted at the same time |
 | `CAST_URL` | — | Address cast devices use to reach Marquee |
+| `MARQUEE_NAME` | the PC's name | Shown by TVs and phones that find Marquee on the network |
 | `INTRO_SCAN_SECONDS` | `600` | How much of each episode's start is searched for the intro |
 | `WATCH_INTERVAL` | `15` | Seconds between checks for new or removed files (`0` turns this off; scans then run every `SCAN_INTERVAL`). On large or slow drives the checks space themselves out, waiting at least 10× as long as a check took. |
 | `YTDLP_PATH` | `yt-dlp` | Location of yt-dlp |

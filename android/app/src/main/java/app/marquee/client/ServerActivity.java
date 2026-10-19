@@ -2,6 +2,7 @@ package app.marquee.client;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
@@ -32,6 +33,8 @@ public class ServerActivity extends Activity {
     private final List<String> urls = new ArrayList<>();
     private ArrayAdapter<String> adapter;
     private boolean scanning;
+    private ListView list;
+    private int foundCount;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -41,7 +44,7 @@ public class ServerActivity extends Activity {
         status = findViewById(R.id.status);
         connect = findViewById(R.id.connect);
         find = findViewById(R.id.find);
-        ListView list = findViewById(R.id.servers);
+        list = findViewById(R.id.servers);
         adapter = new ArrayAdapter<>(this, R.layout.item_server, R.id.label, rows);
         list.setAdapter(adapter);
         list.setOnItemClickListener((parent, view, pos, id) -> tryConnect(urls.get(pos)));
@@ -60,6 +63,21 @@ public class ServerActivity extends Activity {
             return false;
         });
         find.setOnClickListener(v -> scan());
+        // Look for servers straight away; on a TV, start on the list rather than the address box.
+        if (getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK)) find.requestFocus();
+        scan();
+    }
+
+    /** A server found on the network goes to the top of the list (replacing a "Recent" row for it). */
+    private void addFound(Discovery.Found f) {
+        int at = urls.indexOf(f.url);
+        if (at >= 0) { urls.remove(at); rows.remove(at); }
+        urls.add(foundCount, f.url);
+        rows.add(foundCount, f.label());
+        foundCount++;
+        adapter.notifyDataSetChanged();
+        // The first one found gets the focus, so OK on the remote connects.
+        if (foundCount == 1 && !address.hasFocus()) { list.requestFocus(); list.setSelection(0); }
     }
 
     private void addRow(String url, String label) {
@@ -94,11 +112,11 @@ public class ServerActivity extends Activity {
         if (v4 == null) { status.setText(R.string.need_wifi); return; }
         List<String> hosts = Discovery.subnetHosts(v4.getAddress().getAddress(), v4.getPrefixLength());
         scanning = true;
+        foundCount = 0;
         find.setEnabled(false);
         status.setText(R.string.searching);
         io.execute(() -> {
-            List<Discovery.Found> found = Discovery.scan(hosts, ServerAddress.DEFAULT_PORT, 700, f -> runOnUiThread(() ->
-                addRow(f.url, "Found: " + f.url.replace("http://", "") + (f.version.isEmpty() ? "" : "  (Marquee " + f.version + ")"))));
+            List<Discovery.Found> found = Discovery.scan(hosts, ServerAddress.DEFAULT_PORT, 700, f -> runOnUiThread(() -> addFound(f)));
             runOnUiThread(() -> {
                 scanning = false;
                 find.setEnabled(true);

@@ -31,6 +31,8 @@ services:
       HWACCEL: ${HWACCEL:-auto}
       # Address Chromecasts use to reach Marquee (marquee.ps1 fills in this PC's network address).
       CAST_URL: ${CAST_URL:-}
+      # This PC's name, shown when TVs and phones look for Marquee on your network.
+      MARQUEE_NAME: ${MARQUEE_NAME:-${COMPUTERNAME:-}}
       # Update checks look at this GitHub repository; the helper and the app talk through /control.
       MARQUEE_REPO: ${MARQUEE_REPO:-TheNiniteGamer/Marque}
       CONTROL_DIR: /control

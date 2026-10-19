@@ -2,17 +2,18 @@
 <resources>
     <string name="app_name">Marquee</string>
     <string name="connect_title">Connect to your Marquee server</string>
-    <string name="connect_hint">Use the address of the PC running Marquee, e.g. 192.168.1.20 (the port 32500 is added for you).</string>
+    <string name="connect_hint">Marquee looks for your server on this network: pick it below. Or type the address of the PC running Marquee.</string>
+    <string name="or_type">Or type its address (e.g. 192.168.1.20; the port 32500 is added for you)</string>
     <string name="address_hint">192.168.1.20 or my-pc:32500</string>
     <string name="connect">Connect</string>
-    <string name="find">Find servers on my Wi-Fi</string>
+    <string name="find">Search again</string>
     <string name="bad_address">That doesn\'t look like a server address.</string>
     <string name="connecting">Connecting to %1$s…</string>
     <string name="no_server">No Marquee server answered at %1$s. Check the address, and that your phone is on the same Wi-Fi.</string>
     <string name="need_wifi">Connect to your home Wi-Fi first.</string>
     <string name="searching">Searching your network…</string>
     <string name="none_found">No servers found. Is Marquee running, and is Docker allowed through the Windows Firewall?</string>
-    <string name="found_n">Found %1$d. Tap one to connect.</string>
+    <string name="found_n">Found %1$d. Choose yours to connect.</string>
     <string name="cant_reach">Can\'t reach your Marquee server at %1$s.</string>
     <string name="retry">Try again</string>
     <string name="change_server">Change server</string>
