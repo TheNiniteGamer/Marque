@@ -4,6 +4,15 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.7.9
+
+- **TV mode:** the highlighted section in the top bar is a clean white pill instead of an outline
+  that got cut off into brackets.
+- **Android TV player:** nothing in the controls is cut off any more. The timeline's dot no longer
+  gets clipped at either end, the rows grow with larger TV text sizes, and there's a little more
+  room from the screen's edges. (Android TV app 1.2.1, phone app 1.6.1: use Account → *Check for
+  updates* on the TV.)
+
 ## 0.7.8
 
 **The Android apps update themselves.** From Android TV app 1.2.0 / phone app 1.6.0:

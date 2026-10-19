@@ -712,6 +712,11 @@ body.tv .card:focus-within .art { transform: scale(1.08); box-shadow: 0 0 0 3px 
 body.tv .card .play-hover, body.tv .card .card-menu, body.tv .rail-btn { display: none; }
 body.tv .shelf { padding-top: 16px; padding-bottom: 26px; }
 body.tv .round:focus-visible, body.tv .btn:focus-visible { outline-offset: 2px; }
+/* The top bar's sections: a white pill behind the highlighted one (an outline gets cut off there,
+   as the bar scrolls sideways). */
+body.tv .nav-links { gap: 4px; padding: 4px 0; }
+body.tv .nav-links a { padding: 6px 14px; border-radius: 20px; transition: background .15s, color .15s; }
+body.tv .nav-links a:focus-visible { outline: none; background: #fff; color: #000; }
 body.tv .episode:focus-within { background: #2e2e2e; }
 
 /* ---------- hover previews ---------- */

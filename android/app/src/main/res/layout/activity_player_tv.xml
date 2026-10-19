@@ -7,6 +7,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@android:color/black"
+    android:clipChildren="false"
     android:descendantFocusability="blocksDescendants">
 
     <VideoView
@@ -44,7 +45,8 @@
     <FrameLayout
         android:id="@+id/controls"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:clipChildren="false">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -52,9 +54,9 @@
             android:layout_gravity="top"
             android:background="@drawable/scrim_top"
             android:orientation="vertical"
-            android:paddingStart="48dp"
-            android:paddingTop="28dp"
-            android:paddingEnd="48dp"
+            android:paddingStart="56dp"
+            android:paddingTop="32dp"
+            android:paddingEnd="56dp"
             android:paddingBottom="60dp">
 
             <TextView
@@ -92,16 +94,20 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"
             android:background="@drawable/scrim_bottom"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:orientation="vertical"
-            android:paddingStart="48dp"
+            android:paddingStart="56dp"
             android:paddingTop="24dp"
-            android:paddingEnd="48dp"
-            android:paddingBottom="22dp">
+            android:paddingEnd="56dp"
+            android:paddingBottom="32dp">
 
             <!-- The preview picture while scrubbing (moved along above the bar) -->
             <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="158dp">
+                android:layout_height="wrap_content"
+                android:minHeight="158dp"
+                android:clipChildren="false">
 
                 <LinearLayout
                     android:id="@+id/tv_preview"
@@ -134,16 +140,18 @@
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="28dp"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
+                android:clipChildren="false"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <FrameLayout
                     android:id="@+id/tv_track"
                     android:layout_width="0dp"
-                    android:layout_height="28dp"
-                    android:layout_weight="1">
+                    android:layout_height="32dp"
+                    android:layout_weight="1"
+                    android:clipChildren="false">
 
                     <View
                         android:layout_width="match_parent"
@@ -168,8 +176,10 @@
 
                 <TextView
                     android:id="@+id/time"
-                    android:layout_width="96dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="20dp"
+                    android:minWidth="72dp"
                     android:fontFeatureSettings="tnum"
                     android:gravity="end"
                     android:textColor="@android:color/white"
@@ -179,21 +189,24 @@
             <!-- Episodes on the left · back 10, play/pause, ahead 10 in the middle · the rest on the right -->
             <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="64dp"
-                android:layout_marginTop="10dp">
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:clipChildren="false"
+                android:minHeight="68dp">
 
                 <LinearLayout
                     android:id="@+id/tv_left"
                     android:layout_width="wrap_content"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="start"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="start|center_vertical"
                     android:gravity="center_vertical"
                     android:orientation="horizontal" />
 
                 <LinearLayout
                     android:layout_width="wrap_content"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="center_horizontal"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:clipChildren="false"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -224,8 +237,8 @@
                 <LinearLayout
                     android:id="@+id/tv_right"
                     android:layout_width="wrap_content"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="end"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end|center_vertical"
                     android:gravity="center_vertical"
                     android:orientation="horizontal" />
             </FrameLayout>
@@ -239,7 +252,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="48dp"
-        android:layout_marginBottom="200dp"
+        android:layout_marginBottom="220dp"
         android:background="@drawable/tv_pill_on"
         android:minHeight="52dp"
         android:paddingStart="28dp"
@@ -308,7 +321,10 @@
         <TextView
             android:id="@+id/tv_next_btn0"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
+            android:layout_height="wrap_content"
+            android:minHeight="44dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
             android:layout_marginTop="16dp"
             android:gravity="center"
             android:textSize="16sp"
@@ -317,7 +333,10 @@
         <TextView
             android:id="@+id/tv_next_btn1"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
+            android:layout_height="wrap_content"
+            android:minHeight="44dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
             android:layout_marginTop="10dp"
             android:gravity="center"
             android:textSize="16sp"
