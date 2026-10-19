@@ -48,5 +48,16 @@ sub onContent()
     hasBadge = c.badge <> invalid and c.badge <> ""
     m.badgeBg.visible = hasBadge
     m.badge.visible = hasBadge
-    if hasBadge then m.badge.text = c.badge
+    if hasBadge then
+        m.badge.text = c.badge
+        ' Wider for "#10" (Top 10) than for an unwatched count.
+        bw = 40
+        if Len(c.badge) > 2 then bw = 60
+        m.badgeBg.width = bw
+        m.badge.width = bw
+        if m.top.width > 0 then
+            m.badgeBg.translation = [m.top.width - bw - 12, 12]
+            m.badge.translation = [m.top.width - bw - 12, 12]
+        end if
+    end if
 end sub

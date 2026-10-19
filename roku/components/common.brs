@@ -126,6 +126,8 @@ function mqCard(item as Object) as Object
     end if
     badge = ""
     if kind = "show" and mqNum(item.unwatchedCount) > 0 and mqNum(item.unwatchedCount) < mqNum(item.episodeCount) then badge = mqStr(item.unwatchedCount)
+    ' Top 10 in your house: the rank.
+    if item.rank <> invalid then badge = "#" + mqStr(item.rank)
     c.addFields({ kind: kind, progress: progress, badge: badge, sub: sub_, data: item })
     c.id = item.id
     c.title = title

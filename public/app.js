@@ -444,11 +444,16 @@ function startHeroTrailer() {
 }
 const pauseHero = () => $('#hero-video')?.pause();
 
+// Top 10: a big outlined number beside the title, as on the big streamers.
+function rankCard(x) {
+  return html`<div class="rank-card"><span class="rank-num" aria-hidden="true">${x.rank}</span>${posterCard(x)}</div>`;
+}
+
 function hubSection(hub) {
   const link = hub.libraryId ? `#/library/${hub.libraryId}` : hub.link;
   return html`<section class="hub">
     <div class="hub-head"><h2>${hub.title}</h2>${hub.note ? html`<span class="hub-note">${hub.note}</span>` : ''}${link ? html`<a class="see-all" href="${link}">See all ›</a>` : ''}</div>
-    ${rail(hub.items, (x) => (hub.style === 'wide' ? wideCard(x, hub.key) : posterCard(x)))}
+    ${rail(hub.items, (x) => (hub.style === 'wide' ? wideCard(x, hub.key) : hub.style === 'top10' ? rankCard(x) : posterCard(x)))}
   </section>`;
 }
 

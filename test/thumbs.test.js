@@ -33,3 +33,18 @@ test('thumbs-down titles leave suggestions; thumbs-up seeds a row', () => {
   assert.equal(lib.setThumb(store, user, 'a', 0), 0);
   assert.equal(lib.itemSummary(store, user, store.data.items.a).thumb, 0);
 });
+
+test('top 10 in the house: most people first, then most watched', () => {
+  const now = Date.now();
+  store.data.progress = {
+    u: { c: { position: 300, updatedAt: now }, d: { position: 500, updatedAt: now }, e: { position: 30, updatedAt: now } },
+    v: { d: { watched: true, position: 0, updatedAt: now }, f: { position: 999, updatedAt: now - 9 * 86400_000 } },
+  };
+  const h = lib.home(store, user);
+  const top = h.hubs.find((x) => x.key === 'top10');
+  assert.equal(top, undefined, 'fewer than 3 titles: no row');
+  store.data.progress.v.c2 = undefined;
+  store.data.progress.u.f = { position: 400, updatedAt: now };
+  const top2 = lib.home(store, user).hubs.find((x) => x.key === 'top10');
+  assert.deepEqual(top2.items.map((x) => [x.title, x.rank]), [['Coco', 1], ['Up', 2], ['Moana', 3]]);
+});

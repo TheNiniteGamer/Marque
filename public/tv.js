@@ -89,7 +89,7 @@ function tvFocus(el) {
     // A row slides so the highlighted title sits at its start (as on Netflix or Google TV), which
     // keeps the rows lined up with each other; the page then centres the row.
     const pad = parseFloat(getComputedStyle(shelf).paddingLeft) || 0;
-    const card = (el.closest('.card') || el).getBoundingClientRect();
+    const card = (el.closest('.rank-card') || el.closest('.card') || el).getBoundingClientRect();
     shelf.scrollTo({ left: shelf.scrollLeft + card.left - shelf.getBoundingClientRect().left - pad, behavior: 'smooth' });
     const rail = (shelf.closest('.rail') || shelf).getBoundingClientRect();
     window.scrollBy({ top: rail.top + rail.height / 2 - innerHeight / 2, behavior: 'smooth' });
