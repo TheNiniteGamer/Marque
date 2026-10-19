@@ -117,7 +117,7 @@ const parties = new Parties();
 const trickplay = new Trickplay(DATA_DIR);
 const activity = new Activity();
 const maintenance = new Maintenance(store, DATA_DIR, { transcodeDir: TRANSCODE_DIR });
-const offline = new offlineLib.Offline(path.join(DATA_DIR, 'offline'), hwaccel);
+const offline = new offlineLib.Offline(path.join(DATA_DIR, 'offline'), hwaccel, { isBusy: () => transcodes.size > 0 || hls.active > 0 });
 const intro = new IntroDetector(store, DATA_DIR, { isBusy: () => transcodes.size > 0 || hls.active > 0 });
 scanner.on('done', (libraryId) => intro.enqueue({ libraryId }));
 const watcher = new FolderWatcher(store, scanner, Number(process.env.WATCH_INTERVAL ?? 15) * 1000);

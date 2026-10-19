@@ -204,6 +204,7 @@ public class DownloadsActivity extends Activity {
     private String status(JSONObject e, Double fraction) {
         switch (e.optString("state")) {
             case "preparing":
+                if (e.optBoolean("waiting")) return getString(R.string.downloads_waiting);
                 return getString(R.string.downloads_preparing, (int) Math.round(e.optDouble("progress", 0) * 100));
             case "downloading":
                 return fraction != null && fraction >= 0 ? getString(R.string.downloads_progress, (int) Math.round(fraction * 100)) : getString(R.string.downloads_starting);

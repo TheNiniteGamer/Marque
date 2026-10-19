@@ -246,7 +246,8 @@ final class OfflineStore {
                     return;
                 }
                 double progress = s.optDouble("progress", 0);
-                update(c, id, x -> x.put("progress", progress));
+                boolean waiting = s.optBoolean("waiting"); // the server is busy playing something
+                update(c, id, x -> x.put("progress", progress).put("waiting", waiting));
                 Thread.sleep(4000);
                 s = Net.getJson(base + "/api/items/" + id + "/offline?" + q).optJSONObject("copy");
                 if (s == null) s = new JSONObject();

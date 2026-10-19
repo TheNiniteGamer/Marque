@@ -47,3 +47,29 @@ test('a copy is made once, in the background, and is a phone-friendly MP4', asyn
   // Changed file: a new copy is needed.
   assert.equal(off.status({ ...item, mtime: 2 }, { quality: '480p' }).status, 'none');
 });
+
+test('copies wait while someone is watching, and a copy under way pauses', async () => {
+  const file = path.join(ROOT, 'show.mkv');
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=24:d=20', '-f', 'lavfi', '-i', 'sine=d=20',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', file]);
+  const item = { id: 'def456', file, mtime: 1, duration: 20, media: { video: { width: 640, height: 360 }, audio: [{ codec: 'aac' }], bitrate: 500_000 } };
+  let busy = true;
+  const off = new Offline(path.join(ROOT, 'offline2'), null, { isBusy: () => busy });
+  const q = { quality: '480p' };
+  assert.deepEqual(off.request(item, q), { status: 'queued', progress: 0, waiting: true }, 'not started while someone watches');
+  busy = false;
+  off.yieldToViewers();
+  assert.equal(off.status(item, q).status, 'converting');
+  if (process.platform !== 'win32') {
+    busy = true;
+    off.yieldToViewers();
+    assert.equal(off.status(item, q).waiting, true, 'paused');
+    const before = off.status(item, q).progress;
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal(off.status(item, q).progress, before, 'no progress while paused');
+    busy = false;
+    off.yieldToViewers();
+  }
+  for (let i = 0; i < 150 && off.status(item, q).status !== 'ready'; i++) await new Promise((r) => setTimeout(r, 200));
+  assert.equal(off.status(item, q).status, 'ready');
+});
