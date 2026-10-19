@@ -78,12 +78,30 @@ public class MainActivity extends Activity {
 
         String asked = searchQuery(getIntent());
         String play = WatchNext.playId(getIntent());
+        String link = linkOf(getIntent());
         if (state != null) web.restoreState(state);
         else if (play != null) web.loadUrl(startUrl() + "#/play/" + play);
+        else if (link != null) web.loadUrl(startUrl() + link);
         else web.loadUrl(asked != null ? startUrl() + "#/search?q=" + Uri.encode(asked) : startUrl());
         if (tv) web.requestFocus();
         // A newer app on the server? (Asks once per version; Account → Check for updates any time.)
         if (state == null) Updater.check(this, base, false);
+        // Phones: new episodes and requests as notifications (Android 13+ asks once whether that's OK).
+        if (!tv) {
+            NotifyJob.schedule(this);
+            if (Build.VERSION.SDK_INT >= 33 && !Prefs.askedNotifications(this)
+                && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+                Prefs.setAskedNotifications(this);
+                requestPermissions(new String[] { "android.permission.POST_NOTIFICATIONS" }, 7);
+            }
+        }
+    }
+
+    /** A phone notification tapped (see NotifyJob): the page it's about, e.g. "#/show/abc". */
+    private static String linkOf(Intent i) {
+        if (i == null || !NotifyJob.ACTION_OPEN.equals(i.getAction())) return null;
+        String link = i.getStringExtra("link");
+        return link != null && link.matches("#/[A-Za-z0-9_/?=&%.-]*") ? link : null;
     }
 
     /** "Hey Google, search Marquee for …" (or the system search) opening the app. */
@@ -210,6 +228,8 @@ public class MainActivity extends Activity {
         // A Continue Watching card on the TV's home screen.
         String play = WatchNext.playId(intent);
         if (play != null && web != null) web.evaluateJavascript("location.hash = '#/play/" + play + "'", null);
+        String link = linkOf(intent);
+        if (link != null && web != null) web.evaluateJavascript("location.hash = " + org.json.JSONObject.quote(link), null);
     }
 
     @Override

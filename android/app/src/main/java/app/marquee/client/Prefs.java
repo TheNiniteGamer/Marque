@@ -31,6 +31,15 @@ final class Prefs {
 
     static void setSkippedUpdate(Context c, long code) { p(c).edit().putLong("skippedUpdate", code).apply(); }
 
+    /** Notifications up to this time have been shown on the phone (see NotifyJob). */
+    static long notifiedUpTo(Context c) { return p(c).getLong("notifiedUpTo", 0); }
+
+    static void setNotifiedUpTo(Context c, long at) { p(c).edit().putLong("notifiedUpTo", at).apply(); }
+
+    static boolean askedNotifications(Context c) { return p(c).getBoolean("askedNotifications", false); }
+
+    static void setAskedNotifications(Context c) { p(c).edit().putBoolean("askedNotifications", true).apply(); }
+
     /** Phone downloads only on Wi-Fi (the default, as on the big streaming apps). */
     static boolean offlineWifiOnly(Context c) { return p(c).getBoolean("offlineWifiOnly", true); }
 

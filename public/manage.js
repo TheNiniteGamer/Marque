@@ -10,6 +10,7 @@ const maturityLabel = (age) => (MATURITY.find(([a]) => a === age) || [age, `up t
 function showAuth({ setupRequired = false, message = '' } = {}) {
   closePlayer();
   state.user = null;
+  renderBell(null);
   renderSeq++; // drop any in-flight page renders
   clearTimeout(pollTimer);
   document.body.classList.add('auth-mode');
@@ -112,6 +113,7 @@ function renderUserMenu() {
     <div class="user-pop" id="user-pop" hidden>
       <div class="user-pop-head"><b>${u.username}</b><span class="muted">${u.role === 'admin' ? 'Administrator' : 'User'}</span></div>
       ${tv.on ? html`<a href="#/account">Settings</a>` : html`<a href="#/account">Account</a>
+      <a href="#/requests">Requests</a>
       ${phoneDownloads() ? html`<button id="phone-downloads">Downloads on this phone</button>` : ''}
       ${u.canDownload ? html`<a href="#/downloads">${phoneDownloads() ? 'Video downloader' : 'Downloads'}</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/activity">Activity</a>` : ''}

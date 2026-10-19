@@ -38,6 +38,8 @@ const { Trickplay } = require('./lib/trickplay');
 const { Activity } = require('./lib/activity');
 const { Maintenance } = require('./lib/maintenance');
 const offlineLib = require('./lib/offline');
+const notifications = require('./lib/notifications');
+const requests = require('./lib/requests');
 const { KINDS: ENCODER_NAMES } = require('./lib/hwaccel');
 
 const PORT = Number(process.env.PORT) || 32500;
@@ -120,6 +122,10 @@ const maintenance = new Maintenance(store, DATA_DIR, { transcodeDir: TRANSCODE_D
 const offline = new offlineLib.Offline(path.join(DATA_DIR, 'offline'), hwaccel, { isBusy: () => transcodes.size > 0 || hls.active > 0 });
 const intro = new IntroDetector(store, DATA_DIR, { isBusy: () => transcodes.size > 0 || hls.active > 0 });
 scanner.on('done', (libraryId) => intro.enqueue({ libraryId }));
+// New episodes for the people who watch those shows, and requests that have arrived.
+scanner.on('done', () => {
+  try { notifications.newEpisodes(store); requests.checkArrivals(store); } catch (err) { console.warn(`[notify] ${err.message}`); }
+});
 const watcher = new FolderWatcher(store, scanner, Number(process.env.WATCH_INTERVAL ?? 15) * 1000);
 const backups = new Backups(store, {
   dataDir: DATA_DIR,
@@ -456,7 +462,7 @@ const app = {
   isPrivateIp, TRUST_PROXY, clientIp, viaHttpsProxy, noteRemoteOrigin, mediaTokenUser, castAddresses, isRemote,
   remoteLimit, getTarget, route,
 };
-for (const group of ['auth', 'library', 'playback', 'admin', 'downloads']) require(`./routes/${group}`)(app);
+for (const group of ['auth', 'library', 'playback', 'admin', 'downloads', 'requests']) require(`./routes/${group}`)(app);
 
 // ---------- server ----------
 function serveStatic(req, res, pathname) {
@@ -599,6 +605,9 @@ async function main() {
   watcher.start();
   maintenance.start();
   offline.start();
+  // Matching (which gives titles their TMDB / TVmaze ids) finishes after scans, so arrivals are
+  // also checked every minute.
+  setInterval(() => { try { requests.checkArrivals(store); } catch { /* next time */ } }, 60_000).unref();
   downloader.startAutoUpdate();
   setTimeout(() => matcher.backfillCollections().then(() => matcher.backfillRatings()).catch((err) => console.warn('[meta]', err.message)), 60_000).unref();
   backups.startSchedule();

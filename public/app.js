@@ -164,6 +164,7 @@ function openSearch() { $('#search-form').classList.add('open'); $('#search-inpu
 $('#search-btn').addEventListener('click', openSearch);
 $('#search-input').addEventListener('blur', () => { if (!$('#search-input').value) $('#search-form').classList.remove('open'); });
 document.addEventListener('click', (e) => { if (e.target.closest('[data-tab="search"]')) openSearch(); });
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-ask]'); if (b) openRequestDialog(b.dataset.ask); });
 // The phone app keeps downloads for watching offline (its own Downloads screen).
 function phoneDownloads() { return !!window.MarqueeAndroid?.offlineDownloads?.(); }
 document.addEventListener('click', (e) => {
@@ -195,6 +196,8 @@ async function pollStatus() {
     const s = state.status;
     noteUpdateAvailable(s);
     noteDownloads(s.myDownloads);
+    noteRequests(s.requestsPending);
+    refreshBell();
     const ind = $('#scan-indicator');
     ind.hidden = !s.scanning;
     if (s.scanning && s.current) {
@@ -215,6 +218,14 @@ async function pollStatus() {
     if ((finished || after !== before) && !player && (path === '/' || path.startsWith('/library/') || path === '/settings')) router();
   } catch { /* server unreachable; try again later */ }
   pollTimer = setTimeout(pollStatus, state.status?.scanning ? 2000 : 15000);
+}
+
+// Admins: how many requests are waiting, on the Requests link.
+function noteRequests(n) {
+  for (const link of $$('#user-pop a[href="#/requests"]')) {
+    link.querySelector('.count')?.remove();
+    if (n) link.insertAdjacentHTML('beforeend', html`<span class="count" title="Requests waiting">${n}</span>`.s);
+  }
 }
 
 // A notice when one of your downloads finishes (or gives up), and a count on the Downloads link.
@@ -887,6 +898,7 @@ async function viewSearch({ query, seq }) {
   const q = query.get('q') || '';
   if ($('#search-input') !== document.activeElement) $('#search-input').value = q;
   if (q) $('#search-form').classList.add('open');
+  const ask = html`<div class="req-ask"><span class="muted">Not finding what you want?</span> <button class="btn small" data-ask="${q}">Ask for it</button></div>`;
   if (!q.trim()) {
     return setView(seq, $('#voice-btn').hidden ? html`<div class="empty">Type to search your libraries.</div>`
       : html`<div class="empty">Type to search your libraries, or <button class="btn" data-voice>${icon('mic')} Search by voice</button></div>`);
@@ -896,6 +908,7 @@ async function viewSearch({ query, seq }) {
   if (!setView(seq, html`
     <div class="toolbar"><h1>Results for “${q}”</h1>${total ? selectButton() : ''}</div>
     ${!total ? html`<div class="empty">No matches.</div>` : ''}
+    ${!tv.on || !total ? ask : ''}
     ${r.movies.length ? html`<section class="hub"><div class="hub-head"><h2>Movies</h2></div><div class="grid">${r.movies.map(posterCard)}</div></section>` : ''}
     ${r.shows.length ? html`<section class="hub"><div class="hub-head"><h2>Shows</h2></div><div class="grid">${r.shows.map(posterCard)}</div></section>` : ''}
     ${r.episodes.length ? html`<section class="hub"><div class="hub-head"><h2>Episodes</h2></div><div class="grid wide">${r.episodes.map(wideCard)}</div></section>` : ''}`)) return;
@@ -940,6 +953,7 @@ async function viewSettings({ query, seq }) {
           <button class="btn small danger" data-act="delete">Delete</button>
         </div>
       </div>`) : html`<div class="panel muted">No libraries yet. Add one to get started.</div>`}
+    ${s.requestsPending ? html`<div class="panel row" style="justify-content:space-between"><span>🙋 <b>${s.requestsPending}</b> request${s.requestsPending === 1 ? '' : 's'} waiting</span><a class="btn small primary" href="#/requests">Open requests</a></div>` : ''}
     ${libs.length ? html`<div id="problems-wrap">${problemsSection(problems)}</div>` : ''}
     ${updates.check?.status === 'available' || updates.helper.state === 'updating' ? updatesSection(updates) : ''}
     ${metadataSection(metaSettings)}
@@ -2137,6 +2151,7 @@ const routes = [
   [/^\/link$/, viewAccount],
   [/^\/downloads$/, viewDownloads],
   [/^\/watchlist$/, viewWatchlist],
+  [/^\/requests$/, viewRequests],
   [/^\/collections$/, viewCollections],
   [/^\/activity$/, viewActivity],
   [/^\/party\/(\w+)$/, viewParty],
@@ -2265,6 +2280,7 @@ async function startApp() {
   await router();
   firstRoute = false;
   pollStatus();
+  noteRequests(state.status?.requestsPending);
   // Player settings used to be kept in each browser: bring this browser's over to the account once.
   if (state.user && !state.user.prefsSaved) {
     const old = {};
