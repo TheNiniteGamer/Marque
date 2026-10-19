@@ -4,6 +4,19 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.8.2
+
+**Tidier TV screens, and lined-up cards.**
+- TV mode: the MARQUEE logo is no longer a stop (Home does the same). Also gone from the TV, as
+  they're for a mouse or for admins: a library's card-size slider, ☑ Select, ↻ Scan and A–Z bar,
+  "See all" on home rows, and Find series / New collection. Genre links in a title's pop-up are
+  skipped too.
+- TV mode: Genre and Sort lists no longer change when you arrow onto them; OK opens them.
+- TV mode: rows slide so the highlighted title always sits at the row's start (as on Netflix or
+  Google TV), keeping the rows lined up, also at the end of a row.
+- Everywhere: cards in library grids, search and My List no longer look cut off or shifted when
+  highlighted or hovered: the highlight is a ring inside the picture there.
+
 ## 0.8.1
 
 - **TV mode:** side-by-side choices (the fade time on the TV's Settings page, a library's

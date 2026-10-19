@@ -23,7 +23,7 @@ initTvMode();
 
 // ---------- moving with the arrow keys ----------
 // Things on a card besides the card itself (play, ⋯) are reached through the card's pop-up instead.
-const TV_SKIP = '.play-hover, .card-menu, .card-text, .rail-btn, .hero-title a, .tabbar *, [tabindex="-1"], [disabled]';
+const TV_SKIP = '.brand, .play-hover, .card-menu, .card-text, .rail-btn, .hero-title a, .dlg-side a, .tabbar *, [tabindex="-1"], [disabled]';
 const FOCUSABLE = 'a[href], button, select, input:not([type=hidden]), textarea, [tabindex]';
 function tvScope() {
   return [...document.querySelectorAll('.modal-backdrop')].pop() || document.querySelector('.profile-picker')
@@ -84,6 +84,17 @@ function tvFocus(el) {
   if (!el) return false;
   tvLockText(el);
   el.focus({ preventScroll: true });
+  const shelf = el.closest('.shelf');
+  if (shelf) {
+    // A row slides so the highlighted title sits at its start (as on Netflix or Google TV), which
+    // keeps the rows lined up with each other; the page then centres the row.
+    const pad = parseFloat(getComputedStyle(shelf).paddingLeft) || 0;
+    const card = (el.closest('.card') || el).getBoundingClientRect();
+    shelf.scrollTo({ left: shelf.scrollLeft + card.left - shelf.getBoundingClientRect().left - pad, behavior: 'smooth' });
+    const rail = (shelf.closest('.rail') || shelf).getBoundingClientRect();
+    window.scrollBy({ top: rail.top + rail.height / 2 - innerHeight / 2, behavior: 'smooth' });
+    return true;
+  }
   el.scrollIntoView({ block: el.closest('.hero') ? 'end' : 'center', inline: 'nearest', behavior: 'smooth' });
   return true;
 }
@@ -109,12 +120,13 @@ document.addEventListener('keydown', (e) => {
   if (typeof player !== 'undefined' && player) return; // the player has its own keys
   const t = e.target;
   const typing = t.matches?.(TEXT_BOX) && !t.readOnly;
+  // OK on a list of choices (Genre, Sort): open it. The arrows move on past it.
+  if (e.key === 'Enter' && t.tagName === 'SELECT') { try { t.showPicker(); e.preventDefault(); } catch { /* the browser opens it */ } return; }
   // OK on a highlighted text box: now open the keyboard.
   if (e.key === 'Enter' && t.dataset?.tvManaged && t.readOnly) { e.preventDefault(); tvUnlockText(t); return; }
   const isArrow = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key);
   if (isArrow) {
     if (typing && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return; // move the cursor
-    if (t.tagName === 'SELECT' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) return; // change the choice
     if (t.type === 'range' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
     e.preventDefault();
     const from = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
