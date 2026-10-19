@@ -4,6 +4,12 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.7.5
+
+- **TV remote and text boxes:** moving onto a text box (a library's *Filter…*, search, the TV
+  code box…) with the arrows no longer pops up the on-screen keyboard. The box is highlighted;
+  press **OK** to type, and the arrows carry on past it otherwise.
+
 ## 0.7.4
 
 - **Home banner on TVs:** on short screens (the Android TV app and TV browsers show pages at about

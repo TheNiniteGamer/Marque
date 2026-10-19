@@ -60,8 +60,29 @@ function tvNeighbour(from, dir) {
   }
   return best;
 }
+// Text boxes: a TV pops its on-screen keyboard up as soon as one gets focus, so moving onto one only
+// highlights it (read-only); OK opens the keyboard, and leaving it makes it read-only again.
+const TEXT_BOX = 'input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]), textarea';
+function tvLockText(el) {
+  if (!el.matches?.(TEXT_BOX)) return;
+  if (!el.dataset.tvManaged) {
+    if (el.readOnly) return; // really read-only
+    el.dataset.tvManaged = '1';
+    el.addEventListener('blur', () => { if (tv.on && !el.dataset.tvOpening) el.readOnly = true; });
+  }
+  el.readOnly = true;
+}
+function tvUnlockText(el) {
+  el.dataset.tvOpening = '1';
+  el.readOnly = false;
+  el.blur(); // focusing again is what brings up the keyboard
+  el.focus({ preventScroll: true });
+  delete el.dataset.tvOpening;
+  try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* not a text type */ }
+}
 function tvFocus(el) {
   if (!el) return false;
+  tvLockText(el);
   el.focus({ preventScroll: true });
   el.scrollIntoView({ block: el.closest('.hero') ? 'end' : 'center', inline: 'nearest', behavior: 'smooth' });
   return true;
@@ -80,14 +101,16 @@ function tvStart() {
   if (active && active !== document.body && tvScope().contains(active) && tvVisible(active)) return;
   const scope = tvScope();
   const first = scope.querySelector('#detail-panel .btn.play, .hero .btn.play, .profile-picker .pp-profile, .card .cover, main .btn.primary') || tvCandidates()[0];
-  if (first) first.focus({ preventScroll: true });
+  if (first) { tvLockText(first); first.focus({ preventScroll: true }); }
 }
 
 document.addEventListener('keydown', (e) => {
   if (!tv.on || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
   if (typeof player !== 'undefined' && player) return; // the player has its own keys
   const t = e.target;
-  const typing = t.matches?.('input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea');
+  const typing = t.matches?.(TEXT_BOX) && !t.readOnly;
+  // OK on a highlighted text box: now open the keyboard.
+  if (e.key === 'Enter' && t.dataset?.tvManaged && t.readOnly) { e.preventDefault(); tvUnlockText(t); return; }
   const isArrow = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key);
   if (isArrow) {
     if (typing && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return; // move the cursor
