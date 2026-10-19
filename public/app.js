@@ -109,6 +109,13 @@ const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(`marquee:${k}`)) ?? d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(`marquee:${k}`, JSON.stringify(v)); } catch { /* ignore */ } },
 };
+// Player settings saved with your account (Account → Player), so TVs and phones follow them too.
+const PLAYER_DEFAULTS = { autoplayNext: true, autoSkipIntro: false, skipFade: 10 };
+function playerPref(k) { return state.user?.prefs?.[k] ?? PLAYER_DEFAULTS[k]; }
+async function savePlayerPrefs(change) {
+  const r = await api('/api/auth/prefs', { method: 'PUT', body: change });
+  if (state.user) { state.user.prefs = r.prefs; state.user.prefsSaved = true; }
+}
 
 // ---------- app state ----------
 const state = { user: null, libraries: [], status: null, inAppNav: false };
@@ -1069,8 +1076,8 @@ async function viewPlay({ params: [id], query }) {
   }
   // Inside the Android app, videos open in the phone's native player (watch parties stay in the web player).
   if (window.MarqueeAndroid?.play && !partyId) {
-    window.MarqueeAndroid.play(JSON.stringify({ id: item.id, start, autoplayNext: store.get('autoplayNext', true), subsOn: store.get('subsOn', false),
-      autoSkipIntro: store.get('autoSkipIntro', false), quality: store.get('quality', '') }));
+    window.MarqueeAndroid.play(JSON.stringify({ id: item.id, start, autoplayNext: playerPref('autoplayNext'), subsOn: store.get('subsOn', false),
+      autoSkipIntro: playerPref('autoSkipIntro'), skipFade: playerPref('skipFade'), quality: store.get('quality', '') }));
     if (state.inAppNav) history.back(); else location.replace(`#/item/${item.id}`);
     return;
   }
@@ -1456,7 +1463,9 @@ class Player {
     this.updateIntro(t);
   }
 
-  // "Skip Intro" while the detected theme song plays (or skip it automatically, once).
+  // "Skip Intro" while the detected theme song plays (or skip it automatically, once), and "Skip
+  // Credits" at the end of a film (episodes get the Up Next card). The button fades after the
+  // account's skipFade seconds and comes back while the controls are showing.
   updateIntro(t) {
     const credits = this.item.credits;
     if (credits && this.item.next && t >= credits.start && t < credits.start + 30 && !this.creditsShown && !this.dragging) {
@@ -1466,13 +1475,22 @@ class Player {
     const intro = this.item.intro;
     const btn = $('[data-a=skip-intro]', this.root);
     const inIntro = !!intro && t >= intro.start && t < intro.end - 1;
-    if (inIntro && store.get('autoSkipIntro', false) && !this.autoSkipped && (this.casting || !this.v.paused)) {
+    if (inIntro && playerPref('autoSkipIntro') && !this.autoSkipped && (this.casting || !this.v.paused)) {
       this.autoSkipped = true;
       this.seek(intro.end);
       toast('Skipped the intro');
       return;
     }
-    btn.hidden = !inIntro;
+    const inCredits = !!credits && !this.item.next && this.total > 0 && t >= credits.start && t < this.total - 2;
+    const part = inIntro ? 'intro' : inCredits ? 'credits' : null;
+    if (part !== this.skipPart) {
+      this.skipPart = part;
+      this.skipSince = Date.now();
+      if (part) btn.textContent = part === 'intro' ? 'Skip Intro ⏭' : 'Skip Credits ⏭';
+    }
+    btn.hidden = !part;
+    const fade = playerPref('skipFade');
+    btn.classList.toggle('faded', !!part && fade > 0 && Date.now() - this.skipSince > fade * 1000 && this.root.classList.contains('idle'));
   }
 
   updateBuffer() {
@@ -1745,7 +1763,7 @@ class Player {
   showUpNext(atCredits) {
     if ($('.p-upnext', this.root)) return;
     const n = this.item.next;
-    const auto = store.get('autoplayNext', true);
+    const auto = playerPref('autoplayNext');
     let left = 10;
     const box = document.createElement('div');
     box.className = 'p-upnext';
@@ -1756,7 +1774,12 @@ class Player {
         <button class="btn small" data-a="cancel-next">${atCredits ? 'Watch credits' : 'Cancel'}</button></div>`.s;
     this.root.append(box);
     this.root.classList.remove('idle');
-    if (!auto) return;
+    if (!auto) {
+      // Without a countdown, the card at the credits fades like the skip buttons (N still plays next).
+      const fade = playerPref('skipFade');
+      if (atCredits && fade > 0) setTimeout(() => { box.classList.add('faded'); setTimeout(() => box.remove(), 700); }, fade * 1000);
+      return;
+    }
     this.upNextTimer = setInterval(() => {
       if (atCredits && this.paused) return; // the countdown waits while paused
       left--;
@@ -1844,6 +1867,7 @@ class Player {
       else if (a === 'next') this.playNext();
       else if (a === 'cancel-next') { clearInterval(this.upNextTimer); $('.p-upnext', this.root)?.remove(); }
       else if (a === 'pip') this.togglePip();
+      else if (a === 'skip-intro' && this.skipPart === 'credits') this.close(); // leaving in the credits counts as watched
       else if (a === 'skip-intro' && this.item.intro) { this.seek(this.item.intro.end); $('[data-a=skip-intro]', this.root).hidden = true; }
       else if (a === 'cast') this.castClicked();
       else if (a === 'party') this.partyClicked();
@@ -2111,6 +2135,12 @@ async function startApp() {
   await router();
   firstRoute = false;
   pollStatus();
+  // Player settings used to be kept in each browser: bring this browser's over to the account once.
+  if (state.user && !state.user.prefsSaved) {
+    const old = {};
+    for (const k of ['autoplayNext', 'autoSkipIntro']) { const v = store.get(k, null); if (typeof v === 'boolean') old[k] = v; }
+    if (Object.keys(old).length) savePlayerPrefs(old).catch(() => {});
+  }
   // A shared device can ask who's watching once per visit.
   if (store.get('askProfile', false) && !sessionStorage.getItem('marquee:asked')) {
     try { sessionStorage.setItem('marquee:asked', '1'); } catch { /* ignore */ }

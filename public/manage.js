@@ -141,11 +141,18 @@ async function viewAccount({ query, seq }) {
         <dt>Downloads</dt><dd>${u.canDownload ? 'Allowed' : 'Not allowed'}</dd>
       </dl>
     </div>
+    <div class="panel form" id="player-prefs">
+      <h2>Player</h2>
+      <label class="check"><input type="checkbox" data-acct="autoplayNext" ${playerPref('autoplayNext') ? 'checked' : ''}> Play the next episode automatically (a 10-second countdown at the credits)</label>
+      <label class="check"><input type="checkbox" data-acct="autoSkipIntro" ${playerPref('autoSkipIntro') ? 'checked' : ''}> Skip intros automatically</label>
+      <label>Skip Intro / Skip Credits buttons
+        <select data-acct="skipFade">${[[5, 'Fade after 5 seconds'], [10, 'Fade after 10 seconds'], [15, 'Fade after 15 seconds'], [30, 'Fade after 30 seconds'], [0, 'Stay until the intro or credits end']]
+          .map(([v, l]) => html`<option value="${v}" ${playerPref('skipFade') === v ? 'selected' : ''}>${l}</option>`)}</select></label>
+      <p class="muted" style="margin:0;font-size:13px">Saved with your account: they apply on every device you watch on, TVs included. A faded button comes back when you bring up the controls.</p>
+    </div>
     <div class="panel form" id="prefs">
-      <h2>Playback</h2>
-      <label class="check"><input type="checkbox" data-pref="autoplayNext" ${store.get('autoplayNext', true) ? 'checked' : ''}> Play the next episode automatically</label>
+      <h2>This browser</h2>
       <label class="check"><input type="checkbox" data-pref="subsOn" ${store.get('subsOn', false) ? 'checked' : ''}> Turn on subtitles by default</label>
-      <label class="check"><input type="checkbox" data-pref="autoSkipIntro" ${store.get('autoSkipIntro', false) ? 'checked' : ''}> Skip intros automatically</label>
       <label>Streaming quality
         <select data-pref="quality">${[['', 'Automatic (original at home, adaptive when away)'], ['original', 'Original'], ['auto', 'Adaptive (adjusts to your connection)'],
           ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']].map(([v, l]) => html`<option value="${v}" ${(store.get('quality', '') || '') === v ? 'selected' : ''}>${l}</option>`)}</select></label>
@@ -212,6 +219,12 @@ async function viewAccount({ query, seq }) {
     router();
   };
   if (query?.get('code') || parseHash().path === '/link') $('#link-form').scrollIntoView({ block: 'center' });
+  $('#player-prefs').onchange = async (e) => {
+    const k = e.target.dataset.acct;
+    if (!k) return;
+    const v = e.target.type === 'checkbox' ? e.target.checked : Number(e.target.value);
+    try { await savePlayerPrefs({ [k]: v }); toast('Saved for your account'); } catch (err) { toast(err.message, true); }
+  };
   $('#prefs').onchange = (e) => { const k = e.target.dataset.pref; if (k) { store.set(k, e.target.type === 'checkbox' ? e.target.checked : e.target.value); toast('Saved'); } };
   const savePin = async (pin) => {
     const f = $('#pin-form').elements;

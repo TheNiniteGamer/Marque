@@ -2,6 +2,8 @@
 // Playing videos: direct streams, conversion, adaptive streaming, seek previews, watch together and subtitles.
 // Registered by server.js, which passes the shared helpers and services in `app`.
 
+const { playerPrefs } = require('../lib/auth');
+
 module.exports = function register(app) {
   const {
     fs, crypto, path, pipeline, media, subs, lib, hlsLib,
@@ -97,6 +99,7 @@ module.exports = function register(app) {
       intro: item.intro?.end ? { start: item.intro.start, end: item.intro.end } : null,
       credits: item.credits?.start ? { start: item.credits.start } : null,
       cast: castAddresses(),
+      prefs: playerPrefs(user),
     });
   });
 

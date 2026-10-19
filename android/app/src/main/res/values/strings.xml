@@ -34,6 +34,7 @@
     <string name="audio">Audio</string>
     <string name="back">Back</string>
     <string name="skip_intro">Skip Intro</string>
+    <string name="skip_credits">Skip Credits</string>
     <string name="watch_credits">Watch credits</string>
     <string name="intro_skipped">Skipped the intro</string>
     <string name="quality">Quality</string>

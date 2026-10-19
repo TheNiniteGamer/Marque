@@ -39,12 +39,15 @@ On the home page ✱ opens search; on the code screen it changes the server.
     seconds.
   - **Left / right** scrub through the video with preview pictures (hold to go faster, release to
     jump there); **◀◀ / ▶▶** scrub faster; **↺** jumps back 10 s.
-  - **Down** reaches the buttons: back 10 s, play/pause, ahead 10 s, **Episodes**,
-    **Audio & Subtitles** and **Next Episode**.
-  - **Skip Intro** appears during the intro: **OK** (or **Up**) skips it.
+  - **Down** reaches the buttons: **Episodes** on the left, back 10 s / play-pause / ahead 10 s in
+    the middle, **Audio & Subtitles** and **Next Episode** on the right.
+  - **Skip Intro** appears during the intro, and **Skip Credits** in a film's end credits:
+    **OK** (or **Up**) presses it. It fades after 10 seconds and comes back when you bring up the
+    controls; the time (5–30 s, or "stay") is under Account → **Player** on the web, along with
+    playing the next episode automatically and skipping intros automatically.
   - At the credits a **Next Episode** card counts down from 10 and starts it (or choose *Watch
-    Credits*). After three episodes in a row without touching the remote it asks whether you're
-    still watching.
+    Credits*). With autoplay off, the card has no countdown and fades like the skip buttons. After
+    three episodes in a row without touching the remote it asks whether you're still watching.
   - Paused for a while, the screen shows what you're watching. **Back** leaves (your place is
     saved).
 

@@ -19,6 +19,12 @@ sub init()
     m.remaining = m.top.findNode("remaining")
     m.ctlPlay = m.top.findNode("ctlPlay")
     m.actions = m.top.findNode("actions")
+    m.leftActions = m.top.findNode("leftActions")
+    m.skipText = m.top.findNode("skipText")
+    m.skipFadeOut = m.top.findNode("skipFadeOut")
+    m.nextFadeOut = m.top.findNode("nextFadeOut")
+    m.toast = m.top.findNode("toast")
+    m.toastTimer = m.top.findNode("toastTimer")
     m.skip = m.top.findNode("skip")
     m.upNext = m.top.findNode("upNext")
     m.idle = m.top.findNode("idle")
@@ -43,6 +49,9 @@ sub init()
     m.commitTimer.observeField("fire", "commitScrub")
     m.idleTimer.observeField("fire", "showIdle")
     m.countTimer.observeField("fire", "onCountdown")
+    m.toastTimer.observeField("fire", "hideToast")
+    m.skipFadeOut.observeField("state", "onSkipFaded")
+    m.nextFadeOut.observeField("state", "onNextFaded")
     m.audioList.observeField("checkedItem", "onAudioPicked")
     m.subList.observeField("checkedItem", "onSubtitlePicked")
     m.top.observeField("focusedChild", "onFocusChange")
@@ -62,6 +71,10 @@ sub init()
     m.upNextIndex = 0
     m.tp = invalid
     m.tpAskedAt = -1000
+    m.prefs = { autoplayNext: true, autoSkipIntro: false, skipFade: 10 }
+    m.skipPart = ""
+    m.skipSince = 0
+    m.autoSkipped = false
     m.clock = CreateObject("roTimespan")
     m.spin.control = "start"
 end sub
@@ -94,6 +107,13 @@ sub onPlayback(event as Object)
         return
     end if
     m.pb = r.data
+    ' Player settings from the account (Account → Player on the web).
+    p = m.pb.prefs
+    if p <> invalid then
+        if p.autoplayNext <> invalid then m.prefs.autoplayNext = mqIsTrue(p.autoplayNext)
+        if p.autoSkipIntro <> invalid then m.prefs.autoSkipIntro = mqIsTrue(p.autoSkipIntro)
+        if p.skipFade <> invalid then m.prefs.skipFade = mqNum(p.skipFade)
+    end if
     start()
 end sub
 
@@ -238,9 +258,7 @@ end sub
 sub onPosition()
     at = m.video.position
     if not m.scrubbing then drawBar(at)
-    ' Skip Intro while the intro is on.
-    intro = m.item.intro
-    m.skip.visible = intro <> invalid and at >= mqNum(intro.start) and at < mqNum(intro.end) - 1 and not m.upNext.visible
+    updateSkip(at)
     ' The next episode's card at the credits (or 20 s before the end when no credits were found).
     if m.item.next <> invalid and not m.upNextShown and not m.upNextDismissed and m.duration > 0 then
         creditsAt = m.duration - 20
@@ -268,26 +286,31 @@ end sub
 ' ---------- the controls ----------
 
 sub buildActions()
-    m.ctls = [{ kind: "icon", node: m.top.findNode("ctlBack"), action: "back10" }, { kind: "icon", node: m.ctlPlay, action: "play" }, { kind: "icon", node: m.top.findNode("ctlFwd"), action: "fwd10" }]
-    labels = []
-    if m.item.type = "episode" and m.item.showId <> invalid then labels.Push(["Episodes", "episodes"])
-    if m.subs.Count() > 0 or (m.item.audioTracks <> invalid and m.item.audioTracks.Count() > 1) then labels.Push(["Audio & Subtitles", "tracks"])
-    if m.item.next <> invalid then labels.Push(["Next Episode", "next"])
-    for each l in labels
-        g = m.actions.createChild("Group")
-        t = g.createChild("Label")
-        t.text = l[0]
-        t.font = "font:MediumBoldSystemFont"
-        u = g.createChild("Rectangle")
-        u.height = 5
-        u.color = "0xE31B23FF"
-        w = t.boundingRect().width
-        if w < 20 then w = Len(l[0]) * 20
-        u.width = w
-        u.translation = [0, 52]
-        m.ctls.Push({ kind: "text", node: g, label: t, line: u, action: l[1] })
-    end for
+    ' Left to right: Episodes · back 10, play/pause, ahead 10 (centred) · Audio & Subtitles, Next Episode.
+    m.ctls = []
+    if m.item.type = "episode" and m.item.showId <> invalid then addAction(m.leftActions, "Episodes", "episodes")
+    m.ctlIndex = m.ctls.Count() + 1
+    m.ctls.Push({ kind: "icon", node: m.top.findNode("ctlBack"), action: "back10" })
+    m.ctls.Push({ kind: "icon", node: m.ctlPlay, action: "play" })
+    m.ctls.Push({ kind: "icon", node: m.top.findNode("ctlFwd"), action: "fwd10" })
+    if m.subs.Count() > 0 or (m.item.audioTracks <> invalid and m.item.audioTracks.Count() > 1) then addAction(m.actions, "Audio & Subtitles", "tracks")
+    if m.item.next <> invalid then addAction(m.actions, "Next Episode", "next")
     paintControls()
+end sub
+
+sub addAction(row as Object, text as String, action as String)
+    g = row.createChild("Group")
+    t = g.createChild("Label")
+    t.font = "font:MediumBoldSystemFont"
+    t.text = text
+    u = g.createChild("Rectangle")
+    u.height = 5
+    u.color = "0xE31B23FF"
+    w = t.boundingRect().width
+    if w < 20 then w = Len(text) * 20
+    u.width = w
+    u.translation = [0, 52]
+    m.ctls.Push({ kind: "text", node: g, label: t, line: u, action: action })
 end sub
 
 sub paintControls()
@@ -320,6 +343,7 @@ sub showOverlay(zone = "" as String)
     end if
     m.bigPlay.visible = m.video.state = "paused"
     paintControls()
+    paintSkip()
     m.hideTimer.control = "stop"
     if m.video.state = "playing" and not m.scrubbing then m.hideTimer.control = "start"
 end sub
@@ -328,6 +352,7 @@ sub hideOverlay()
     if m.scrubbing or m.video.state = "paused" then return
     m.overlay.visible = false
     m.zone = "bar"
+    paintSkip()
 end sub
 
 sub togglePause()
@@ -473,11 +498,76 @@ sub showPreview(at as Float)
     m.preview.visible = true
 end sub
 
-' ---------- Skip Intro, Up Next ----------
+' ---------- Skip Intro / Skip Credits, Up Next ----------
+
+' "Skip Intro" during the intro, "Skip Credits" in a film's end credits (episodes get the Next Episode
+' card). It fades after the account's skipFade seconds (0 = stays), and comes back with the controls.
+sub updateSkip(at as Float)
+    part = ""
+    intro = m.item.intro
+    if intro <> invalid and at >= mqNum(intro.start) and at < mqNum(intro.end) - 1 then part = "intro"
+    credits = m.item.credits
+    d = duration()
+    if part = "" and m.item.next = invalid and credits <> invalid and mqNum(credits.start) > 0 and at >= mqNum(credits.start) and d > 0 and at < d - 2 then part = "credits"
+    if part = "intro" and m.prefs.autoSkipIntro and not m.autoSkipped and m.video.state = "playing" then
+        m.autoSkipped = true
+        m.video.seek = mqNum(intro.end)
+        toast("Skipped the intro")
+        part = ""
+    end if
+    if part <> m.skipPart then
+        m.skipPart = part
+        m.skipSince = m.clock.TotalSeconds()
+        if part = "intro" then m.skipText.text = "Skip Intro"
+        if part = "credits" then m.skipText.text = "Skip Credits"
+    end if
+    paintSkip()
+end sub
+
+sub paintSkip()
+    show = m.skipPart <> "" and not m.upNext.visible and not m.panel.visible
+    fade = m.prefs.skipFade
+    fresh = fade <= 0 or m.clock.TotalSeconds() - m.skipSince < fade
+    if show and (fresh or m.overlay.visible) then
+        m.skipFadeOut.control = "stop"
+        m.skip.opacity = 1.0
+        m.skip.visible = true
+    else if show and m.skip.visible and m.skip.opacity >= 1.0 and m.skipFadeOut.state <> "running" then
+        m.skipFadeOut.control = "start"
+    else if not show then
+        m.skipFadeOut.control = "stop"
+        m.skip.visible = false
+    end if
+end sub
+
+sub onSkipFaded()
+    if m.skipFadeOut.state = "stopped" and m.skip.opacity < 0.05 then m.skip.visible = false
+end sub
+
+function skipShowing() as Boolean
+    return m.skip.visible and m.skip.opacity > 0.5
+end function
 
 sub skipIntro()
+    if m.skipPart = "credits" then
+        ' Skipping a film's credits ends it (and counts it as watched).
+        report(true, duration())
+        leave()
+        m.top.navigate = { back: true }
+        return
+    end if
     m.video.seek = mqNum(m.item.intro.end)
     m.skip.visible = false
+end sub
+
+sub toast(text as String)
+    m.top.findNode("toastText").text = text
+    m.toast.visible = true
+    m.toastTimer.control = "start"
+end sub
+
+sub hideToast()
+    m.toast.visible = false
 end sub
 
 sub showUpNext(stillWatching as Boolean)
@@ -492,13 +582,27 @@ sub showUpNext(stillWatching as Boolean)
     m.count = 10
     m.skip.visible = false
     m.overlay.visible = false
+    m.nextFadeOut.control = "stop"
+    m.upNext.opacity = 1.0
     m.upNext.visible = true
+    m.autoplay = m.prefs.autoplayNext and not stillWatching
     paintUpNext()
-    if not stillWatching then m.countTimer.control = "start"
+    if m.autoplay then
+        m.countTimer.control = "start"
+    else if not stillWatching and m.prefs.skipFade > 0 then
+        ' No countdown: the card fades like the skip buttons (Next Episode is also under the bar).
+        m.count = Int(m.prefs.skipFade)
+        m.countTimer.control = "start"
+    end if
+end sub
+
+sub onNextFaded()
+    if m.nextFadeOut.state = "stopped" and m.upNext.opacity < 0.05 then dismissUpNext()
 end sub
 
 sub paintUpNext()
     first = "Next Episode in " + m.count.ToStr()
+    if not m.autoplay then first = "Next Episode"
     second = "Watch Credits"
     if m.stillWatching then
         m.top.findNode("nextKind").text = "ARE YOU STILL WATCHING?"
@@ -524,7 +628,7 @@ sub onCountdown()
     m.count = m.count - 1
     if m.count <= 0 then
         m.countTimer.control = "stop"
-        playNext(true)
+        if m.autoplay then playNext(true) else m.nextFadeOut.control = "start"
     else
         paintUpNext()
     end if
@@ -532,6 +636,8 @@ end sub
 
 sub dismissUpNext()
     m.countTimer.control = "stop"
+    m.nextFadeOut.control = "stop"
+    m.upNext.opacity = 1.0
     m.upNext.visible = false
     m.upNextDismissed = true
 end sub
@@ -540,7 +646,10 @@ sub finished()
     m.reportTimer.control = "stop"
     if m.item.next <> invalid then
         ' Three episodes in a row with nobody touching the remote: ask first.
-        if m.global.autoNexts >= 3 then
+        if not m.prefs.autoplayNext then
+            leave()
+            m.top.navigate = { back: true }
+        else if m.global.autoNexts >= 3 then
             showUpNext(true)
         else
             playNext(true)
@@ -692,9 +801,10 @@ sub onReportTimer()
     if m.video.state = "playing" then report(false)
 end sub
 
-sub report(stopped as Boolean)
+sub report(stopped as Boolean, position = -1 as Float)
     if m.item = invalid or m.done then return
     at = m.video.position
+    if position >= 0 then at = position
     if at <= 0 and not stopped then return
     if stopped then m.done = true
     mqApi("/api/items/" + m.item.id + "/progress", "onReported", "POST", { position: at, paused: m.video.state = "paused", stopped: stopped, client: "Roku", mode: m.mode })
@@ -789,7 +899,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
 
     if not m.overlay.visible then
-        if (key = "OK" or key = "up") and m.skip.visible then
+        if (key = "OK" or key = "up") and skipShowing() then
             skipIntro()
         else if key = "OK" then
             togglePause()

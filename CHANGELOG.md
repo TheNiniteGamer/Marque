@@ -4,6 +4,19 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.7.2
+
+- **Skip Intro and Skip Credits fade away** after 10 seconds, and come back when you bring up the
+  controls. Choose the time (5, 10, 15 or 30 seconds, or stay until the intro or credits end) in
+  Account → **Player**.
+- **Player settings follow your account:** *Play the next episode automatically*, *Skip intros
+  automatically* and the fade time now apply on every device: web, the Android apps and Roku.
+  (This browser's earlier choices are carried over the first time you sign in.)
+- **Skip Credits** for films with detected end credits: it ends the film and counts it as watched.
+- Roku (channel 1.2.0): play/pause and the 10-second skips are centred under the bar, with
+  Episodes on the left and Audio & Subtitles / Next Episode on the right; autoplay off and
+  automatic intro skipping now work there too. Android apps 1.4.1 / TV 1.0.1.
+
 ## 0.7.1
 
 **Roku player redone** to work like the big streaming apps (channel 1.1.0: download it again from

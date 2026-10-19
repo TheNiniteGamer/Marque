@@ -40,7 +40,8 @@
         <Label id="remaining" translation="[1584,-16]" width="144" horizAlign="right" color="0xFFFFFFFF" font="font:MediumSystemFont" />
       </Group>
 
-      <LayoutGroup id="icons" translation="[96,940]" layoutDirection="horiz" itemSpacings="[36]">
+      <LayoutGroup id="leftActions" translation="[96,952]" layoutDirection="horiz" itemSpacings="[56]" />
+      <LayoutGroup id="icons" translation="[960,940]" layoutDirection="horiz" horizAlignment="center" itemSpacings="[48]">
         <Poster id="ctlBack" uri="pkg:/images/pl_back10.png" width="64" height="64" scaleRotateCenter="[32,32]" />
         <Poster id="ctlPlay" uri="pkg:/images/pl_pause.png" width="64" height="64" scaleRotateCenter="[32,32]" />
         <Poster id="ctlFwd" uri="pkg:/images/pl_fwd10.png" width="64" height="64" scaleRotateCenter="[32,32]" />
@@ -48,10 +49,20 @@
       <LayoutGroup id="actions" translation="[1824,952]" layoutDirection="horiz" horizAlignment="right" itemSpacings="[56]" />
     </Group>
 
-    <!-- Skip Intro: OK (or Up) presses it -->
+    <!-- Skip Intro / Skip Credits: OK (or Up) presses it. Fades after the account's skipFade seconds. -->
     <Group id="skip" visible="false" translation="[1500,760]">
       <Rectangle width="324" height="76" color="0xFFFFFFFF" />
-      <Label text="Skip Intro" width="324" height="76" horizAlign="center" vertAlign="center" color="0x000000FF" font="font:MediumBoldSystemFont" />
+      <Label id="skipText" text="Skip Intro" width="324" height="76" horizAlign="center" vertAlign="center" color="0x000000FF" font="font:MediumBoldSystemFont" />
+    </Group>
+    <Animation id="skipFadeOut" duration="0.6" repeat="false" easeFunction="linear">
+      <FloatFieldInterpolator key="[0.0, 1.0]" keyValue="[1.0, 0.0]" fieldToInterp="skip.opacity" />
+    </Animation>
+    <Animation id="nextFadeOut" duration="0.6" repeat="false" easeFunction="linear">
+      <FloatFieldInterpolator key="[0.0, 1.0]" keyValue="[1.0, 0.0]" fieldToInterp="upNext.opacity" />
+    </Animation>
+    <Group id="toast" visible="false" translation="[760,72]">
+      <Rectangle width="400" height="64" color="0x141414E6" />
+      <Label id="toastText" width="400" height="64" horizAlign="center" vertAlign="center" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
     </Group>
 
     <!-- At the credits: the next episode, starting by itself after a countdown -->
@@ -99,6 +110,7 @@
     <Timer id="commitTimer" duration="0.9" />
     <Timer id="idleTimer" duration="12" />
     <Timer id="countTimer" duration="1" repeat="true" />
+    <Timer id="toastTimer" duration="2.5" />
   </children>
   <script type="text/brightscript" uri="PlayerScreen.brs" />
   <script type="text/brightscript" uri="pkg:/components/common.brs" />

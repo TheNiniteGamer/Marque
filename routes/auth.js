@@ -2,6 +2,8 @@
 // Sign-in, "Who's watching?" profiles and user accounts.
 // Registered by server.js, which passes the shared helpers and services in `app`.
 
+const { playerPrefs, cleanPrefs } = require('../lib/auth');
+
 module.exports = function register(app) {
   const {
     publicUser, store, auth, HttpError, json, readBody, getUser, isPrivateIp,
@@ -91,6 +93,16 @@ module.exports = function register(app) {
     if (!(await auth.login(user.username, body.currentPassword))) throw new HttpError(400, 'Current password is incorrect');
     await auth.setPin(user, body.pin || null);
     json(res, 200, { user: publicUser(user) });
+  });
+
+  // Player settings for your account (they apply on every device you watch on).
+  route('PUT', '/api/auth/prefs', async (req, res, p, url, user) => {
+    const body = await readBody(req);
+    let clean;
+    try { clean = cleanPrefs(body || {}); } catch (err) { throw new HttpError(400, err.message); }
+    user.prefs = { ...(user.prefs || {}), ...clean };
+    store.save();
+    json(res, 200, { prefs: playerPrefs(user) });
   });
 
   route('POST', '/api/auth/password', async (req, res, p, url, user) => {

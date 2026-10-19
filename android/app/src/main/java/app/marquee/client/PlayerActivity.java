@@ -13,6 +13,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Rational;
 import android.view.KeyEvent;
 import android.view.View;
@@ -70,6 +71,11 @@ public class PlayerActivity extends Activity {
     private JSONObject playback;   // signed link + streaming session from /playback
     private JSONObject intro, credits;
     private boolean autoSkipIntro, autoSkipped, creditsShown;
+    // Skip Intro / Skip Credits fade after skipFade seconds (0 = stay); they come back with the controls.
+    private int skipFade = 10;
+    private String skipPart;
+    private long skipSince;
+    private boolean skipFading;
     private double offset;       // seconds: where a converted stream starts in the real timeline
     private double pendingSeek;  // seconds: seek to this once a direct stream is ready
     private double duration;
@@ -109,7 +115,11 @@ public class PlayerActivity extends Activity {
         qualityBtn = findViewById(R.id.quality);
         skipIntro = findViewById(R.id.skip_intro);
         qualityBtn.setOnClickListener(v -> chooseQuality());
-        skipIntro.setOnClickListener(v -> { if (intro != null) seekTo(intro.optDouble("end")); skipIntro.setVisibility(View.GONE); });
+        skipIntro.setOnClickListener(v -> {
+            if ("credits".equals(skipPart)) { finish(); return; } // leaving in the credits counts as watched
+            if (intro != null) seekTo(intro.optDouble("end"));
+            skipIntro.setVisibility(View.GONE);
+        });
 
         findViewById(R.id.back).setOnClickListener(v -> finish());
         findViewById(R.id.root).setOnClickListener(v -> setControls(controls.getVisibility() != View.VISIBLE));
@@ -139,6 +149,7 @@ public class PlayerActivity extends Activity {
             autoplayNext = req.optBoolean("autoplayNext", true);
             subsOn = req.optBoolean("subsOn", false);
             autoSkipIntro = req.optBoolean("autoSkipIntro", false);
+            skipFade = req.optInt("skipFade", 10);
             qualityPref = req.optString("quality", "");
             load(req.getString("id"), req.optDouble("start", 0));
         } catch (Exception e) {
@@ -181,6 +192,7 @@ public class PlayerActivity extends Activity {
         intro = it.optJSONObject("intro");
         credits = it.optJSONObject("credits");
         autoSkipped = creditsShown = false;
+        skipPart = null;
         skipIntro.setVisibility(View.GONE);
         duration = it.optDouble("duration", 0);
         seek.setMax((int) Math.max(1, duration));
@@ -378,9 +390,32 @@ public class PlayerActivity extends Activity {
             Toast.makeText(this, R.string.intro_skipped, Toast.LENGTH_SHORT).show();
             in = false;
         }
-        skipIntro.setVisibility(in ? View.VISIBLE : View.GONE);
         // "Up next" as soon as the end credits start.
         JSONObject n = item.optJSONObject("next");
+        // A film's end credits get "Skip Credits" instead.
+        boolean inCredits = credits != null && n == null && duration > 0 && t >= credits.optDouble("start") && t < duration - 2;
+        String part = in ? "intro" : inCredits ? "credits" : null;
+        if (part == null ? skipPart != null : !part.equals(skipPart)) {
+            skipPart = part;
+            skipSince = SystemClock.elapsedRealtime();
+            if (part != null) skipIntro.setText(in ? R.string.skip_intro : R.string.skip_credits);
+        }
+        boolean show = part != null && (skipFade <= 0 || SystemClock.elapsedRealtime() - skipSince < skipFade * 1000L
+            || controls.getVisibility() == View.VISIBLE);
+        if (show) {
+            if (skipFading) { skipIntro.animate().cancel(); skipFading = false; }
+            skipIntro.setAlpha(1f);
+            skipIntro.setVisibility(View.VISIBLE);
+        } else if (part == null) {
+            skipIntro.setVisibility(View.GONE);
+        } else if (skipIntro.getVisibility() == View.VISIBLE && !skipFading) {
+            skipFading = true;
+            skipIntro.animate().alpha(0f).setDuration(600).withEndAction(() -> {
+                skipFading = false;
+                skipIntro.setVisibility(View.GONE);
+                skipIntro.setAlpha(1f);
+            }).start();
+        }
         if (credits != null && n != null && !creditsShown && !dragging && t >= credits.optDouble("start") && t < credits.optDouble("start") + 30) {
             creditsShown = true;
             showUpNext(n, autoplayNext ? 10 : -1, true);
