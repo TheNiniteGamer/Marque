@@ -44,13 +44,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Native video player. Plays files directly when the phone can decode them, otherwise asks the
+ * Native video player, the same on phones and TVs (controls: PlayerControls). Plays files directly when the phone can decode them, otherwise asks the
  * server to convert them on the fly (same /transcode endpoint the web player uses). A lower quality
  * can be chosen, which plays the server's adaptive (HLS) stream through Android's own player.
  */
 public class PlayerActivity extends Activity {
     static final String EXTRA_REQUEST = "request";
-    private static final float[] SPEEDS = {0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f};
+    static final float[] SPEEDS = {0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f};
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final String clientId = "android-" + Long.toHexString(System.nanoTime());
@@ -59,17 +59,14 @@ public class PlayerActivity extends Activity {
     private VideoView video;
     private View controls;
     private ProgressBar spinner;
-    private SeekBar seek;
-    private TextView title, subtitle, time, subs;
-    private ImageView playPause;
-    private ImageButton next, audioBtn, qualityBtn;
+    private TextView title, subtitle, subs;
     private Button skipIntro;
 
     String base;
     JSONObject item;
-    // On a TV the controls are worked with the remote like the Roku channel (TvControls); phones keep touch controls.
+    // The controls, worked by touch on a phone and by the remote on a TV (like the Roku channel).
     private boolean tv;
-    private TvControls tvUi;
+    private PlayerControls controlsUi;
     private boolean direct;
     private boolean directCapable;  // the phone can play the original file
     private int burn = -1;          // picture subtitle track the server draws into the video, or -1
@@ -91,38 +88,30 @@ public class PlayerActivity extends Activity {
     String subId;
     private List<Vtt.Cue> cues = new ArrayList<>();
     private MediaPlayer mp;
-    private float speed = 1f;
-    private boolean dragging, subsOn;
+    float speed = 1f;
+    private boolean subsOn;
     boolean autoplayNext = true;
     private long lastReport;
-    private AlertDialog upNext;
     private boolean pipUsed;
 
     // (Lambdas and static classes only: build-tools 34's dex tool crashes on anonymous classes from Java 21.)
     private final Runnable tick = this::tickLoop;
-    private final Runnable hideControls = () -> { if (video.isPlaying()) setControls(false); };
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         tv = isTvDevice();
-        setContentView(tv ? R.layout.activity_player_tv : R.layout.activity_player);
+        setContentView(R.layout.activity_player);
         immersive();
         base = Prefs.server(this);
         Net.refreshCookie(base);
         video = findViewById(R.id.video);
         controls = findViewById(R.id.controls);
         spinner = findViewById(R.id.spinner);
-        seek = findViewById(R.id.seek);
         title = findViewById(R.id.title);
         subtitle = findViewById(R.id.subtitle);
-        time = findViewById(R.id.time);
         subs = findViewById(R.id.subs);
-        playPause = findViewById(R.id.play_pause);
-        next = findViewById(R.id.next);
-        audioBtn = findViewById(R.id.audio);
-        qualityBtn = findViewById(R.id.quality);
         skipIntro = findViewById(R.id.skip_intro);
         skipIntro.setOnClickListener(v -> {
             if ("credits".equals(skipPart)) { finish(); return; } // leaving in the credits counts as watched
@@ -130,24 +119,13 @@ public class PlayerActivity extends Activity {
             skipIntro.setVisibility(View.GONE);
         });
 
-        if (tv) {
-            tvUi = new TvControls(this);
-        } else {
-            qualityBtn.setOnClickListener(v -> chooseQuality());
-            findViewById(R.id.back).setOnClickListener(v -> finish());
-            findViewById(R.id.root).setOnClickListener(v -> setControls(controls.getVisibility() != View.VISIBLE));
-            playPause.setOnClickListener(v -> { togglePlay(); poke(); });
-            findViewById(R.id.rewind).setOnClickListener(v -> { seekTo(now() - 10); poke(); });
-            findViewById(R.id.forward).setOnClickListener(v -> { seekTo(now() + 30); poke(); });
-            findViewById(R.id.subs_btn).setOnClickListener(v -> chooseSubtitles());
-            findViewById(R.id.speed).setOnClickListener(v -> chooseSpeed());
-            audioBtn.setOnClickListener(v -> chooseAudio());
-            next.setOnClickListener(v -> playNext());
-            findViewById(R.id.pip).setOnClickListener(v -> enterPip());
-            if (Build.VERSION.SDK_INT < 26 || !getPackageManager().hasSystemFeature("android.software.picture_in_picture")) findViewById(R.id.pip).setVisibility(View.GONE);
-
-            seek.setOnSeekBarChangeListener(new SeekListener(this));
-        }
+        controlsUi = new PlayerControls(this, tv);
+        // Phones: a back arrow and picture-in-picture at the top (a TV remote has its own Back).
+        View back = findViewById(R.id.back), pip = findViewById(R.id.pip);
+        back.setOnClickListener(v -> finish());
+        pip.setOnClickListener(v -> enterPip());
+        if (tv) back.setVisibility(View.GONE);
+        if (tv || Build.VERSION.SDK_INT < 26 || !getPackageManager().hasSystemFeature("android.software.picture_in_picture")) pip.setVisibility(View.GONE);
 
         video.setOnPreparedListener(this::onPrepared);
         video.setOnCompletionListener(m -> onEnded());
@@ -176,14 +154,6 @@ public class PlayerActivity extends Activity {
         ui.postDelayed(tick, 250);
     }
 
-    static final class SeekListener implements SeekBar.OnSeekBarChangeListener {
-        private final PlayerActivity a;
-        SeekListener(PlayerActivity a) { this.a = a; }
-        @Override public void onProgressChanged(SeekBar s, int p, boolean user) { if (user) a.time.setText(a.label(p)); }
-        @Override public void onStartTrackingTouch(SeekBar s) { a.dragging = true; a.ui.removeCallbacks(a.hideControls); }
-        @Override public void onStopTrackingTouch(SeekBar s) { a.dragging = false; a.seekTo(s.getProgress()); a.poke(); }
-    }
-
     // ---------------------------------------------------------------- loading
     private void load(String id, double start) {
         spinner.setVisibility(View.VISIBLE);
@@ -209,19 +179,14 @@ public class PlayerActivity extends Activity {
         skipPart = null;
         skipIntro.setVisibility(View.GONE);
         duration = it.optDouble("duration", 0);
-        if (seek != null) seek.setMax((int) Math.max(1, duration));
         boolean isEp = "episode".equals(it.optString("type"));
         title.setText(it.optString("title"));
         String sub = isEp ? it.optString("showTitle") + epLabel(it) : (it.optInt("year", 0) > 0 ? String.valueOf(it.optInt("year")) : "");
         subtitle.setText(sub);
-        if (tv && isEp) {
-            // TV: the show big, then "S1:E3  Episode title"
+        if (isEp) {
+            // The show big, then "S1:E3  Episode title"
             title.setText(it.optString("showTitle"));
             subtitle.setText("S" + it.optInt("season") + ":E" + it.optInt("episode") + "  " + it.optString("title"));
-        }
-        if (!tv) {
-            next.setVisibility(it.optJSONObject("next") != null ? View.VISIBLE : View.GONE);
-            audioBtn.setVisibility(it.optJSONArray("audioTracks") != null && it.optJSONArray("audioTracks").length() > 1 ? View.VISIBLE : View.GONE);
         }
         audioIndex = 0;
 
@@ -234,7 +199,6 @@ public class PlayerActivity extends Activity {
             v != null ? v.optString("codec", null) : null, v != null ? v.optString("profile", null) : null, aCodec, decoders());
         direct = directCapable;
         JSONArray qs = qualities();
-        if (!tv) qualityBtn.setVisibility(qs.length() > 0 ? View.VISIBLE : View.GONE);
         quality = qs.length() > 0 ? PlaybackPlan.defaultQuality(qualityPref, Uri.parse(base).getHost()) : "original";
         // Away from home the server's admin may have capped the quality: the original isn't offered then.
         if ("original".equals(quality) && qs.length() > 0 && !originalAllowed()) quality = "auto";
@@ -259,7 +223,7 @@ public class PlayerActivity extends Activity {
             if (pick == null) pick = list.optJSONObject(0);
             setSubtitles(pick.optString("id"), false);
         }
-        if (tvUi != null) tvUi.onBegin();
+        controlsUi.onBegin();
         open(start);
         ui.removeCallbacks(tick);
         ui.post(tick);
@@ -386,23 +350,12 @@ public class PlayerActivity extends Activity {
         updatePlayIcon();
     }
 
-    private void updatePlayIcon() {
-        if (tvUi != null) { tvUi.onPlayState(video.isPlaying()); return; }
-        playPause.setImageResource(video.isPlaying() ? R.drawable.ic_pause : R.drawable.ic_play);
-    }
+    private void updatePlayIcon() { controlsUi.onPlayState(video.isPlaying()); }
 
     private void update() {
         if (item == null) return;
         double t = now();
-        if (tvUi != null) tvUi.tick(t);
-        else {
-            if (!dragging) {
-                seek.setProgress((int) t);
-                time.setText(label(t));
-            }
-            int buffered = video.getBufferPercentage();
-            if (seekable() && duration > 0) seek.setSecondaryProgress((int) (duration * buffered / 100));
-        }
+        controlsUi.tick(t);
         showSubtitle(cues.isEmpty() ? "" : Vtt.textAt(cues, (long) (t * 1000)));
         updateIntro(t);
         updatePlayIcon();
@@ -444,10 +397,9 @@ public class PlayerActivity extends Activity {
                 skipIntro.setAlpha(1f);
             }).start();
         }
-        if (credits != null && n != null && !creditsShown && !dragging && t >= credits.optDouble("start") && t < credits.optDouble("start") + 30) {
+        if (credits != null && n != null && !creditsShown && !controlsUi.scrubbing() && t >= credits.optDouble("start") && t < credits.optDouble("start") + 30) {
             creditsShown = true;
-            if (tvUi != null) tvUi.showUpNext(n, false);
-            else showUpNext(n, autoplayNext ? 10 : -1, true);
+            controlsUi.showUpNext(n, false);
         }
     }
 
@@ -458,7 +410,6 @@ public class PlayerActivity extends Activity {
         subs.setVisibility(text.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
-    private String label(double t) { return PlaybackPlan.clock(t) + " / " + PlaybackPlan.clock(duration); }
 
     private void markWatched() {
         final String url = base + "/api/items/" + item.optString("id") + "/watched";
@@ -492,33 +443,10 @@ public class PlayerActivity extends Activity {
         io.execute(() -> {
             try { Net.postJson(url, new JSONObject().put("position", duration)); } catch (Exception ignored) { }
         });
-        if (tvUi != null) { tvUi.onEnded(); return; }
-        JSONObject n = item.optJSONObject("next");
-        if (n == null) { finish(); return; }
-        if (upNext != null && upNext.isShowing()) return; // already offered at the credits
-        showUpNext(n, autoplayNext ? 10 : -1, false);
-    }
-
-    private void showUpNext(JSONObject n, int seconds, boolean atCredits) {
-        String name = "S" + n.optInt("season") + " · E" + n.optInt("episode") + " — " + n.optString("title");
-        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(R.string.up_next).setMessage(name)
-            .setPositiveButton(R.string.play_now, (d, w) -> playNext());
-        // At the credits, "Watch credits" just closes the card; at the very end, leave the player.
-        if (atCredits) b.setNegativeButton(R.string.watch_credits, (d, w) -> d.dismiss());
-        else b.setNegativeButton(R.string.close, (d, w) -> finish()).setOnCancelListener(d -> finish());
-        upNext = b.show();
-        if (seconds > 0) countdown(seconds);
-    }
-
-    private void countdown(int left) {
-        if (upNext == null || !upNext.isShowing()) return;
-        upNext.setTitle(getString(R.string.up_next_in, left));
-        if (left <= 0) { upNext.dismiss(); playNext(); return; }
-        ui.postDelayed(() -> countdown(left - 1), 1000);
+        controlsUi.onEnded();
     }
 
     void playNext() {
-        if (upNext != null) upNext.dismiss();
         JSONObject n = item != null ? item.optJSONObject("next") : null;
         if (n == null) return;
         if (credits != null && now() >= credits.optDouble("start") - 1) markWatched(); // left during the credits
@@ -528,21 +456,6 @@ public class PlayerActivity extends Activity {
     }
 
     // ---------------------------------------------------------------- choices
-    private void chooseSubtitles() {
-        JSONArray list = item != null ? item.optJSONArray("subtitles") : null;
-        if (list == null || list.length() == 0) { Toast.makeText(this, R.string.no_subtitles, Toast.LENGTH_SHORT).show(); return; }
-        String[] labels = new String[list.length() + 1];
-        labels[0] = getString(R.string.off);
-        int checked = 0;
-        for (int i = 0; i < list.length(); i++) {
-            labels[i + 1] = list.optJSONObject(i).optString("label");
-            if (list.optJSONObject(i).optString("id").equals(subId)) checked = i + 1;
-        }
-        new AlertDialog.Builder(this).setTitle(R.string.subtitles).setSingleChoiceItems(labels, checked, (d, which) -> {
-            d.dismiss();
-            setSubtitles(which == 0 ? null : list.optJSONObject(which - 1).optString("id"), true);
-        }).show();
-    }
 
     /** From the TV's Audio & Subtitles panel (null = off). */
     void chooseSubtitle(String id) { setSubtitles(id, true); }
@@ -576,18 +489,11 @@ public class PlayerActivity extends Activity {
         });
     }
 
-    private void chooseSpeed() {
-        String[] labels = new String[SPEEDS.length];
-        int checked = 2;
-        for (int i = 0; i < SPEEDS.length; i++) {
-            labels[i] = SPEEDS[i] == 1f ? getString(R.string.normal) : (SPEEDS[i] + "×").replace(".0×", "×");
-            if (SPEEDS[i] == speed) checked = i;
-        }
-        new AlertDialog.Builder(this).setTitle(R.string.speed).setSingleChoiceItems(labels, checked, (d, which) -> {
-            d.dismiss();
-            speed = SPEEDS[which];
-            applySpeed();
-        }).show();
+
+    /** From the Audio & Subtitles panel. */
+    void setSpeed(float s) {
+        speed = s;
+        applySpeed();
     }
 
     private void applySpeed() {
@@ -600,16 +506,6 @@ public class PlayerActivity extends Activity {
         } catch (Exception ignored) { }
     }
 
-    private void chooseAudio() {
-        JSONArray tracks = item != null ? item.optJSONArray("audioTracks") : null;
-        if (tracks == null) return;
-        String[] labels = new String[tracks.length()];
-        for (int i = 0; i < tracks.length(); i++) labels[i] = tracks.optJSONObject(i).optString("label");
-        new AlertDialog.Builder(this).setTitle(R.string.audio).setSingleChoiceItems(labels, audioIndex, (d, which) -> {
-            d.dismiss();
-            selectAudio(which);
-        }).show();
-    }
 
     void selectAudio(int which) {
         audioIndex = which;
@@ -646,25 +542,6 @@ public class PlayerActivity extends Activity {
         open(at);
     }
 
-    private void chooseQuality() {
-        JSONArray qs = qualities();
-        if (qs.length() == 0) return;
-        int first = originalAllowed() ? 1 : 0; // slots before "Auto"
-        String[] ids = new String[qs.length() + 1 + first];
-        String[] labels = new String[ids.length];
-        if (first == 1) { ids[0] = "original"; labels[0] = getString(R.string.quality_original); }
-        ids[first] = "auto"; labels[first] = getString(R.string.quality_auto);
-        int checked = 0;
-        for (int i = 0; i < qs.length(); i++) {
-            ids[i + first + 1] = qs.optJSONObject(i).optString("id");
-            labels[i + first + 1] = qs.optJSONObject(i).optString("label");
-        }
-        for (int i = 0; i < ids.length; i++) if (ids[i].equals(quality)) checked = i;
-        new AlertDialog.Builder(this).setTitle(R.string.quality).setSingleChoiceItems(labels, checked, (d, which) -> {
-            d.dismiss();
-            applyQuality(ids[which]);
-        }).show();
-    }
 
     private void selectDirectAudio(int index) {
         if (mp == null) return;
@@ -687,7 +564,7 @@ public class PlayerActivity extends Activity {
     // are hidden (when they show, the arrows move between the buttons), plus the media keys.
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (tvUi != null && tvUi.onKey(event)) return true;
+        if (controlsUi.onKey(event)) return true;
         return super.dispatchKeyEvent(event);
     }
 
@@ -707,43 +584,14 @@ public class PlayerActivity extends Activity {
             || (m != null && m.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION);
     }
 
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (tvUi != null) return super.onKeyDown(keyCode, event);
-        boolean shown = controls.getVisibility() == View.VISIBLE;
-        switch (keyCode) {
-            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE: case KeyEvent.KEYCODE_SPACE: togglePlay(); setControls(true); return true;
-            case KeyEvent.KEYCODE_MEDIA_PLAY: if (!video.isPlaying()) togglePlay(); setControls(true); return true;
-            case KeyEvent.KEYCODE_MEDIA_PAUSE: if (video.isPlaying()) togglePlay(); setControls(true); return true;
-            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD: seekTo(now() + 30); setControls(true); return true;
-            case KeyEvent.KEYCODE_MEDIA_REWIND: seekTo(now() - 10); setControls(true); return true;
-            case KeyEvent.KEYCODE_MEDIA_NEXT: if (next.getVisibility() == View.VISIBLE) playNext(); return true;
-            case KeyEvent.KEYCODE_DPAD_CENTER: case KeyEvent.KEYCODE_ENTER:
-                if (!shown) { togglePlay(); setControls(true); return true; }
-                break;
-            case KeyEvent.KEYCODE_DPAD_LEFT: if (!shown) { seekTo(now() - 10); setControls(true); return true; } break;
-            case KeyEvent.KEYCODE_DPAD_RIGHT: if (!shown) { seekTo(now() + 30); setControls(true); return true; } break;
-            case KeyEvent.KEYCODE_DPAD_UP: case KeyEvent.KEYCODE_DPAD_DOWN:
-                if (!shown) { setControls(true); playPause.requestFocus(); return true; }
-                break;
-            default: break;
-        }
-        if (shown) poke();
-        return super.onKeyDown(keyCode, event);
-    }
-
     // ---------------------------------------------------------------- chrome
     private void setControls(boolean show) {
-        if (tvUi != null) { if (show) tvUi.show(null); else tvUi.hide(); return; }
-        controls.setVisibility(show ? View.VISIBLE : View.GONE);
-        if (show) poke();
-        else immersive();
+        if (show) controlsUi.show(null);
+        else { controlsUi.hide(); immersive(); }
     }
 
     private void poke() {
-        if (tvUi != null) { tvUi.poke(); return; }
-        ui.removeCallbacks(hideControls);
-        ui.postDelayed(hideControls, 3500);
+        controlsUi.poke();
     }
 
     @SuppressWarnings("deprecation")
@@ -781,7 +629,7 @@ public class PlayerActivity extends Activity {
     @Override
     public void onPictureInPictureModeChanged(boolean inPip, Configuration newConfig) {
         super.onPictureInPictureModeChanged(inPip, newConfig);
-        controls.setVisibility(inPip ? View.GONE : View.VISIBLE);
+        if (inPip) controlsUi.hide(); else controlsUi.show(null);
         if (inPip) pipUsed = true;
     }
 
@@ -818,7 +666,7 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onDestroy() {
         ui.removeCallbacksAndMessages(null);
-        if (tvUi != null) tvUi.release();
+        controlsUi.release();
         if (item != null && video.getCurrentPosition() > 0) report(true);
         video.stopPlayback();
         // Stop the server's conversion right away instead of waiting for it to time out.

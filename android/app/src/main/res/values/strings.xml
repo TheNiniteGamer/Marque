@@ -30,7 +30,7 @@
     <string name="no_subtitles">This video has no subtitles.</string>
     <string name="subtitles_failed">Couldn\'t load the subtitles.</string>
     <string name="off">Off</string>
-    <string name="speed">Playback speed</string>
+    <string name="speed">Speed</string>
     <string name="normal">Normal</string>
     <string name="audio">Audio</string>
     <string name="back">Back</string>

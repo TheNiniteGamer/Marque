@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Player sizes on a phone (values-television/ has the TV ones). -->
+<resources>
+    <dimen name="player_side">20dp</dimen>
+    <dimen name="player_top">10dp</dimen>
+    <dimen name="player_bottom">10dp</dimen>
+    <dimen name="player_title">19sp</dimen>
+    <dimen name="player_subtitle">14sp</dimen>
+    <dimen name="player_icon">48dp</dimen>
+    <dimen name="player_icon_gap">28dp</dimen>
+    <dimen name="player_row">52dp</dimen>
+    <dimen name="player_text">15sp</dimen>
+    <dimen name="player_time">14sp</dimen>
+    <dimen name="player_subs">20sp</dimen>
+    <dimen name="player_subs_bottom">24dp</dimen>
+    <dimen name="player_preview_w">160dp</dimen>
+    <dimen name="player_preview_h">90dp</dimen>
+    <dimen name="player_skip_bottom">130dp</dimen>
+    <dimen name="player_card_w">340dp</dimen>
+    <dimen name="player_big_play">72dp</dimen>
+</resources>

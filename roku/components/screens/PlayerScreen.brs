@@ -298,38 +298,58 @@ sub buildActions()
     paintControls()
 end sub
 
+' A word button: highlighted as a white pill with dark text (as in the Android TV app).
 sub addAction(row as Object, text as String, action as String)
     g = row.createChild("Group")
+    pill = g.createChild("Poster")
+    pill.uri = "pkg:/images/pill.9.png"
+    pill.opacity = 0
     t = g.createChild("Label")
     t.font = "font:MediumBoldSystemFont"
     t.text = text
-    u = g.createChild("Rectangle")
-    u.height = 5
-    u.color = "0xE31B23FF"
     w = t.boundingRect().width
     if w < 20 then w = Len(text) * 20
-    u.width = w
-    u.translation = [0, 52]
-    m.ctls.Push({ kind: "text", node: g, label: t, line: u, action: action })
+    pill.width = w + 48
+    pill.height = 60
+    t.translation = [24, 0]
+    t.height = 60
+    t.vertAlign = "center"
+    m.ctls.Push({ kind: "text", node: g, label: t, pill: pill, action: action })
 end sub
 
 sub paintControls()
+    iconOn = invalid
     for i = 0 to m.ctls.Count() - 1
         c = m.ctls[i]
         on = m.zone = "controls" and i = m.ctlIndex
         if c.kind = "icon" then
             if on then
                 c.node.opacity = 1.0
-                c.node.scale = [1.25, 1.25]
+                c.node.scale = [1.15, 1.15]
+                iconOn = c.node
             else
-                c.node.opacity = 0.7
+                c.node.opacity = 0.75
                 c.node.scale = [1.0, 1.0]
             end if
         else
-            c.line.visible = on
-            if on then c.label.color = "0xFFFFFFFF" else c.label.color = "0xB0B0B0FF"
+            if on then
+                c.pill.opacity = 1.0
+                c.label.color = "0x000000FF"
+            else
+                c.pill.opacity = 0
+                c.label.color = "0xC8C8C8FF"
+            end if
         end if
     end for
+    ' A light circle behind the highlighted icon.
+    focusRing = m.top.findNode("iconFocus")
+    if iconOn <> invalid then
+        r = iconOn.sceneBoundingRect()
+        focusRing.translation = [r.x + r.width / 2 - 44, r.y + r.height / 2 - 44]
+        focusRing.visible = true
+    else
+        focusRing.visible = false
+    end if
     if m.zone = "bar" then m.knob.scale = [1.3, 1.3] else m.knob.scale = [1.0, 1.0]
     m.knob.scaleRotateCenter = [16, 16]
 end sub

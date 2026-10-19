@@ -40,13 +40,15 @@
         <Label id="remaining" translation="[1584,-16]" width="144" horizAlign="right" color="0xFFFFFFFF" font="font:MediumSystemFont" />
       </Group>
 
-      <LayoutGroup id="leftActions" translation="[96,952]" layoutDirection="horiz" itemSpacings="[56]" />
+      <!-- behind the highlighted icon (as in the Android TV app) -->
+      <Poster id="iconFocus" uri="pkg:/images/pl_focus.png" width="88" height="88" visible="false" />
+      <LayoutGroup id="leftActions" translation="[72,942]" layoutDirection="horiz" itemSpacings="[16]" />
       <LayoutGroup id="icons" translation="[960,940]" layoutDirection="horiz" horizAlignment="center" itemSpacings="[48]">
         <Poster id="ctlBack" uri="pkg:/images/pl_back10.png" width="64" height="64" scaleRotateCenter="[32,32]" />
         <Poster id="ctlPlay" uri="pkg:/images/pl_pause.png" width="64" height="64" scaleRotateCenter="[32,32]" />
         <Poster id="ctlFwd" uri="pkg:/images/pl_fwd10.png" width="64" height="64" scaleRotateCenter="[32,32]" />
       </LayoutGroup>
-      <LayoutGroup id="actions" translation="[1824,952]" layoutDirection="horiz" horizAlignment="right" itemSpacings="[56]" />
+      <LayoutGroup id="actions" translation="[1848,942]" layoutDirection="horiz" horizAlignment="right" itemSpacings="[16]" />
     </Group>
 
     <!-- Skip Intro / Skip Credits: OK (or Up) presses it. Fades after the account's skipFade seconds. -->

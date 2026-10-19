@@ -21,20 +21,24 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * The player's controls on a TV, worked like the big streaming apps (and Marquee's Roku channel):
+ * The player's controls, on phones and TVs, laid out like the big streaming apps (and Marquee's
+ * Roku channel). On a phone everything is tapped (the screen shows and hides them, the bar can be
+ * dragged). With a TV remote:
  * OK or ▶‖ pauses and plays; any key shows the title, a progress bar with the time left and
  * back 10 / play / ahead 10; left/right scrub with preview pictures (hold to speed up, release to
  * jump there); Down reaches Episodes, Audio & Subtitles and Next Episode; at the credits a Next
  * Episode card counts down; paused for a while, it shows what you're watching.
  * Nothing takes Android focus: the keys come here from PlayerActivity.dispatchKeyEvent.
  */
-final class TvControls {
+@SuppressWarnings("ClickableViewAccessibility")
+final class PlayerControls {
     /** Episodes started by themselves in a row; any key resets it. After three, ask first. */
     static int autoNexts;
 
     interface Pick { void pick(int index); }
 
     private final PlayerActivity a;
+    private final boolean tv;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final View controls, preview, played, knob, track, upNext, idle, panel;
     private final ImageView previewImg, playIcon, bigPlay, nextThumb;
@@ -72,8 +76,9 @@ final class TvControls {
     private final Runnable countRun = this::countdownTick;
     private final Runnable fadeRun = this::fadeUpNext;
 
-    TvControls(PlayerActivity a) {
+    PlayerControls(PlayerActivity a, boolean tv) {
         this.a = a;
+        this.tv = tv;
         dp = a.getResources().getDisplayMetrics().density;
         controls = a.findViewById(R.id.controls);
         preview = a.findViewById(R.id.tv_preview);
@@ -96,7 +101,39 @@ final class TvControls {
         idle = a.findViewById(R.id.tv_idle);
         panel = a.findViewById(R.id.tv_panel);
         panelCols = a.findViewById(R.id.tv_panel_cols);
+
+        // Touch: tap the picture to show / hide the controls, drag along the bar, tap the buttons.
+        a.findViewById(R.id.root).setOnClickListener(v -> { if (visible()) hide(); else show(null); });
+        bigPlay.setOnClickListener(v -> togglePause());
+        idle.setOnClickListener(v -> { hideIdle(); show(null); });
+        panel.setOnClickListener(v -> closePanel());
+        panelCols.setClickable(true);
+        nextBtn0.setOnClickListener(v -> { stopCountdown(); a.playNext(); });
+        nextBtn1.setOnClickListener(v -> { if (stillWatching) a.finish(); else dismissUpNext(); });
+        upNext.setClickable(true);
+        track.setOnTouchListener((v, ev) -> {
+            if (a.item == null || a.duration <= 0 || v.getWidth() == 0) return false;
+            double f = Math.max(0, Math.min(1, ev.getX() / v.getWidth()));
+            switch (ev.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                case android.view.MotionEvent.ACTION_MOVE:
+                    v.getParent().requestDisallowInterceptTouchEvent(true);
+                    scrubTo(f * a.duration);
+                    return true;
+                case android.view.MotionEvent.ACTION_UP:
+                    scrubTo(f * a.duration);
+                    commitScrub();
+                    return true;
+                case android.view.MotionEvent.ACTION_CANCEL:
+                    commitScrub();
+                    return true;
+                default:
+                    return true;
+            }
+        });
     }
+
+    boolean scrubbing() { return scrubbing; }
 
     // ---------------------------------------------------------------- a new video
     void onBegin() {
@@ -124,11 +161,7 @@ final class TvControls {
         ctlIndex = ctls.size();
         addIcon(playIcon, "play");
         addIcon(a.findViewById(R.id.forward), "fwd10");
-        JSONArray subs = it.optJSONArray("subtitles");
-        JSONArray audio = it.optJSONArray("audioTracks");
-        if ((subs != null && subs.length() > 0) || (audio != null && audio.length() > 1) || a.qualities().length() > 0) {
-            addText(right, a.getString(R.string.audio_subtitles), "tracks");
-        }
+        addText(right, a.getString(R.string.audio_subtitles), "tracks"); // always has Speed at least
         if (it.optJSONObject("next") != null) addText(right, a.getString(R.string.next_episode), "next");
         zone = "bar";
         paint();
@@ -137,12 +170,13 @@ final class TvControls {
     private void addIcon(View v, String action) {
         ctls.add(v);
         actions.add(action);
+        v.setOnClickListener(x -> { act(action); poke(); });
     }
 
     private void addText(LinearLayout row, String text, String action) {
         TextView t = new TextView(a);
         t.setText(text);
-        t.setTextSize(17);
+        t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, a.getResources().getDimension(R.dimen.player_text));
         t.setTypeface(Typeface.DEFAULT_BOLD);
         t.setGravity(Gravity.CENTER);
         int px = (int) (18 * dp), py = (int) (8 * dp);
@@ -152,6 +186,7 @@ final class TvControls {
         row.addView(t, lp);
         ctls.add(t);
         actions.add(action);
+        t.setOnClickListener(x -> { act(action); poke(); });
     }
 
     /** Highlights the chosen button (white pill for words, a light circle and bigger for icons). */
@@ -278,6 +313,20 @@ final class TvControls {
         double size = steps < 3 ? 10 : steps < 10 ? 30 : 60;
         if (fast) size *= 3;
         scrubPos = clamp(scrubPos + dir * size);
+        drawBar(scrubPos);
+        showPreview(scrubPos);
+    }
+
+    /** Dragging along the bar (touch). */
+    private void scrubTo(double t) {
+        if (!scrubbing) {
+            scrubbing = true;
+            wasPaused = !a.isPlaying();
+        }
+        ui.removeCallbacks(commit);
+        show("bar");
+        ui.removeCallbacks(hide);
+        scrubPos = clamp(t);
         drawBar(scrubPos);
         showPreview(scrubPos);
     }
@@ -483,6 +532,14 @@ final class TvControls {
         }
         List<String> qIds = a.qualityIds();
         if (qIds.size() > 1) addColumn(a.getString(R.string.quality), a.qualityLabels(), Math.max(0, qIds.indexOf(a.quality)), i -> a.applyQuality(qIds.get(i)));
+        List<String> speeds = new ArrayList<>();
+        int speedAt = 2;
+        for (int i = 0; i < PlayerActivity.SPEEDS.length; i++) {
+            float sp = PlayerActivity.SPEEDS[i];
+            speeds.add(sp == 1f ? a.getString(R.string.normal) : (sp + "×").replace(".0×", "×"));
+            if (sp == a.speed) speedAt = i;
+        }
+        addColumn(a.getString(R.string.speed), speeds, speedAt, i -> a.setSpeed(PlayerActivity.SPEEDS[i]));
         if (cols.isEmpty()) return;
         panelCol = cols.size() > 1 && subs != null && subs.length() > 0 && audio != null && audio.length() > 1 ? 1 : 0;
         panelRow = chosen.get(panelCol);
@@ -494,7 +551,7 @@ final class TvControls {
     private void addColumn(String heading, List<String> labels, int selected, Pick pick) {
         LinearLayout col = new LinearLayout(a);
         col.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams((int) (250 * dp), ViewGroup.LayoutParams.MATCH_PARENT);
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams((int) ((tv ? 250 : 190) * dp), ViewGroup.LayoutParams.MATCH_PARENT);
         if (!cols.isEmpty()) clp.setMarginStart((int) (20 * dp));
         TextView h = new TextView(a);
         h.setText(heading);
@@ -504,8 +561,11 @@ final class TvControls {
         h.setPadding(0, 0, 0, (int) (14 * dp));
         col.addView(h);
         List<TextView> rows = new ArrayList<>();
+        final int colIndex = cols.size();
         for (String l : labels) {
             TextView t = new TextView(a);
+            final int row = rows.size();
+            t.setOnClickListener(x -> pickRow(colIndex, row));
             t.setText(l);
             t.setTextSize(16);
             t.setSingleLine(true);
@@ -537,6 +597,17 @@ final class TvControls {
         }
     }
 
+    /** A tapped (or OK'd) choice in the panel. */
+    private void pickRow(int c, int r) {
+        panelCol = c;
+        panelRow = r;
+        if (chosen.get(c) != r) {
+            chosen.set(c, r);
+            picks.get(c).pick(r);
+        }
+        paintPanel();
+    }
+
     private void closePanel() {
         panel.setVisibility(View.GONE);
         show("controls");
@@ -553,11 +624,8 @@ final class TvControls {
                 if (panelCol < cols.size() - 1) { panelCol++; panelRow = Math.min(chosen.get(panelCol), cols.get(panelCol).size() - 1); }
                 break;
             case KeyEvent.KEYCODE_DPAD_CENTER: case KeyEvent.KEYCODE_ENTER:
-                if (chosen.get(panelCol) != panelRow) {
-                    chosen.set(panelCol, panelRow);
-                    picks.get(panelCol).pick(panelRow);
-                }
-                break;
+                pickRow(panelCol, panelRow);
+                return true;
             default: return false;
         }
         paintPanel();
