@@ -111,6 +111,24 @@ h2 { font-size: 20px; margin: 0; }
 /* Kids profiles: a label on "Who's watching?" and by the logo. */
 .pp-kids { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); padding: 1px 8px; border-radius: 10px; background: #ffd23f; color: #111; font: 800 12px/1.5 var(--display); letter-spacing: .06em; }
 body.kids .brand::after { content: "KIDS"; margin-left: 10px; padding: 2px 9px; border-radius: 12px; background: #ffd23f; color: #111; font-size: 12px; letter-spacing: .06em; vertical-align: middle; }
+/* Cast: round photos with names (a title's pop-up, a person's page, the player when paused). */
+.cast-row { display: flex; gap: 18px; overflow-x: auto; padding: 4px 2px 8px; scrollbar-width: none; }
+.cast-row::-webkit-scrollbar { display: none; }
+.person-card { flex: none; width: 104px; display: grid; justify-items: center; gap: 4px; text-align: center; color: var(--text); text-decoration: none; }
+.person-photo { position: relative; width: 88px; height: 88px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; font: 900 32px var(--display); color: #fff; }
+.person-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.person-photo.big { width: 140px; height: 140px; font-size: 54px; }
+.person-name { font-size: 14px; font-weight: 600; line-height: 1.25; }
+.person-role { font-size: 12px; color: var(--muted); line-height: 1.25; }
+.person-card:hover .person-photo, .person-card:focus-visible .person-photo { box-shadow: 0 0 0 3px #fff; }
+body.tv .person-card:focus-visible { outline: none; }
+.person-head { display: flex; align-items: center; gap: 24px; margin: 8px 0 28px; }
+.person-head h1 { margin: 0; font-size: 34px; }
+.p-cast { position: absolute; z-index: 3; left: 24px; right: 24px; bottom: 120px; max-width: 760px; padding: 14px 18px 10px; border-radius: 10px; background: rgba(12,12,12,.82); }
+.p-cast-head { font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.p-cast .person-card { width: 92px; }
+.p-cast .person-photo { width: 64px; height: 64px; font-size: 24px; }
+@media (max-width: 640px) { .p-cast { display: none; } }
 .age-badge { display: inline-block; padding: 0 6px; border: 1px solid rgba(255,255,255,.55); border-radius: 3px; font-size: .85em; line-height: 1.5; color: #e6e6e6; }
 .hero-mute { position: absolute; z-index: 2; right: var(--pad); bottom: max(32%, 200px); width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.7); background: rgba(0,0,0,.3); color: #fff; cursor: pointer; display: grid; place-items: center; }
 .hero-mute svg { width: 20px; height: 20px; }

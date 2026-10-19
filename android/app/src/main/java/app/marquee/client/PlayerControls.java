@@ -500,6 +500,16 @@ final class PlayerControls {
         ((TextView) a.findViewById(R.id.tv_idle_title)).setText(isEp ? it.optString("showTitle") : it.optString("title"));
         ((TextView) a.findViewById(R.id.tv_idle_sub)).setText(isEp ? "S" + it.optInt("season") + ":E" + it.optInt("episode") + "  " + it.optString("title") : "");
         ((TextView) a.findViewById(R.id.tv_idle_overview)).setText(it.optString("overview"));
+        // Who's in it.
+        JSONArray cast = it.optJSONArray("cast");
+        StringBuilder who = new StringBuilder();
+        for (int i = 0; cast != null && i < Math.min(6, cast.length()); i++) {
+            JSONObject c = cast.optJSONObject(i);
+            if (who.length() > 0) who.append("  ·  ");
+            who.append(c.optString("name"));
+            if (!c.isNull("character") && !c.optString("character").isEmpty()) who.append(" (").append(c.optString("character")).append(')');
+        }
+        ((TextView) a.findViewById(R.id.tv_idle_cast)).setText(who.length() > 0 ? a.getString(R.string.with_cast, who) : "");
         hide();
         idle.setVisibility(View.VISIBLE);
     }

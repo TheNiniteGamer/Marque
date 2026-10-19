@@ -8,7 +8,7 @@ module.exports = function register(app) {
     DATA_DIR, MEDIA_ROOT, hostLabel, store, scanner, updater, hls, opensubs,
     activity, downloader, transcodes, HttpError, json, readBody, getItem, getShow,
     getLibrary, librarySummary, validateLibraryInput, removeLibraryData, clientIp, isRemote, getTarget, route,
-    matcher, fromHostPath, folderPlaces,
+    matcher, fromHostPath, folderPlaces, crypto, sendFile,
   } = app;
 
   // --- server + libraries ---
@@ -219,6 +219,24 @@ module.exports = function register(app) {
     lib.setWatched(store, user, [item.id], body.watched !== false);
     json(res, 200, lib.itemSummary(store, user, item));
   });
+
+  // --- people: the titles an actor is in, and their photo (fetched from TMDB once, then kept) ---
+  route('GET', '/api/people/:name', async (req, res, { name }, url, user) => {
+    const p = lib.person(store, user, name);
+    if (!p.titles.length) throw new HttpError(404, 'Nobody by that name in your library');
+    json(res, 200, { name: p.name, photo: p.photoSource ? `/api/people/${encodeURIComponent(p.name)}/photo` : null, titles: p.titles });
+  });
+  route('GET', '/api/people/:name/photo', async (req, res, { name }, url, user) => {
+    const p = lib.person(store, user, name);
+    if (!p.photoSource) throw new HttpError(404, 'No photo');
+    const dir = path.join(DATA_DIR, 'people');
+    const key = crypto.createHash('sha1').update(p.photoSource).digest('hex');
+    let file = ['.jpg', '.png', '.webp', '.gif'].map((e) => path.join(dir, key + e)).find((f) => fs.existsSync(f));
+    if (!file) {
+      try { file = await metadata.downloadImage(p.photoSource, dir, key); } catch { throw new HttpError(404, 'No photo'); }
+    }
+    sendFile(req, res, file, { headers: { 'Cache-Control': 'private, max-age=604800' } });
+  }, 'media');
 
   // --- the sound / subtitle languages a person picked, remembered per show ---
   route('PUT', '/api/items/:id/tracks', async (req, res, { id }, url, user) => {

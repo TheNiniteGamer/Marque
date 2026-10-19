@@ -717,6 +717,18 @@ sub showIdle()
     m.top.findNode("idleTitle").text = m.heading.text
     if x.type = "episode" then m.top.findNode("idleSub").text = mqEpLabel(x) + "  " + mqStr(x.title) else m.top.findNode("idleSub").text = ""
     m.top.findNode("idleOverview").text = mqStr(x.overview)
+    ' Who's in it.
+    who = []
+    if x.cast <> invalid then
+        for each c in x.cast
+            if who.Count() < 6 then
+                n = mqStr(c.name)
+                if mqStr(c.character) <> "" then n = n + " (" + mqStr(c.character) + ")"
+                who.Push(n)
+            end if
+        end for
+    end if
+    if who.Count() > 0 then m.top.findNode("idleCast").text = "With " + who.Join("  ·  ") else m.top.findNode("idleCast").text = ""
     m.overlay.visible = false
     m.idle.visible = true
 end sub

@@ -54,6 +54,7 @@
     <string name="pause">Pause</string>
     <string name="back_10">Back 10 seconds</string>
     <string name="ahead_10">Ahead 10 seconds</string>
+    <string name="with_cast">With %1$s</string>
     <string name="youre_watching">You\'re watching</string>
     <string name="episodes">Episodes</string>
     <string name="audio_subtitles">Audio &amp; Subtitles</string>

@@ -637,6 +637,27 @@ function extrasSection(list) {
       <div class="txt"><span class="m">${sub}</span></div></a>`;
   })}</div></section>`;
 }
+// The cast, with photos: each opens the person's page (the titles in your library they're in).
+function personCard(c) {
+  return html`<a class="person-card" href="#/person/${encodeURIComponent(c.name)}">
+    <span class="person-photo" style="background:${avatarColor(c.name)}">${c.photo ? html`<img loading="lazy" src="${c.photo}" alt="" onerror="this.remove()">` : ''}<b>${c.name.slice(0, 1)}</b></span>
+    <span class="person-name">${c.name}</span>${c.character ? html`<span class="person-role">${c.character}</span>` : ''}</a>`;
+}
+function castSection(cast) {
+  if (!cast?.length) return '';
+  return html`<section class="dlg-section"><h2 style="margin-bottom:14px">Cast</h2><div class="cast-row">${cast.slice(0, 12).map(personCard)}</div></section>`;
+}
+
+async function viewPerson({ params: [name], seq }) {
+  const p = await api(`/api/people/${name}`);
+  document.title = `${p.name} · Marquee`;
+  for (const t of p.titles) knownItems.set(t.id, t);
+  setView(seq, html`<div class="person-head">
+      <span class="person-photo big" style="background:${avatarColor(p.name)}">${p.photo ? html`<img src="${p.photo}" alt="" onerror="this.remove()">` : ''}<b>${p.name.slice(0, 1)}</b></span>
+      <div><h1>${p.name}</h1><p class="muted">${p.titles.length} title${p.titles.length === 1 ? '' : 's'} in your library</p></div></div>
+    <div class="grid sized">${p.titles.map((t) => posterCard(t))}</div>`);
+}
+
 // "More like this": other titles sharing genres.
 function similarSection(list) {
   if (!list?.length) return '';
@@ -727,6 +748,7 @@ async function viewShow({ params: [id], query, seq }) {
       <div id="season-body"></div>
     </section>` : ''}
     ${extrasSection(show.extras)}
+    ${castSection(show.cast)}
     ${similarSection(show.similar)}`)) return;
 
   bindDetailActions(show);
@@ -796,6 +818,7 @@ async function viewItem({ params: [id], seq }) {
       ${sideInfo(it)}
     </div>
     ${extrasSection(it.extras)}
+    ${it.type !== 'episode' ? castSection(it.cast) : ''}
     ${similarSection(it.similar)}
     <details class="tech-box"><summary>File and playback details</summary>
       <dl class="tech">
@@ -1159,6 +1182,7 @@ class Player {
       <div class="p-cast-msg" hidden><div class="p-cast-icon">📺</div><div>Playing on <b class="p-cast-name"></b></div>
         <button class="btn small" data-a="cast-stop">Stop casting</button></div>
       <button class="btn p-skip" data-a="skip-intro" hidden>Skip Intro ⏭</button>
+      ${it.cast?.length ? html`<div class="p-cast" hidden><div class="p-cast-head">In this</div><div class="cast-row">${it.cast.slice(0, 6).map(personCard)}</div></div>` : ''}
       <div class="p-top">
         <button class="p-btn" data-a="close" title="Back (Esc)">←</button>
         <div class="p-title">${it.title}<small>${subtitle}</small></div>
@@ -1843,8 +1867,15 @@ class Player {
     v.addEventListener('waiting', () => this.spinner(true));
     v.addEventListener('seeking', () => this.spinner(true));
     for (const ev of ['playing', 'canplay', 'seeked', 'pause']) v.addEventListener(ev, () => { if (ev !== 'pause' || v.readyState >= 3) this.spinner(false); });
-    v.addEventListener('play', () => { $('[data-a=toggle]', this.root).textContent = '❚❚'; this.showControls(); });
-    v.addEventListener('pause', () => { if (this.casting) return; $('[data-a=toggle]', this.root).textContent = '▶'; this.showControls(); this.report(); });
+    // Paused for a moment: who's in it (each opens their page).
+    const castBox = $('.p-cast', this.root);
+    v.addEventListener('play', () => { $('[data-a=toggle]', this.root).textContent = '❚❚'; this.showControls(); clearTimeout(this.castTimer); if (castBox) castBox.hidden = true; });
+    v.addEventListener('pause', () => {
+      if (this.casting) return;
+      $('[data-a=toggle]', this.root).textContent = '▶'; this.showControls(); this.report();
+      clearTimeout(this.castTimer);
+      if (castBox) this.castTimer = setTimeout(() => { if (this.v.paused && !this.v.ended) castBox.hidden = false; }, 2500);
+    });
     v.addEventListener('ended', () => { if (!this.casting) this.onEnded(); });
     for (const ev of ['play', 'pause', 'seeked']) v.addEventListener(ev, () => { if (!this.casting) this.partySend(); });
     v.addEventListener('volumechange', () => {
@@ -2034,6 +2065,7 @@ const routes = [
   [/^\/activity$/, viewActivity],
   [/^\/party\/(\w+)$/, viewParty],
   [/^\/collection\/([\w-]+)$/, viewCollection],
+  [/^\/person\/(.+)$/, viewPerson],
 ];
 
 // Scroll position per page, so "back" returns to where you were in a long library.
