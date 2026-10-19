@@ -177,6 +177,7 @@ never gets access to Docker itself.
 
 | Feature | What Marquee does |
 | --- | --- |
+| **Look** | A red-and-black design: a top bar, a featured banner on the home page (with its trailer playing quietly when there is one), rows that scroll sideways (Continue Watching, My List, New in each library, collections, "Because you watched …", genres), wide cards with titles on the artwork, and a **More info** pop-up with episodes, extras and **More like this**. Works on phones (with a bar along the bottom) and in the Android app. |
 | **Accounts** | Sign-in screen, with an admin account created on first run. Admins add users, choose which libraries each one can see, and decide who can use the downloader. Each user has their own watch history, Continue Watching and resume points. |
 | **Libraries** | Movie and TV Show libraries, each combining one or more folders, which can be on different drives. Everything inside the folders is found, including shows in folders of their own (`Kids/Bluey/…`). Add, edit and remove them in Settings with a built-in folder picker that lists your drives, accepts typed paths and shows how many videos a folder holds; whole drives can be shared with Docker (see *Other drives*). |
 | **Scanning** | Probes new or changed files with `ffprobe`, removes deleted ones, and rescans periodically. If a drive is offline, its items and watch history are kept. |
@@ -327,6 +328,7 @@ lib/matcher.js      matching, refresh/unmatch, user edits and custom artwork (ed
 lib/subtitles.js    SRT→VTT, cue time-shifting
 lib/store.js        JSON-file database with atomic writes
 public/             single-page web client (vanilla JS): app.js (browse/play), manage.js (accounts, downloads),
+                    fonts/ (Archivo and Figtree, SIL Open Font License),
                     extras.js (menus, edit/match dialogs, My List, settings panels, shortcuts), select.js (☑ Select and
                     bulk actions), cast.js (Google Cast),
                     vendor/hls.js (Apache-2.0, for adaptive streaming in browsers without native HLS)

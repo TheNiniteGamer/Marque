@@ -555,7 +555,7 @@ function waitForRestart() {
 function noteUpdateAvailable(status) {
   const on = state.user?.role === 'admin' && !!status?.updateAvailable;
   $('#user-menu')?.classList.toggle('has-update', on);
-  const link = $('.sidebar a[data-nav="settings"]');
+  const link = $('#user-pop a[href="#/settings"]');
   if (link) link.classList.toggle('has-update', on);
   const menuLink = $('#user-pop .upd-link');
   if (menuLink) menuLink.textContent = status?.significantUpdate ? 'Significant update available' : 'Update available';
@@ -953,17 +953,14 @@ const groupingOn = () => store.get('groupCollections', true);
 
 function collectionCard(c) {
   knownItems.set(c.id, c);
+  const sub = c.hidden ? 'Hidden' : `Collection · ${c.count} title${c.count === 1 ? '' : 's'}`;
   return html`<div class="card ${c.hidden ? 'is-hidden' : ''}" data-sel="${c.id}">
-    <div class="art"><a class="cover" href="#/collection/${c.id}">
-      ${c.cover ? html`<img loading="lazy" src="${artUrl('poster', c.cover)}" alt="${c.name}">` : html`<div class="collection-empty">▦</div>`}</a>
+    <div class="art"><a class="cover" href="#/collection/${c.id}" aria-label="${c.name}">
+      ${c.cover ? html`<img loading="lazy" src="${artUrl('backdrop', c.cover)}" alt="">` : html`<div class="collection-empty">▦</div>`}</a>
+      <i class="scrim"></i><span class="art-title">${c.name}</span>
       <span class="badge" title="Titles in this collection">${c.count}</span></div>
-    <a href="#/collection/${c.id}"><div class="title" title="${c.name}">${c.name}</div>
-      <div class="sub">${c.hidden ? 'Hidden' : `Collection · ${c.count} title${c.count === 1 ? '' : 's'}`}</div></a>
+    <a class="card-text" href="#/collection/${c.id}" tabindex="-1"><span class="sub">${sub}</span></a>
   </div>`;
-}
-
-function collectionChips(x) {
-  return x.collections?.length ? html`<div class="row collection-chips">${x.collections.map((c) => html`<a class="chip link" href="#/collection/${c.id}">▦ ${c.name}</a>`)}</div>` : '';
 }
 
 // Collections are listed in sections: Movies, TV and YouTube (each collection's section is worked out

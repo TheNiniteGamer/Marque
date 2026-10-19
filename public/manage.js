@@ -13,7 +13,7 @@ function showAuth({ setupRequired = false, message = '' } = {}) {
   view.innerHTML = html`
     <div class="auth-wrap">
       <form class="auth-card" id="auth-form">
-        <div class="auth-brand"><img src="/icon.svg" alt=""> Marquee</div>
+        <div class="auth-brand">MARQUEE</div>
         <h1>${setupRequired ? 'Create your admin account' : 'Sign in'}</h1>
         ${setupRequired ? html`<p class="muted">Welcome! This first account can manage libraries, users and downloads.</p>` : ''}
         <label>Username<input class="input" name="username" autocomplete="username" required autofocus></label>
@@ -58,11 +58,12 @@ function renderUserMenu() {
   const root = $('#user-menu');
   if (!u) { root.innerHTML = ''; return; }
   root.innerHTML = html`
-    <button class="avatar" id="user-btn" aria-haspopup="true" aria-expanded="false" title="${u.username}">${u.username.slice(0, 1).toUpperCase()}</button>
+    <button class="avatar" id="user-btn" aria-haspopup="true" aria-expanded="false" title="${u.username}" aria-label="${u.username}: account menu" style="background:${avatarColor(u.username)}">${u.username.slice(0, 1).toUpperCase()}</button>
     <div class="user-pop" id="user-pop" hidden>
       <div class="user-pop-head"><b>${u.username}</b><span class="muted">${u.role === 'admin' ? 'Administrator' : 'User'}</span></div>
       <a href="#/account">Account</a>
       ${u.canDownload ? html`<a href="#/downloads">Downloads</a>` : ''}
+      ${u.role === 'admin' ? html`<a href="#/activity">Activity</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/settings">Settings</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/settings?section=updates" class="upd-link">Update available</a>` : ''}
       <button id="switch-profile">Switch profile</button>
@@ -434,7 +435,8 @@ async function showProfilePicker({ atStart = false } = {}) {
   root.innerHTML = html`<div class="pp-inner">
       <h1>Who's watching?</h1>
       <div class="pp-list">${list.map((p) => html`<button class="pp-profile ${p.id === data.current ? 'current' : ''}" data-pid="${p.id}">
-        <span class="pp-avatar">${p.username.slice(0, 1).toUpperCase()}</span><span>${p.username}</span>${p.needsPin && p.id !== data.current ? html`<span class="pp-lock" title="PIN">🔒</span>` : ''}</button>`)}</div>
+        <span class="pp-avatar" style="background:${avatarColor(p.username)}">${p.username.slice(0, 1).toUpperCase()}${p.needsPin && p.id !== data.current
+          ? html`<span class="pp-lock" title="Needs a PIN">${icon('lock')}</span>` : ''}</span><span>${p.username}</span></button>`)}</div>
       <form class="pp-pin" hidden><label>PIN for <b class="pp-name"></b>
         <input class="input" name="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off"></label>
         <div class="row"><button class="btn primary">Continue</button><button class="btn" type="button" data-pp="back">Back</button></div>

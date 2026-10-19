@@ -70,11 +70,22 @@ module.exports = function register(app) {
   });
 
   // --- browsing + watch state ---
-  route('GET', '/api/home', async (req, res, p, url, user) => json(res, 200, lib.home(store, user)));
+  route('GET', '/api/home', async (req, res, p, url, user) => {
+    const h = lib.home(store, user);
+    // Collections as rows of their own (the first few, in the order an admin arranged them), after "New in …".
+    const rows = collections.list(store, user).filter((c) => !c.hidden && c.count >= 3).slice(0, 3)
+      .map((c) => { const d = collections.detail(store, user, c.id); return { key: `col-${c.id}`, title: c.name, note: `Collection · ${c.count} titles`, link: `#/collection/${c.id}`, style: 'poster', items: d.items }; });
+    const at = h.hubs.findLastIndex((x) => x.key.startsWith('recent-')) + 1 || h.hubs.length;
+    h.hubs.splice(at, 0, ...rows);
+    json(res, 200, h);
+  });
 
   route('GET', '/api/search', async (req, res, p, url, user) => json(res, 200, lib.search(store, user, url.searchParams.get('q') || '')));
 
-  route('GET', '/api/shows/:id', async (req, res, { id }, url, user) => json(res, 200, { ...lib.showDetail(store, user, getShow(id, user)), collections: collections.of(store, user, id) }));
+  route('GET', '/api/shows/:id', async (req, res, { id }, url, user) => {
+    const show = getShow(id, user);
+    json(res, 200, { ...lib.showDetail(store, user, show), collections: collections.of(store, user, id), similar: lib.similar(store, user, show) });
+  });
 
   route('POST', '/api/shows/:id/watched', async (req, res, { id }, url, user) => {
     const body = await readBody(req);
@@ -85,7 +96,10 @@ module.exports = function register(app) {
     json(res, 200, lib.showDetail(store, user, show));
   });
 
-  route('GET', '/api/items/:id', async (req, res, { id }, url, user) => json(res, 200, { ...lib.itemDetail(store, user, getItem(id, user)), collections: collections.of(store, user, id) }));
+  route('GET', '/api/items/:id', async (req, res, { id }, url, user) => {
+    const it = getItem(id, user);
+    json(res, 200, { ...lib.itemDetail(store, user, it), collections: collections.of(store, user, id), similar: it.type === 'movie' ? lib.similar(store, user, it) : [] });
+  });
 
   // --- collections ---
   route('GET', '/api/collections', async (req, res, p, url, user) => json(res, 200, collections.list(store, user, { libraryId: url.searchParams.get('library'), includeHidden: url.searchParams.has('hidden') })));

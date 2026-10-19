@@ -57,6 +57,32 @@ function epLabel(x) {
   return [s, e].filter(Boolean).join(' · ');
 }
 const sortTitle = (t) => String(t || '').toLowerCase().replace(/^(the|a|an)\s+/, '');
+// "1 hr 14 min left" / "9 min left"
+const fmtLeft = (x) => (x.progress?.position && !x.progress.watched && x.duration ? `${fmtDuration(Math.max(60, x.duration - x.progress.position))} left` : '');
+
+// ---------- icons (inline, drawn with the text colour) ----------
+const ICONS = {
+  play: '<path d="M7 4.5v15l12-7.5z" fill="currentColor" stroke="none"/>',
+  info: '<circle cx="12" cy="12" r="9.5"/><path d="M12 11v6M12 7.5v.5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  dots: '<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
+  left: '<path d="M15 5l-7 7 7 7"/>',
+  right: '<path d="M9 5l7 7-7 7"/>',
+  mute: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l4 6M21 9l-4 6"/>',
+  sound: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 8.5a5 5 0 010 7M19.5 6a8.5 8.5 0 010 12"/>',
+  home: '<path d="M12 3l9 8h-3v9h-5v-6h-2v6H6v-9H3z" fill="currentColor" stroke="none"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+  download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  stack: '<rect x="3" y="7" width="14" height="13" rx="1.5"/><path d="M7 4h13a1 1 0 011 1v12"/>',
+  link: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
+};
+const icon = (name) => raw(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`);
+// A steady colour per person for avatars and profile squares.
+const AVATAR_COLORS = ['#2f6fb3', '#b3402f', '#7a4fb3', '#2f8a5c', '#b3862f', '#2f9bb3', '#b32f7a', '#5c6b2f'];
+const avatarColor = (name) => AVATAR_COLORS[[...String(name || '')].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7) % AVATAR_COLORS.length];
 const pct = (p, d) => (d ? Math.min(100, Math.max(0, (p / d) * 100)) : 0);
 
 // ---------- ui helpers ----------
@@ -88,9 +114,11 @@ const store = {
 const state = { user: null, libraries: [], status: null, inAppNav: false };
 let renderSeq = 0;
 const view = $('#view');
+// Where the current page is drawn: the page itself, or the "More info" pop-up for movies, shows and episodes.
+let viewEl = view;
 function setView(seq, content) {
   if (seq !== renderSeq) return false;
-  view.innerHTML = renderVal(content);
+  viewEl.innerHTML = renderVal(content);
   return true;
 }
 
@@ -99,24 +127,34 @@ async function refreshLibraries() {
   renderSidebar();
 }
 
-function renderSidebar() {
+// Top bar: Home, each library, Collections, My List. On phones the libraries become a row of
+// buttons and Home / Search / My List sit in a bar at the bottom.
+function renderNav() {
   const { path } = parseHash();
-  const icon = (t) => (t === 'show' ? '📺' : '🎬');
-  $('#sidebar').innerHTML = html`
-    <a href="#/" class="${path === '/' ? 'active' : ''}">🏠 Home</a>
-    <a href="#/watchlist" class="${path === '/watchlist' ? 'active' : ''}">♡ My List</a>
-    <div class="section">Libraries</div>
-    ${state.libraries.map((l) => html`
-      <a href="#/library/${l.id}" class="${path === `/library/${l.id}` ? 'active' : ''}">${icon(l.type)} ${l.name}<span class="count">${l.count}</span></a>`)}
-    ${state.libraries.length ? '' : state.user?.role === 'admin' ? html`<a href="#/settings">＋ Add a library</a>` : html`<div class="muted" style="padding:8px 12px;font-size:13px">No libraries shared with you yet.</div>`}
-    <div class="section">${state.user?.role === 'admin' ? 'Manage' : 'You'}</div>
-    ${state.user?.canDownload ? html`<a href="#/downloads" class="${path === '/downloads' ? 'active' : ''}">⤓ Downloads</a>` : ''}
-    ${state.user?.role === 'admin' ? html`<a href="#/activity" class="${path === '/activity' ? 'active' : ''}">📊 Activity</a>` : ''}
-    ${state.user?.role === 'admin' ? html`<a href="#/settings" data-nav="settings" class="${path === '/settings' ? 'active' : ''}">⚙ Settings</a>` : ''}
-    <a href="#/account" class="${path === '/account' ? 'active' : ''}">👤 Account</a>
-  `.s;
+  const on = (test) => (test ? 'active' : '');
+  $('#nav-links').innerHTML = html`
+    <a href="#/" class="desk-only ${on(path === '/')}">Home</a>
+    ${state.libraries.map((l) => html`<a href="#/library/${l.id}" class="${on(path === `/library/${l.id}`)}">${l.name}</a>`)}
+    ${state.libraries.length ? html`<a href="#/collections" class="${on(path.startsWith('/collection'))}">Collections</a>` : ''}
+    <a href="#/watchlist" class="desk-only ${on(path === '/watchlist')}">My List</a>
+    ${!state.libraries.length && state.user?.role === 'admin' ? html`<a href="#/settings">＋ Add a library</a>` : ''}`.s;
+  $('#tabbar').innerHTML = html`
+    <a href="#/" class="${on(path === '/')}">${icon('home')}Home</a>
+    <button type="button" data-tab="search">${icon('search')}Search</button>
+    <a href="#/watchlist" class="${on(path === '/watchlist')}">${icon('plus')}My List</a>
+    ${state.user?.canDownload ? html`<a href="#/downloads" class="${on(path === '/downloads')}">${icon('download')}Downloads</a>`
+      : html`<a href="#/collections" class="${on(path.startsWith('/collection'))}">${icon('stack')}Collections</a>`}`.s;
   if (state.status) { noteUpdateAvailable(state.status); noteDownloads(state.status.myDownloads); }
 }
+const renderSidebar = renderNav;
+
+// The search box opens from the magnifier (or "/", or Search in the phone bar).
+function openSearch() { $('#search-form').classList.add('open'); $('#search-input').focus(); }
+$('#search-btn').addEventListener('click', openSearch);
+$('#search-input').addEventListener('blur', () => { if (!$('#search-input').value) $('#search-form').classList.remove('open'); });
+document.addEventListener('click', (e) => { if (e.target.closest('[data-tab="search"]')) openSearch(); });
+// The bar is see-through over the banner and turns solid once the page scrolls.
+window.addEventListener('scroll', () => document.body.classList.toggle('scrolled', window.scrollY > 10), { passive: true });
 
 // ---------- scan status polling ----------
 let pollTimer;
@@ -154,8 +192,7 @@ async function pollStatus() {
 // A notice when one of your downloads finishes (or gives up), and a count on the Downloads link.
 function noteDownloads(d) {
   if (!d) return;
-  const link = $('.sidebar a[href="#/downloads"]');
-  if (link) {
+  for (const link of $$('#user-pop a[href="#/downloads"], #tabbar a[href="#/downloads"]')) {
     link.querySelector('.count')?.remove();
     if (d.active) link.insertAdjacentHTML('beforeend', html`<span class="count" title="Downloads in progress">${d.active}</span>`.s);
   }
@@ -177,44 +214,82 @@ function progressBar(x) {
 }
 function hrefFor(x) { return x.type === 'show' ? `#/show/${x.id}` : `#/item/${x.id}`; }
 
+// "NEW" / "NEW EPISODES" on titles added in the last week (not for a library's first scan).
+const NEW_MS = 7 * 86400_000;
+function ribbonFor(x) {
+  const lib = state.libraries.find((l) => l.id === x.libraryId);
+  const since = (t) => t && Date.now() - t < NEW_MS && (!lib?.createdAt || t - lib.createdAt > 86400_000);
+  if (since(x.addedAt)) return 'NEW';
+  if (x.type === 'show' && since(x.lastAddedAt)) return 'NEW EPISODES';
+  return '';
+}
+
+// Wide card with the title on the artwork (rows and grids). ctx: where it is shown (for its ⋯ menu).
 function posterCard(x, ctx = '') {
   if (x.type === 'collection') return collectionCard(x);
   const sub = x.type === 'show'
-    ? (x.seasonCount > 1 ? `${x.seasonCount} seasons` : `${x.episodeCount} episode${x.episodeCount === 1 ? '' : 's'}`)
-    : x.type === 'episode' ? `${x.showTitle} · ${epLabel(x)}` : (x.year || '');
+    ? (x.seasonCount > 1 ? `${x.seasonCount} seasons` : `${x.episodeCount} episode${x.episodeCount === 1 ? '' : 's'}`) + (x.year ? ` · ${x.year}` : '')
+    : x.type === 'episode' ? `${epLabel(x)} · ${x.title}` : [x.year, fmtDuration(x.duration)].filter(Boolean).join(' · ');
   let badge = '';
-  if (x.type === 'show' && x.unwatchedCount > 0) badge = html`<span class="badge" title="Unwatched episodes">${x.unwatchedCount}</span>`;
+  if (x.type === 'show' && x.unwatchedCount > 0 && x.unwatchedCount < x.episodeCount) badge = html`<span class="badge" title="Unwatched episodes">${x.unwatchedCount}</span>`;
   else if ((x.type === 'show' && x.episodeCount && !x.unwatchedCount) || x.progress?.watched) badge = html`<span class="badge check" title="Watched">✓</span>`;
+  const ribbon = ribbonFor(x);
+  const title = x.type === 'episode' ? x.showTitle : x.title;
   knownItems.set(x.id, x);
   return html`
     <div class="card" data-sel="${x.id}">
-      <div class="art">
-        <a class="cover" href="${hrefFor(x)}"><img loading="lazy" src="${artUrl('poster', x)}" alt="${x.title}"></a>
-        ${badge}${progressBar(x)}
-        <button class="play-hover" data-play="${x.type === 'show' ? `show:${x.id}` : x.id}" aria-label="Play ${x.title}">▶</button>
-        <button class="card-menu" data-menu="${x.id}" data-ctx="${ctx}" aria-label="More options for ${x.title}" title="More">⋯</button>
+      <div class="art ${ribbon ? 'has-ribbon' : ''}">
+        <a class="cover" href="${hrefFor(x)}" aria-label="${title}"><img loading="lazy" src="${artUrl(x.type === 'episode' ? 'thumb' : 'backdrop', x)}" alt=""></a>
+        <i class="scrim"></i><span class="art-title">${title}</span>
+        ${ribbon ? html`<span class="ribbon">${ribbon}</span>` : ''}${badge}${progressBar(x)}
+        <button class="play-hover" data-play="${x.type === 'show' ? `show:${x.id}` : x.id}" aria-label="Play ${title}">▶</button>
+        <button class="card-menu" data-menu="${x.id}" data-ctx="${ctx}" aria-label="More options for ${title}" title="More">⋯</button>
       </div>
-      <a href="${hrefFor(x)}"><div class="title" title="${x.title}">${x.title}</div><div class="sub">${sub}</div></a>
+      <a class="card-text" href="${hrefFor(x)}" tabindex="-1"><span class="sub" title="${sub}">${sub}</span></a>
     </div>`;
 }
 
+// Continue Watching: the episode or film, where you are in it, and the time left.
 function wideCard(x, ctx = '') {
   knownItems.set(x.id, x);
   const isEp = x.type === 'episode';
-  const kind = isEp ? 'thumb' : 'backdrop';
   const title = isEp ? x.showTitle : x.title;
-  const sub = isEp ? [epLabel(x), x.title].filter(Boolean).join(' — ') : [x.year, x.progress?.position ? `${fmtClock(x.duration - x.progress.position)} left` : ''].filter(Boolean).join(' · ');
+  const sub = isEp ? [epLabel(x).replace(' · ', ':'), x.title].filter(Boolean).join(' · ') : (x.year || '');
   return html`
-    <div class="card wide" data-sel="${x.id}">
+    <div class="card cw" data-sel="${x.id}">
       <div class="art">
-        <a class="cover" href="${hrefFor(x)}"><img loading="lazy" src="${artUrl(kind, x)}" alt="${title}"></a>
+        <a class="cover" href="${hrefFor(x)}" aria-label="${title}"><img loading="lazy" src="${artUrl(isEp ? 'thumb' : 'backdrop', x)}" alt=""></a>
+        <i class="scrim"></i><span class="art-title">${title}</span>
         ${x.progress?.watched ? html`<span class="badge check">✓</span>` : ''}${progressBar(x)}
-        <button class="play-hover" data-play="${x.id}" aria-label="Play">▶</button>
+        <button class="play-hover" data-play="${x.id}" aria-label="Play ${title}">▶</button>
         <button class="card-menu" data-menu="${x.id}" data-ctx="${ctx}" aria-label="More options" title="More">⋯</button>
       </div>
-      <a href="${hrefFor(x)}"><div class="title" title="${title}">${title}</div><div class="sub" title="${sub}">${sub}</div></a>
+      <a class="card-text" href="${hrefFor(x)}" tabindex="-1"><span class="sub" title="${sub}">${sub}</span><span class="left">${fmtLeft(x)}</span></a>
     </div>`;
 }
+
+// A row that scrolls sideways, with arrows on hover.
+function rail(items, render) {
+  return html`<div class="rail">
+    <button class="rail-btn prev off" data-rail="-1" tabindex="-1" aria-label="Scroll left">${icon('left')}</button>
+    <div class="shelf">${items.map(render)}</div>
+    <button class="rail-btn next" data-rail="1" tabindex="-1" aria-label="Scroll right">${icon('right')}</button>
+  </div>`;
+}
+function updateRail(shelf) {
+  const r = shelf.parentElement;
+  r.querySelector('.prev')?.classList.toggle('off', shelf.scrollLeft <= 2);
+  r.querySelector('.next')?.classList.toggle('off', shelf.scrollLeft >= shelf.scrollWidth - shelf.clientWidth - 2);
+}
+const updateRails = () => $$('.shelf').forEach(updateRail);
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-rail]');
+  if (!b) return;
+  const shelf = b.parentElement.querySelector('.shelf');
+  shelf.scrollBy({ left: Number(b.dataset.rail) * shelf.clientWidth * 0.85, behavior: 'smooth' });
+});
+document.addEventListener('scroll', (e) => { if (e.target.classList?.contains('shelf')) updateRail(e.target); }, true);
+window.addEventListener('resize', updateRails);
 
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-play]');
@@ -231,6 +306,58 @@ document.addEventListener('click', async (e) => {
 });
 
 // ---------- views ----------
+// The banner: a featured title, with its trailer playing quietly behind it when there is one.
+function heroBanner(h) {
+  knownItems.set(h.id, h);
+  const isShow = h.type === 'show';
+  const lib = state.libraries.find((l) => l.id === h.libraryId);
+  return html`<section class="hero" aria-label="Featured: ${h.title}">
+    <div class="hero-art"><img src="${artUrl('backdrop', h)}" alt="">
+      ${h.trailerId ? html`<video id="hero-video" muted playsinline loop preload="none" data-src="/api/items/${h.trailerId}/stream"></video>` : ''}</div>
+    <div class="hero-body">
+      <div class="hero-kind"><span class="m-badge" aria-hidden="true">M</span>${isShow ? 'SERIES' : /youtube/i.test(lib?.name || '') ? 'VIDEO' : 'FILM'}</div>
+      <h1 class="hero-title"><a href="${hrefFor(h)}">${h.title}</a></h1>
+      <div class="hero-meta">
+        ${h.year ? html`<span>${h.year}</span>` : ''}
+        <span>${isShow ? `${h.seasonCount} season${h.seasonCount === 1 ? '' : 's'}` : fmtDuration(h.duration)}</span>
+        ${h.rating ? html`<span>★ ${h.rating}</span>` : ''}
+        ${h.genres?.length ? html`<span>${h.genres.slice(0, 3).join(' · ')}</span>` : ''}
+      </div>
+      <p class="hero-overview">${h.overview}</p>
+      <div class="hero-actions">
+        ${h.play ? html`<button class="btn play" data-play="${h.play.id}" ${h.play.t === 0 ? raw('data-t="0"') : ''}>${icon('play')}${h.play.label}</button>` : ''}
+        <a class="btn ghost" href="${hrefFor(h)}">${icon('info')}More info</a>
+      </div>
+    </div>
+    ${h.trailerId ? html`<button class="hero-mute" id="hero-mute" aria-label="Turn the trailer's sound on" hidden>${icon('mute')}</button>` : ''}
+  </section>`;
+}
+function startHeroTrailer() {
+  const v = $('#hero-video');
+  if (!v || window.innerWidth < 900 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  setTimeout(() => {
+    if (!document.contains(v) || document.body.classList.contains('detail-open') || player) return;
+    v.src = v.dataset.src;
+    v.play().then(() => { v.classList.add('playing'); $('#hero-mute').hidden = false; }).catch(() => {});
+  }, 2500);
+  // Only while the banner is on screen.
+  new IntersectionObserver(([e]) => { if (!v.src) return; if (e.isIntersecting && !document.body.classList.contains('detail-open')) v.play().catch(() => {}); else v.pause(); }, { threshold: 0.25 }).observe(v);
+  $('#hero-mute').onclick = () => {
+    v.muted = !v.muted;
+    $('#hero-mute').innerHTML = icon(v.muted ? 'mute' : 'sound').s;
+    $('#hero-mute').setAttribute('aria-label', v.muted ? "Turn the trailer's sound on" : "Turn the trailer's sound off");
+  };
+}
+const pauseHero = () => $('#hero-video')?.pause();
+
+function hubSection(hub) {
+  const link = hub.libraryId ? `#/library/${hub.libraryId}` : hub.link;
+  return html`<section class="hub">
+    <div class="hub-head"><h2>${hub.title}</h2>${hub.note ? html`<span class="hub-note">${hub.note}</span>` : ''}${link ? html`<a class="see-all" href="${link}">See all ›</a>` : ''}</div>
+    ${rail(hub.items, (x) => (hub.style === 'wide' ? wideCard(x, hub.key) : posterCard(x)))}
+  </section>`;
+}
+
 async function viewHome({ seq }) {
   const [homeData, cols] = await Promise.all([api('/api/home'), groupingOn() ? api('/api/collections').catch(() => []) : []]);
   // Recently added titles that belong to a collection show as the collection.
@@ -248,17 +375,18 @@ async function viewHome({ seq }) {
       <p>${state.status?.scanning ? 'New items will appear here as they are found.' : 'Check that your library folders contain video files, then scan again.'}</p>
       <a class="btn" href="#/settings">Manage libraries</a></div>`);
   }
-  setView(seq, homeData.hubs.map((hub) => html`
-    <section class="hub">
-      <div class="hub-head"><h2>${hub.title}</h2>${hub.libraryId ? html`<a href="#/library/${hub.libraryId}">See all ›</a>` : hub.link ? html`<a href="${hub.link}">See all ›</a>` : ''}</div>
-      <div class="shelf ${hub.style}">${hub.items.map((x) => (hub.style === 'wide' ? wideCard(x, hub.key) : posterCard(x)))}</div>
-    </section>`));
+  if (seq !== renderSeq) return;
+  view.classList.toggle('has-hero', !!homeData.hero);
+  setView(seq, html`${homeData.hero ? heroBanner(homeData.hero) : ''}${homeData.hubs.map(hubSection)}`);
+  updateRails();
+  startHeroTrailer();
 }
 
 async function viewLibrary({ params: [id], query, seq }) {
   const [data, cols] = await Promise.all([api(`/api/libraries/${id}/items`), api(`/api/collections?library=${id}`).catch(() => [])]);
   const lib = data.library;
-  const prefs = { sort: 'title', filter: 'all', size: 150, ...store.get(`lib:${id}`, {}) };
+  const prefs = { sort: 'title', filter: 'all', ...store.get(`lib:${id}`, {}) };
+  prefs.cardW ||= 260; // card width (wide cards; the old poster size setting is not reused)
   // Genre and text filters live in the URL so they survive back/forward and can be linked to.
   let genre = query.get('genre') || '';
   let text = '';
@@ -283,7 +411,7 @@ async function viewLibrary({ params: [id], query, seq }) {
     $('#lib-count').textContent = `${current.length}`;
     queueMicrotask(markSelected);
     const grid = $('#lib-grid');
-    grid.style.setProperty('--card-w', `${prefs.size}px`);
+    grid.style.setProperty('--card-w', `${prefs.cardW}px`);
     grid.innerHTML = current.length ? current.map((x) => posterCard(x).s).join('')
       : html`<div class="empty" style="grid-column:1/-1">${data.items.length ? 'Nothing matches these filters.' : state.status?.scanning ? 'Scanning…' : 'This library is empty.'}</div>`.s;
     // A–Z jump bar only makes sense when sorted by title.
@@ -307,7 +435,7 @@ async function viewLibrary({ params: [id], query, seq }) {
         ${[['title', 'Title'], ['added', 'Date added'], ['year', 'Year'], ['rating', 'Rating'], ...(lib.type === 'movie' ? [['duration', 'Duration']] : [])]
           .map(([k, label]) => html`<option value="${k}" ${prefs.sort === k ? 'selected' : ''}>${label}</option>`)}
       </select>
-      <input type="range" id="lib-size" min="110" max="230" step="10" value="${prefs.size}" title="Poster size" aria-label="Poster size">
+      <input type="range" id="lib-size" min="180" max="420" step="20" value="${prefs.cardW}" title="Card size" aria-label="Card size">
       <button class="btn small" id="lib-shuffle" title="Play something random from this view">⤮ Shuffle</button>
       ${selectButton()}
       ${cols.length ? html`<div class="seg" id="lib-group" title="Show titles that are in a collection as the collection, or every title on its own">
@@ -321,7 +449,7 @@ async function viewLibrary({ params: [id], query, seq }) {
   bindSelect({ root: () => $('#lib-grid'), kind: 'titles' });
   const save = () => store.set(`lib:${id}`, prefs);
   $('#lib-sort').onchange = (e) => { prefs.sort = e.target.value; save(); render(); };
-  $('#lib-size').oninput = (e) => { prefs.size = Number(e.target.value); save(); $('#lib-grid').style.setProperty('--card-w', `${prefs.size}px`); };
+  $('#lib-size').oninput = (e) => { prefs.cardW = Number(e.target.value); save(); $('#lib-grid').style.setProperty('--card-w', `${prefs.cardW}px`); };
   // Redrawn once typing pauses, not on every key (big libraries have thousands of cards).
   let typing = null;
   $('#lib-text').oninput = (e) => { text = e.target.value; clearTimeout(typing); typing = setTimeout(render, 150); };
@@ -358,28 +486,33 @@ async function viewLibrary({ params: [id], query, seq }) {
   if ($('#lib-scan')) $('#lib-scan').onclick = async () => { await api(`/api/libraries/${id}/scan`, { method: 'POST' }); toast(`Scanning ${lib.name}…`); pollStatus(); };
 }
 
-function backdrop(x) {
-  return html`<div class="backdrop"><img src="${artUrl('backdrop', x)}" alt="" onerror="this.remove()"></div>`;
+// ---------- "More info" pop-up: movies, shows, episodes and extras ----------
+// Buttons shared by the pop-ups: My List and the ⋯ menu (edit, fix match, collections… for admins).
+function listButton(x) {
+  if (x.type === 'episode' || x.type === 'extra') return '';
+  return html`<button class="round" id="list-toggle" aria-label="${x.inWatchlist ? 'Remove from My List' : 'Add to My List'}" title="${x.inWatchlist ? 'Remove from My List' : 'Add to My List'}">${icon(x.inWatchlist ? 'check' : 'plus')}</button>`;
 }
-
-// Buttons shared by movie, show and episode pages: My List, Edit (admins), and the ⋯ menu.
-function detailActions(x) {
+function dlgTop(x) {
   knownItems.set(x.id, x);
-  return html`
-    ${x.type !== 'episode' ? html`<button class="btn icon-only ${x.inWatchlist ? 'on' : ''}" id="list-toggle" title="${x.inWatchlist ? 'Remove from My List' : 'Add to My List'}">${x.inWatchlist ? '♥' : '♡'} My List</button>` : ''}
-    ${state.user.role === 'admin' ? html`<button class="btn" id="edit-btn">✎ Edit</button>` : ''}
-    <button class="btn" data-menu="${x.id}" aria-label="More options">⋯</button>`;
+  return html`<div class="dlg-top">
+    <button class="round solid" data-menu="${x.id}" aria-label="More options" title="More options">${icon('dots')}</button>
+    <button class="round solid" id="dlg-close" aria-label="Close" title="Close">${icon('close')}</button>
+  </div>`;
 }
 function bindDetailActions(x) {
   if ($('#list-toggle')) $('#list-toggle').onclick = () => toggleWatchlist(x).catch((err) => toast(err.message, true));
-  if ($('#edit-btn')) $('#edit-btn').onclick = () => openEditor(x.id).catch((err) => toast(err.message, true));
+  $('#dlg-close').onclick = closeDetail;
 }
-function genreChips(x) {
-  return x.genres.length ? html`<div class="row">${x.genres.map((g) => html`<a class="chip link" href="#/library/${x.libraryId}?genre=${encodeURIComponent(g)}">${g}</a>`)}</div>` : '';
-}
-function castList(x) {
-  return x.cast?.length ? html`<div class="cast"><h3>Cast</h3><div class="cast-list">${x.cast.map((c) => html`
-    <div class="cast-member"><span class="cast-initial">${c.name.slice(0, 1)}</span><span><b>${c.name}</b>${c.character ? html`<br><span class="muted">${c.character}</span>` : ''}</span></div>`)}</div></div>` : '';
+// Genres, cast, collections and library, on the right of the pop-up.
+function sideInfo(x) {
+  const lib = state.libraries.find((l) => l.id === x.libraryId);
+  const list = (items) => items.map((v, i) => [v, i < items.length - 1 ? ', ' : '']);
+  return html`<div class="dlg-side">
+    ${x.cast?.length ? html`<div>Cast: <span class="v">${x.cast.slice(0, 5).map((c) => c.name).join(', ')}</span></div>` : ''}
+    ${x.genres?.length ? html`<div>Genres: ${list(x.genres.map((g) => html`<a href="#/library/${x.libraryId}?genre=${encodeURIComponent(g)}">${g}</a>`))}</div>` : ''}
+    ${x.collections?.length ? html`<div>Collections: ${list(x.collections.map((c) => html`<a href="#/collection/${c.id}">${c.name}</a>`))}</div>` : ''}
+    ${lib ? html`<div>Library: <a href="#/library/${lib.id}">${lib.name}</a></div>` : ''}
+  </div>`;
 }
 function matchNote(x) {
   if (state.user.role !== 'admin' || !x.match) return '';
@@ -395,20 +528,32 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-fix-match]');
   if (b) openMatcher(b.dataset.fixMatch).catch((err) => toast(err.message, true));
 });
+function progressLine(x, label) {
+  const p = x.progress;
+  if (!p?.position || p.watched || !x.duration) return '';
+  return html`<div class="dlg-progress"><div class="bar"><i style="width:${pct(p.position, x.duration).toFixed(1)}%"></i></div><span>${label ? `${label} — ` : ''}${fmtLeft(x)}</span></div>`;
+}
 
-// Trailers, featurettes and other extras on a movie or show page.
-function extrasRow(list) {
+// Trailers, featurettes and other extras.
+function extrasSection(list) {
   if (!list?.length) return '';
-  return html`<section class="hub extras"><div class="hub-head"><h2>Extras</h2></div><div class="grid wide">${list.map((x) => {
+  return html`<section class="dlg-section"><h2 style="margin-bottom:14px">Trailers &amp; extras</h2><div class="similar-grid">${list.map((x) => {
     knownItems.set(x.id, x);
     const sub = [x.title !== x.extraLabel ? x.extraLabel : '', fmtDuration(x.duration)].filter(Boolean).join(' · ');
-    return html`<div class="card wide">
-      <div class="art">
-        <a class="cover" href="#/item/${x.id}"><img loading="lazy" src="${artUrl('thumb', x)}" alt="${x.title}"></a>
-        ${progressBar(x)}<button class="play-hover" data-play="${x.id}" data-t="0" aria-label="Play">▶</button>
-      </div>
-      <a href="#/item/${x.id}"><div class="title" title="${x.title}">${x.title}</div><div class="sub">${sub}</div></a>
-    </div>`;
+    return html`<a class="similar-card" href="#/item/${x.id}" data-play="${x.id}" data-t="0">
+      <div class="art"><img loading="lazy" src="${artUrl('thumb', x)}" alt=""><span class="art-title">${x.title}</span></div>
+      <div class="txt"><span class="m">${sub}</span></div></a>`;
+  })}</div></section>`;
+}
+// "More like this": other titles sharing genres.
+function similarSection(list) {
+  if (!list?.length) return '';
+  return html`<section class="dlg-section"><h2 style="margin-bottom:14px">More like this</h2><div class="similar-grid">${list.map((x) => {
+    knownItems.set(x.id, x);
+    const m = [x.year, x.type === 'show' ? `${x.seasonCount} season${x.seasonCount === 1 ? '' : 's'}` : fmtDuration(x.duration)].filter(Boolean).join(' · ');
+    return html`<a class="similar-card" href="${hrefFor(x)}">
+      <div class="art"><img loading="lazy" src="${artUrl('backdrop', x)}" alt=""><span class="art-title">${x.title}</span></div>
+      <div class="txt"><span class="m">${m}</span>${x.overview ? html`<span class="o">${x.overview}</span>` : ''}</div></a>`;
   })}</div></section>`;
 }
 
@@ -418,36 +563,33 @@ async function viewShow({ params: [id], query, seq }) {
   let current = query.get('season') ?? (show.upNext ? String(show.upNext.season) : show.seasons[0] && seasonKey(show.seasons[0]));
   if (!show.seasons.some((s) => seasonKey(s) === current)) current = show.seasons[0] && seasonKey(show.seasons[0]);
   const up = show.upNext;
-  const upLabel = up ? `${up.progress?.position && !up.progress.watched ? 'Resume' : 'Play'} ${epLabel(up)}` : null;
+  const resuming = up?.progress?.position && !up.progress.watched;
+  const upLabel = up ? `${resuming ? 'Resume' : 'Play'} ${epLabel(up).replace(' · ', ':')}` : null;
+  document.title = `${show.title} · Marquee`;
 
   const episodeRow = (e) => { knownItems.set(e.id, e); return html`
-    <div class="episode">
+    <div class="episode ${up?.id === e.id ? 'current' : ''}">
+      <span class="ep-num">${e.episode ?? ''}</span>
       <div class="art">
-        <a href="#/item/${e.id}"><img loading="lazy" src="${artUrl('thumb', e)}" alt="${e.title}"></a>
+        <a href="#/item/${e.id}" aria-label="${e.title}"><img loading="lazy" src="${artUrl('thumb', e)}" alt=""></a>
         ${progressBar(e)}
-        <button class="play-hover" data-play="${e.id}" aria-label="Play">▶</button>
+        <button class="play-hover" data-play="${e.id}" aria-label="Play ${e.title}">▶</button>
       </div>
       <a href="#/item/${e.id}">
-        <div class="ep-title">${e.episode != null ? `${e.episode}. ` : ''}${e.title}</div>
-        <div class="muted" style="font-size:13px">${[epLabel(e), fmtDuration(e.duration)].filter(Boolean).join(' · ')}</div>
+        <div class="ep-title"><span>${e.title}</span><span class="muted">${fmtDuration(e.duration)}</span></div>
         ${e.overview ? html`<div class="ep-overview">${e.overview}</div>` : ''}
       </a>
       <div class="ep-actions">
-        <button class="watch-toggle ${e.progress?.watched ? 'on' : ''}" data-watch="${e.id}" title="${e.progress?.watched ? 'Mark unwatched' : 'Mark watched'}">✓</button>
+        <button class="watch-toggle ${e.progress?.watched ? 'on' : ''}" data-watch="${e.id}" title="${e.progress?.watched ? 'Mark unwatched' : 'Mark watched'}" aria-label="${e.progress?.watched ? 'Mark unwatched' : 'Mark watched'}">✓</button>
         <button class="card-menu static" data-menu="${e.id}" aria-label="More options">⋯</button>
       </div>
     </div>`; };
 
   const renderSeason = () => {
     const season = show.seasons.find((s) => seasonKey(s) === current);
-    $$('.seasons-nav button').forEach((b) => b.classList.toggle('primary', b.dataset.season === current));
     const allWatched = season.episodes.every((e) => e.progress?.watched);
-    $('#season-body').innerHTML = html`
-      <div class="row" style="justify-content:space-between;margin-bottom:8px">
-        <h2>${season.title} <span class="muted" style="font-weight:400;font-size:14px">${season.episodes.length} episodes</span></h2>
-        <button class="btn small" id="season-watch">${allWatched ? 'Mark season unwatched' : 'Mark season watched'}</button>
-      </div>
-      <div class="episodes">${season.episodes.map(episodeRow)}</div>`.s;
+    $('#season-watch').textContent = allWatched ? 'Mark season unwatched' : 'Mark season watched';
+    $('#season-body').innerHTML = html`<div class="episodes">${season.episodes.map(episodeRow)}</div>`.s;
     $('#season-watch').onclick = async () => {
       await api(`/api/shows/${id}/watched`, { method: 'POST', body: { season: season.season, watched: !allWatched } });
       router();
@@ -456,46 +598,54 @@ async function viewShow({ params: [id], query, seq }) {
 
   const allWatched = show.unwatchedCount === 0;
   if (!setView(seq, html`
-    <div class="detail">
-      ${backdrop(show)}
-      <div class="detail-body">
-        <div class="poster"><img src="${artUrl('poster', show)}" alt="${show.title}"></div>
-        <div class="info">
-          <h1>${show.title}</h1>
-          <div class="meta-line">
-            ${show.year ? html`<span>${show.year}</span>` : ''}
-            <span>${show.seasonCount} season${show.seasonCount === 1 ? '' : 's'}</span>
-            <span>${show.episodeCount} episodes</span>
-            ${show.unwatchedCount ? html`<span>${show.unwatchedCount} unwatched</span>` : ''}
-            ${show.rating ? html`<span>★ ${show.rating}</span>` : ''}
-          </div>
-          ${genreChips(show)}
-          ${collectionChips(show)}
-          ${show.overview ? html`<p class="overview">${show.overview}</p>` : ''}
-          ${matchNote(show)}
-          <div class="row actions">
-            ${up ? html`<button class="btn primary" data-play="${up.id}">▶ ${upLabel}</button>` : ''}
-            <button class="btn" id="show-watch">${allWatched ? 'Mark unwatched' : 'Mark all watched'}</button>
-            ${detailActions(show)}
-          </div>
-          ${castList(show)}
+    <div class="dlg-hero">
+      <img src="${artUrl('backdrop', show)}" alt="">
+      ${dlgTop(show)}
+      <div class="dlg-head">
+        <h1 class="dlg-title">${show.title}</h1>
+        <div class="dlg-actions">
+          ${up ? html`<button class="btn play" data-play="${up.id}">${icon('play')}${upLabel}</button>` : ''}
+          ${listButton(show)}
+          <button class="round" id="show-watch" aria-label="${allWatched ? 'Mark the whole show unwatched' : 'Mark the whole show watched'}" title="${allWatched ? 'Mark the whole show unwatched' : 'Mark the whole show watched'}">${allWatched ? '↺' : icon('check')}</button>
         </div>
       </div>
     </div>
-    <div class="seasons-nav">${show.seasons.map((s) => html`<button class="btn small" data-season="${seasonKey(s)}">${s.title}</button>`)}</div>
-    <div id="season-body"></div>
-    ${extrasRow(show.extras)}`)) return;
+    <div class="dlg-body">
+      <div>
+        <div class="dlg-meta">
+          ${show.year ? html`<span>${show.year}</span>` : ''}
+          <span>${show.seasonCount} season${show.seasonCount === 1 ? '' : 's'}</span>
+          <span>${show.episodeCount} episodes</span>
+          ${show.unwatchedCount && !allWatched ? html`<span class="muted">${show.unwatchedCount} unwatched</span>` : ''}
+          ${show.rating ? html`<span>★ ${show.rating}</span>` : ''}
+        </div>
+        ${resuming ? progressLine(up, `${epLabel(up).replace(' · ', ':')} · ${up.title}`) : ''}
+        ${show.overview ? html`<p class="overview">${show.overview}</p>` : ''}
+        ${matchNote(show)}
+      </div>
+      ${sideInfo(show)}
+    </div>
+    ${show.seasons.length ? html`<section class="dlg-section">
+      <div class="dlg-section-head"><h2>Episodes</h2>
+        <div class="row">
+          ${show.seasons.length > 1 ? html`<select id="season-pick" aria-label="Season">${show.seasons.map((s) => html`<option value="${seasonKey(s)}" ${seasonKey(s) === current ? 'selected' : ''}>${s.title}</option>`)}</select>`
+            : html`<span class="muted">${show.seasons[0].title}</span>`}
+          <button class="btn small" id="season-watch"></button>
+        </div></div>
+      <div id="season-body"></div>
+    </section>` : ''}
+    ${extrasSection(show.extras)}
+    ${similarSection(show.similar)}`)) return;
 
   bindDetailActions(show);
-  if (current != null) renderSeason();
-  $('.seasons-nav').onclick = (e) => {
-    const b = e.target.closest('[data-season]'); if (!b) return;
-    current = b.dataset.season;
+  if (current != null && show.seasons.length) renderSeason();
+  if ($('#season-pick')) $('#season-pick').onchange = (e) => {
+    current = e.target.value;
     history.replaceState(null, '', `#/show/${id}?season=${current}`);
     renderSeason();
   };
   $('#show-watch').onclick = async () => { await api(`/api/shows/${id}/watched`, { method: 'POST', body: { watched: !allWatched } }); router(); };
-  view.onclick = async (e) => {
+  viewEl.onclick = async (e) => {
     const b = e.target.closest('[data-watch]'); if (!b) return;
     await api(`/api/items/${b.dataset.watch}/watched`, { method: 'POST', body: { watched: !b.classList.contains('on') } });
     router();
@@ -504,65 +654,70 @@ async function viewShow({ params: [id], query, seq }) {
 
 async function viewItem({ params: [id], seq }) {
   const it = await api(`/api/items/${id}`);
-  view.onclick = null;
+  viewEl.onclick = null;
   const isEp = it.type === 'episode';
   const isExtra = it.type === 'extra';
   const p = it.progress;
   const resumable = p && !p.watched && p.position > 15;
   const v = it.media?.video, a = it.media?.audio?.[0];
   const res = resLabel(v);
+  document.title = `${isEp ? `${it.showTitle} · ` : ''}${it.title} · Marquee`;
   if (!setView(seq, html`
-    <div class="detail">
-      ${backdrop(it)}
-      <div class="detail-body">
-        <div class="poster ${isEp || isExtra ? 'wide' : ''}"><img src="${artUrl(isEp || isExtra ? 'thumb' : 'poster', it)}" alt="${it.title}"></div>
-        <div class="info">
-          ${isEp ? html`<div class="eyebrow"><a href="#/show/${it.showId}?season=${it.season}">${it.showTitle}</a> · ${epLabel(it)}</div>` : ''}
-          ${isExtra ? html`<div class="eyebrow">${it.extraLabel}${it.parent ? html` · <a href="#/${it.parent.type === 'show' ? 'show' : 'item'}/${it.parent.id}">${it.parent.title}</a>` : ''}</div>` : ''}
-          <h1>${it.title}</h1>
-          ${it.tagline ? html`<p class="tagline">${it.tagline}</p>` : ''}
-          <div class="meta-line">
-            ${it.year && !isEp ? html`<span>${it.year}</span>` : ''}
-            ${it.airDate ? html`<span>${it.airDate}</span>` : ''}
-            ${it.channel ? html`<span title="Channel">📺 ${it.channel}</span>` : ''}
-            ${it.duration ? html`<span>${fmtDuration(it.duration)}</span>` : ''}
-            ${it.rating ? html`<span>★ ${it.rating}</span>` : ''}
-            ${res ? html`<span class="chip">${res}</span>` : ''}
-            <span class="chip" title="${it.directPlay ? 'Your browser can play this file as-is' : 'Converted on the fly by the server'}">${it.directPlay ? 'Direct Play' : 'Transcode'}</span>
-            ${p?.watched ? html`<span class="chip" style="color:var(--accent)">✓ Watched</span>` : ''}
-          </div>
-          ${genreChips(it)}
-          ${collectionChips(it)}
-          ${matchNote(it)}
-          <div class="row actions">
-            ${it.media ? html`
-              <button class="btn primary" data-play="${id}" ${resumable ? '' : 'data-t="0"'}>▶ ${resumable ? `Resume from ${fmtClock(p.position)}` : 'Play'}</button>
-              ${resumable ? html`<button class="btn" data-play="${id}" data-t="0">Play from start</button>` : ''}` : html`<span class="error-box">This file could not be read by ffprobe.</span>`}
-            <button class="btn" id="item-watch">${p?.watched ? 'Mark unwatched' : 'Mark watched'}</button>
-            <a class="btn" href="/api/items/${id}/stream?download=1" download title="Download the original file">⤓</a>
-            ${it.sourceUrl ? html`<a class="btn" href="${it.sourceUrl}" target="_blank" rel="noopener" title="Open the original video page">Original ↗</a>` : ''}
-            ${detailActions(it)}
-          </div>
-          ${resumable ? html`<div class="resume-note">${fmtClock(it.duration - p.position)} remaining</div>` : ''}
-          ${it.overview ? html`<p class="overview">${it.overview}</p>` : ''}
-          ${isEp && (it.prev || it.next) ? html`<div class="row" style="margin:12px 0">
-            ${it.prev ? html`<a class="btn small" href="#/item/${it.prev.id}">‹ ${epLabel(it.prev)}</a>` : ''}
-            ${it.next ? html`<a class="btn small" href="#/item/${it.next.id}">${epLabel(it.next)} ›</a>` : ''}</div>` : ''}
-          ${castList(it)}
-          <dl class="tech">
-            <dt>File</dt><dd>${it.file || it.fileName}</dd>
-            <dt>Size</dt><dd>${fmtSize(it.size)}</dd>
-            ${it.media ? html`
-              <dt>Container</dt><dd>${it.media.container}</dd>
-              ${v ? html`<dt>Video</dt><dd>${v.codec?.toUpperCase()} ${v.profile ? `(${v.profile})` : ''} · ${v.width}×${v.height}</dd>` : ''}
-              ${a ? html`<dt>Audio</dt><dd>${it.audioTracks.map((t) => t.label).join(', ')}</dd>` : ''}
-              ${it.media.bitrate ? html`<dt>Bitrate</dt><dd>${(it.media.bitrate / 1e6).toFixed(1)} Mbps</dd>` : ''}` : ''}
-            <dt>Subtitles</dt><dd>${it.subtitles.length ? it.subtitles.map((s) => s.label).join(', ') : 'None'}</dd>
-          </dl>
+    <div class="dlg-hero">
+      <img src="${artUrl(isEp || isExtra ? 'thumb' : 'backdrop', it)}" alt="">
+      ${dlgTop(it)}
+      <div class="dlg-head">
+        ${isEp ? html`<div class="dlg-eyebrow"><a href="#/show/${it.showId}?season=${it.season}">${it.showTitle}</a> · ${epLabel(it).replace(' · ', ':')}</div>` : ''}
+        ${isExtra ? html`<div class="dlg-eyebrow">${it.extraLabel}${it.parent ? html` · <a href="#/${it.parent.type === 'show' ? 'show' : 'item'}/${it.parent.id}">${it.parent.title}</a>` : ''}</div>` : ''}
+        <h1 class="dlg-title">${it.title}</h1>
+        <div class="dlg-actions">
+          ${it.media ? html`
+            <button class="btn play" data-play="${id}" ${resumable ? '' : raw('data-t="0"')}>${icon('play')}${resumable ? 'Resume' : 'Play'}</button>
+            ${resumable ? html`<button class="btn ghost" data-play="${id}" data-t="0">From the start</button>` : ''}` : ''}
+          ${listButton(it)}
+          <button class="round" id="item-watch" aria-label="${p?.watched ? 'Mark unwatched' : 'Mark watched'}" title="${p?.watched ? 'Mark unwatched' : 'Mark watched'}">${p?.watched ? '↺' : icon('check')}</button>
+          <a class="round" href="/api/items/${id}/stream?download=1" download aria-label="Download the original file" title="Download the original file">${icon('download')}</a>
+          ${it.sourceUrl ? html`<a class="round" href="${it.sourceUrl}" target="_blank" rel="noopener" aria-label="Open the original video page" title="Open the original video page">${icon('link')}</a>` : ''}
         </div>
       </div>
     </div>
-    ${extrasRow(it.extras)}`)) return;
+    <div class="dlg-body">
+      <div>
+        <div class="dlg-meta">
+          ${it.year && !isEp ? html`<span>${it.year}</span>` : ''}
+          ${it.airDate ? html`<span>${it.airDate}</span>` : ''}
+          ${it.channel ? html`<span title="Channel">${it.channel}</span>` : ''}
+          ${it.duration ? html`<span>${fmtDuration(it.duration)}</span>` : ''}
+          ${it.rating ? html`<span>★ ${it.rating}</span>` : ''}
+          ${res ? html`<span class="tag">${res}</span>` : ''}
+          ${p?.watched ? html`<span class="tag">✓ Watched</span>` : ''}
+        </div>
+        ${resumable ? progressLine(it, `Paused at ${fmtClock(p.position)}`) : ''}
+        ${!it.media ? html`<p class="error-box">This file could not be read by ffprobe.</p>` : ''}
+        ${it.tagline ? html`<p class="tagline">${it.tagline}</p>` : ''}
+        ${it.overview ? html`<p class="overview">${it.overview}</p>` : ''}
+        ${matchNote(it)}
+        ${isEp && (it.prev || it.next) ? html`<div class="ep-links">
+          ${it.prev ? html`<a class="btn small" href="#/item/${it.prev.id}">‹ ${epLabel(it.prev).replace(' · ', ':')}</a>` : ''}
+          ${it.next ? html`<a class="btn small" href="#/item/${it.next.id}">${epLabel(it.next).replace(' · ', ':')} ›</a>` : ''}</div>` : ''}
+      </div>
+      ${sideInfo(it)}
+    </div>
+    ${extrasSection(it.extras)}
+    ${similarSection(it.similar)}
+    <details class="tech-box"><summary>File and playback details</summary>
+      <dl class="tech">
+        <dt>Plays</dt><dd>${it.directPlay ? 'Directly in this browser' : 'Converted on the fly by the server'}</dd>
+        <dt>File</dt><dd>${it.file || it.fileName}</dd>
+        <dt>Size</dt><dd>${fmtSize(it.size)}</dd>
+        ${it.media ? html`
+          <dt>Container</dt><dd>${it.media.container}</dd>
+          ${v ? html`<dt>Video</dt><dd>${v.codec?.toUpperCase()} ${v.profile ? `(${v.profile})` : ''} · ${v.width}×${v.height}</dd>` : ''}
+          ${a ? html`<dt>Audio</dt><dd>${it.audioTracks.map((t) => t.label).join(', ')}</dd>` : ''}
+          ${it.media.bitrate ? html`<dt>Bitrate</dt><dd>${(it.media.bitrate / 1e6).toFixed(1)} Mbps</dd>` : ''}` : ''}
+        <dt>Subtitles</dt><dd>${it.subtitles.length ? it.subtitles.map((x) => x.label).join(', ') : 'None'}</dd>
+      </dl>
+    </details>`)) return;
   bindDetailActions(it);
   $('#item-watch').onclick = async () => {
     await api(`/api/items/${id}/watched`, { method: 'POST', body: { watched: !p?.watched } });
@@ -573,6 +728,7 @@ async function viewItem({ params: [id], seq }) {
 async function viewSearch({ query, seq }) {
   const q = query.get('q') || '';
   if ($('#search-input') !== document.activeElement) $('#search-input').value = q;
+  if (q) $('#search-form').classList.add('open');
   if (!q.trim()) return setView(seq, html`<div class="empty">Type to search your libraries.</div>`);
   const r = await api(`/api/search?q=${encodeURIComponent(q)}`);
   const total = r.movies.length + r.shows.length + r.episodes.length;
@@ -1748,25 +1904,69 @@ const routes = [
 const scrollMemo = new Map();
 let lastPath = null;
 
+// The pop-up layer for movie, show and episode pages. `openedFromPage`: it was opened from a page in
+// the app (so closing goes back to it); otherwise (a link opened directly) closing goes home.
+let openedFromPage = false;
+function openDetailLayer() {
+  if (!$('#detail-layer')) {
+    openedFromPage = !firstRoute && !!view.dataset.path;
+    $('#detail-root').innerHTML = '<div class="detail-layer" id="detail-layer"><div class="dlg" id="detail-panel" role="dialog" aria-modal="true" aria-label="Details"></div></div>';
+    $('#detail-layer').addEventListener('mousedown', (e) => { if (e.target.id === 'detail-layer') closeDetail(); });
+    // Moving between titles inside the pop-up replaces it, so closing (or Back) returns to the page.
+    $('#detail-layer').addEventListener('click', (e) => {
+      const a = e.target.closest('a[href^="#/show/"], a[href^="#/item/"]');
+      if (!a || e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      e.preventDefault();
+      location.replace(a.getAttribute('href'));
+    });
+  }
+  viewEl = $('#detail-panel');
+  document.body.classList.add('detail-open');
+}
+function closeDetailLayer() {
+  viewEl = view;
+  if (!$('#detail-layer')) return;
+  $('#detail-root').innerHTML = '';
+  document.body.classList.remove('detail-open');
+}
+function closeDetail() {
+  if (openedFromPage) history.back();
+  else location.hash = '#/';
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !$('#detail-layer') || player || openPop || $('.modal-backdrop') || $('.profile-picker')) return;
+  closeDetail();
+});
+
 async function router() {
   if (!state.user) return;
   const { path, query } = parseHash();
   document.body.classList.remove('nav-open');
   if ($('#user-pop')) $('#user-pop').hidden = true;
   const isPlay = path.startsWith('/play/');
+  const isDetail = /^\/(show|item)\//.test(path);
   if (!isPlay) closePlayer();
-  if (path !== '/search' && !isPlay) $('#search-input').value = '';
-  renderSidebar();
+  if (path !== '/search' && !isPlay) { $('#search-input').value = ''; if (document.activeElement !== $('#search-input')) $('#search-form').classList.remove('open'); }
+  renderNav();
   endSelect();
+  if (isPlay || isDetail) pauseHero();
   const seq = ++renderSeq;
   const changedPage = path !== lastPath;
-  if (changedPage && lastPath && !lastPath.startsWith('/play/')) scrollMemo.set(lastPath, window.scrollY);
-  if (!isPlay) lastPath = path;
+  if (!isDetail && changedPage && lastPath && !lastPath.startsWith('/play/')) scrollMemo.set(lastPath, window.scrollY);
+  if (!isPlay && !isDetail) lastPath = path;
   const match = routes.find(([re]) => re.test(path));
-  if (!match) return setView(seq, html`<div class="empty"><h2>Page not found</h2><a class="btn" href="#/">Go home</a></div>`);
-  if (!isPlay) {
+  if (!match) { closeDetailLayer(); return setView(seq, html`<div class="empty"><h2>Page not found</h2><a class="btn" href="#/">Go home</a></div>`); }
+  if (isDetail) {
+    // Movies, shows and episodes open over the page you were on.
+    openDetailLayer();
+    viewEl.onclick = null;
+    if (viewEl.dataset.path !== path) { viewEl.innerHTML = '<div class="spinner"></div>'; $('#detail-layer').scrollTop = 0; }
+    viewEl.dataset.path = path;
+  } else if (!isPlay) {
+    closeDetailLayer();
     view.onclick = null;
     if (!view.innerHTML || !view.dataset.path || view.dataset.path !== path) {
+      view.className = '';
       view.innerHTML = '<div class="spinner"></div>';
       window.scrollTo(0, 0);
     }
@@ -1806,10 +2006,8 @@ $('#search-input').addEventListener('input', (e) => {
 });
 $('#search-form').addEventListener('submit', (e) => e.preventDefault());
 document.addEventListener('keydown', (e) => {
-  if (e.key === '/' && !player && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) { e.preventDefault(); $('#search-input').focus(); }
+  if (e.key === '/' && !player && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) { e.preventDefault(); openSearch(); }
 });
-$('#menu-btn').addEventListener('click', () => document.body.classList.toggle('nav-open'));
-document.addEventListener('click', (e) => { if (document.body.classList.contains('nav-open') && !e.target.closest('.sidebar, #menu-btn')) document.body.classList.remove('nav-open'); });
 
 async function startApp() {
   document.body.classList.remove('auth-mode');

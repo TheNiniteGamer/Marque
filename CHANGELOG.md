@@ -4,6 +4,26 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.6.0 — Significant update
+
+**A new look, in red and black.** Every page has changed; everything you could do before is still
+there.
+- **Top bar** instead of the side menu: Home, each library, Collections and My List, with search
+  behind the magnifier and the account menu (Activity, Settings, Downloads…) on your picture. On
+  phones the libraries are buttons along the top and Home, Search and My List sit at the bottom.
+- **Home banner:** a featured title with *Play* and *More info*, a different one each day, with
+  its trailer playing quietly behind it when it has one (sound button on the right).
+- **Rows that scroll sideways** with arrows: Continue Watching (with the time left), My List,
+  New in each library, your collections, "Because you watched …", and the biggest genres.
+- **Wide cards with the title on the artwork,** red counts of unwatched episodes, and *NEW* /
+  *NEW EPISODES* on titles added in the last week.
+- **"More info" opens over the page** instead of a separate page: play or resume, My List, mark
+  watched, the episode list with a season picker, trailers and extras, and **More like this**
+  (titles sharing genres). Esc, the ✕ or clicking outside it closes it. Admin options are in its
+  ⋯ menu; file details are under *File and playback details*.
+- "Who's watching?", sign-in and settings pages restyled to match. The typefaces are included
+  with Marquee, so it looks the same without internet access.
+
 ## 0.5.2
 
 Faster and lighter:
