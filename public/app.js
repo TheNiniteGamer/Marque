@@ -926,8 +926,9 @@ function cacheSummary(m) {
 async function viewSettings({ query, seq }) {
   view.onclick = null;
   if (state.user.role !== 'admin') { location.replace('#/account'); return; }
-  const [, s, users, metaSettings, updates, remote, backupInfo, transcoding, introInfo, problems, maint] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'),
-    api('/api/settings'), api('/api/updates'), api('/api/remote'), api('/api/backups'), api('/api/transcoding'), api('/api/intro'), api('/api/problems'), api('/api/maintenance')]);
+  const [, s, users, metaSettings, updates, remote, backupInfo, transcoding, introInfo, problems, maint, health] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'),
+    api('/api/settings'), api('/api/updates'), api('/api/remote'), api('/api/backups'), api('/api/transcoding'), api('/api/intro'), api('/api/problems'), api('/api/maintenance'),
+    api('/api/health-check').catch(() => null)]);
   state.status = s;
   const libs = state.libraries;
   if (!setView(seq, html`
@@ -936,6 +937,7 @@ async function viewSettings({ query, seq }) {
       <button class="btn primary" id="add-lib">＋ Add library</button>
     </div>
     <div id="lib-form-slot"></div>
+    ${health ? healthSection(health) : ''}
     <h2 style="margin:8px 0 12px">Libraries</h2>
     ${libs.length ? libs.map((l) => html`
       <div class="panel lib-row" data-lib="${l.id}">
@@ -989,6 +991,7 @@ async function viewSettings({ query, seq }) {
   bindUpdatesSection(updates);
   bindRemoteSection();
   bindBackupsSection();
+  bindHealthSection();
   bindTranscodingSection();
   if (query.get('section')) $(`#${query.get('section')}`)?.scrollIntoView({ block: 'start' });
   if ($('#scan-all')) $('#scan-all').onclick = async () => { await api('/api/scan', { method: 'POST' }); toast('Scanning all libraries…'); pollStatus(); };

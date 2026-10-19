@@ -7,7 +7,7 @@ module.exports = function register(app) {
     logs, fs, os, pipeline, lib, metadata, hlsLib, findProblems,
     ENCODER_NAMES, store, matcher, updater, hwaccel, hls, opensubs, activity,
     maintenance, intro, backups, auth, transcodes, HttpError, json, readBody,
-    readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary, path, fromHostPath,
+    readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary, path, fromHostPath, health,
   } = app;
 
   // --- activity (admin): who is watching what right now ---
@@ -274,6 +274,9 @@ module.exports = function register(app) {
     seen: store.data.remoteSeen || null,
     viaRemoteNow: viaHttpsProxy(req),
   }), 'admin');
+
+  // --- the health check (admin): ?run=1 checks again now ---
+  route('GET', '/api/health-check', async (req, res, p, url) => json(res, 200, url.searchParams.has('run') ? health.run() : health.status()), 'admin');
 
   // --- backups (admin) ---
   route('GET', '/api/backups', async (req, res) => json(res, 200, backups.status()), 'admin');

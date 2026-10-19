@@ -853,3 +853,20 @@ body.tv .episode:focus-within { background: #2e2e2e; }
 .bell-foot { display: block; padding: 10px 14px; text-align: center; color: var(--muted); }
 .bk-copy { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
 .bk-copy-bad { color: #ff8a8a; font-size: 13px; }
+
+/* ---------- health check ---------- */
+.health { display: grid; gap: 10px; }
+.health-head { font-size: 16px; }
+.health.ok .health-head, .health.info .health-head { color: #7ee2a8; }
+.health.warn .health-head { color: #ffd479; }
+.health.bad .health-head { color: #ff8a8a; }
+.health-row { display: flex; gap: 12px; align-items: flex-start; }
+.health-mark { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--bg-3); }
+.health-row.ok .health-mark { color: #7ee2a8; }
+.health-row.info .health-mark { color: #7ec8ff; }
+.health-row.warn .health-mark { background: #ffd479; color: #000; }
+.health-row.bad .health-mark { background: #e5484d; color: #fff; }
+.health-title a { color: inherit; }
+.health-detail { font-size: 13px; }
+.health-fine summary { cursor: pointer; font-size: 13px; }
+.health-fine .health-row { margin-top: 8px; }

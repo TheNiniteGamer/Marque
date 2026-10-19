@@ -40,6 +40,7 @@ const { Maintenance } = require('./lib/maintenance');
 const offlineLib = require('./lib/offline');
 const notifications = require('./lib/notifications');
 const requests = require('./lib/requests');
+const { Health } = require('./lib/health');
 const { KINDS: ENCODER_NAMES } = require('./lib/hwaccel');
 
 const PORT = Number(process.env.PORT) || 32500;
@@ -136,6 +137,7 @@ const backups = new Backups(store, {
   onRestored: () => { auth.prune(); scanner.enqueueAll(); },
 });
 const auth = new Auth(store);
+const health = new Health({ store, dataDir: DATA_DIR, transcodeDir: TRANSCODE_DIR, backups, updater, hwaccel, logs, labelFor: hostLabel });
 const downloader = new Downloader(store, { dataDir: DATA_DIR, onFinished: (job) => scanner.enqueue(job.libraryId) });
 const transcodes = new Set();
 
@@ -456,7 +458,7 @@ const app = {
   MediaTokens, IntroDetector, FolderWatcher, findProblems, collections, OpenSubtitles, Parties, Trickplay,
   Activity, Maintenance, ENCODER_NAMES, PORT, HOST, DATA_DIR, MEDIA_ROOT, SCAN_INTERVAL_MIN,
   MEDIA_LABELS, hostLabel, fromHostPath, folderPlaces, PUBLIC_DIR, THUMB_DIR, SUB_CACHE, SUB_DOWNLOADS, store, matcher,
-  scanner, updater, hwaccel, TRANSCODE_DIR, hls, offline, offlineLib, tokens, opensubs, parties,
+  scanner, updater, hwaccel, TRANSCODE_DIR, hls, offline, offlineLib, health, tokens, opensubs, parties,
   trickplay, activity, maintenance, intro, watcher, backups, auth, downloader,
   transcodes, HttpError, json, readBody, readRaw, MIME, sendFile, getItem,
   getShow, getLibrary, getUser, librarySummary, validateLibraryInput, removeLibraryData, resolveArt, subtitleVtt,
@@ -606,6 +608,7 @@ async function main() {
   watcher.start();
   maintenance.start();
   offline.start();
+  health.start();
   // Matching (which gives titles their TMDB / TVmaze ids) finishes after scans, so arrivals are
   // also checked every minute.
   setInterval(() => { try { requests.checkArrivals(store); } catch { /* next time */ } }, 60_000).unref();

@@ -610,6 +610,34 @@ function bindRemoteSection() {
 
 // ---------- Settings → Backups ----------
 const KIND = { auto: 'Automatic', manual: 'Manual', 'pre-restore': 'Before restore' };
+// ---------- health check ----------
+const HEALTH_MARK = { ok: '✓', info: 'ℹ', warn: '!', bad: '✕' };
+function healthSection(h) {
+  const problems = h.checks.filter((c) => c.level !== 'ok');
+  const fine = h.checks.filter((c) => c.level === 'ok');
+  const row = (c) => html`<div class="health-row ${c.level}"><span class="health-mark">${HEALTH_MARK[c.level]}</span>
+    <div><div class="health-title">${c.link ? html`<a href="${c.link}">${c.title}</a>` : c.title}</div>${c.detail ? html`<div class="muted health-detail">${c.detail}</div>` : ''}</div></div>`;
+  const head = { ok: '✓ Everything looks fine', info: '✓ Fine, with a suggestion or two', warn: 'Something needs a look', bad: 'Something is wrong' }[h.level];
+  return html`
+    <div class="panel health ${h.level}" id="health">
+      <div class="row" style="justify-content:space-between">
+        <div><b class="health-head">${head}</b> <span class="muted" style="font-size:13px">Health check · ${fmtDate(h.at)}</span></div>
+        <button class="btn small" id="health-run">Check now</button>
+      </div>
+      ${problems.map(row)}
+      ${fine.length ? html`<details class="health-fine"><summary class="muted">${fine.length} check${fine.length === 1 ? '' : 's'} passed</summary>${fine.map(row)}</details>` : ''}
+    </div>`;
+}
+
+function bindHealthSection() {
+  const b = $('#health-run');
+  if (!b) return;
+  b.onclick = async () => {
+    b.disabled = true; b.textContent = 'Checking…';
+    try { const h = await api('/api/health-check?run=1'); $('#health').outerHTML = healthSection(h).s; bindHealthSection(); } catch (err) { toast(err.message, true); b.disabled = false; }
+  };
+}
+
 function backupsSection(b) {
   const s = b.settings;
   return html`
