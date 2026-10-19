@@ -42,6 +42,14 @@ Versions before 1.2.0 need the new one installed once the old way.
     three episodes in a row it asks whether you're still watching. Paused for a while, the screen
     shows what you're watching. **Back** leaves the player.
 
+## On the TV's home screen and by voice
+
+- What you're in the middle of shows in the TV's own **Play next / Continue watching** row, with
+  progress. Pick one to carry on.
+- **Voice search:** the mic button by the search box, or the remote's search key. "Hey Google,
+  search Marquee for …" opens the results too.
+- **Night mode** (clearer dialogue, quieter loud scenes) is under *Sound* in Audio & Subtitles.
+
 ## Build
 
 Same requirements as the phone app (Android SDK platform 34 + build-tools 34, JDK 17+):

@@ -29,7 +29,12 @@ To update, upload the new zip the same way (it replaces the old one).
    **Watch on a TV**, type the code and press *Link TV*. The Roku signs in as you within a few
    seconds and stays signed in (unlink it on that page to sign it out).
 
-In the menu (press **left** on the home page) are Search, My List, each library and *Sign out*.
+**Who's watching?** When anyone else on the server has a profile (a PIN set on their Account page,
+or one an admin lets be picked without a PIN), the channel starts by asking who's watching. A profile with a PIN asks for it
+on a number pad. *Switch profile* is in the menu.
+
+In the menu (press **left** on the home page) are Search, My List, each library, *Switch profile*
+and *Sign out*.
 On the home page ✱ opens search; on the code screen it changes the server.
 
 ## Remote
@@ -59,7 +64,8 @@ On the home page ✱ opens search; on the code screen it changes the server.
 - Subtitles are in **Audio & Subtitles**. Text ones (SRT, ASS, embedded, downloaded) are shown by
   the Roku; picture ones (Blu-ray, DVD) are drawn into the video by the server. The language you
   pick is remembered for the next video.
-- Who's-watching profiles aren't on Roku yet: it uses the account the code was entered from.
+- **Night mode** (Account → Player on the web) is done by the server, so with it on everything
+  plays through the server's conversion.
 - `fonts/Archivo-Black.ttf` is under the SIL Open Font License (`fonts/Archivo-OFL.txt`).
 
 ## Developing

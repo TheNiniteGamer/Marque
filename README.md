@@ -191,7 +191,7 @@ never gets access to Docker itself.
 | Feature | What Marquee does |
 | --- | --- |
 | **Look** | A red-and-black design: a top bar, a featured banner on the home page (with its trailer playing quietly when there is one), rows that scroll sideways (Continue Watching, My List, New in each library, collections, "Because you watched …", genres), wide cards with titles on the artwork, and a **More info** pop-up with episodes, extras and **More like this**. Works on phones (with a bar along the bottom) and in the Android app. |
-| **TV apps** | A **Roku** channel and an **Android TV** app, signed in by typing the code the TV shows into your phone. TV mode in the web interface: bigger highlights, the remote's arrows move between titles, Back closes pop-ups. |
+| **TV apps** | A **Roku** channel and an **Android TV** app, signed in by typing the code the TV shows into your phone. Both have profiles; Android TV also has voice search and puts Continue Watching on the TV's home screen. TV mode in the web interface: bigger highlights, the remote's arrows move between titles, Back closes pop-ups. |
 | **Hover previews** | On a computer, resting the pointer on a title opens a larger card with its trailer playing quietly (when there is one), Play, My List and More info. |
 | **Accounts** | Sign-in screen, with an admin account created on first run. Admins add users, choose which libraries each one can see, and decide who can use the downloader. Each user has their own watch history, Continue Watching and resume points. |
 | **Libraries** | Movie and TV Show libraries, each combining one or more folders, which can be on different drives. Everything inside the folders is found, including shows in folders of their own (`Kids/Bluey/…`). Add, edit and remove them in Settings with a built-in folder picker that lists your drives, accepts typed paths and shows how many videos a folder holds; whole drives can be shared with Docker (see *Other drives*). |
@@ -208,6 +208,11 @@ never gets access to Docker itself.
 | **Graphics card conversion** | NVIDIA (NVENC), Intel Quick Sync and Intel/AMD VAAPI, detected automatically, with fallback to the CPU. |
 | **Skip intro, Up Next at the credits** | Theme songs and end credits are found automatically by comparing the audio of episodes in a season. A **Skip Intro** button appears during the intro (`S`), or turn on automatic skipping under *Account*. When the credits start, **Up Next** offers the next episode (with *Watch credits* to stay). Admins can fix either by hand: *⋯ → Edit intro & credits…*, or ✂ in the player. |
 | **Seek preview thumbnails** | Pictures above the seek bar while you hover or drag. They're made the first time a video is opened (a few seconds to a minute or two for a film). |
+| **Kids profiles & ratings** | Titles carry their maturity rating (PG-13, TV-14, 12A…, from TMDB for your country, or set by hand with *⋯ → Edit*), shown as a badge. Give a profile a limit in *Settings → Users* (and choose whether unrated titles show): anything above it disappears everywhere for that profile. |
+| **Downloads on the phone** | The Android app saves movies and episodes to watch offline: the original file when the phone plays it, or a 1080p / 720p / 480p copy the server makes first. *Downloads* lists them; progress goes back to the server when you're online again. |
+| **Personal touches** | Sound and subtitle languages are remembered per show; 👍 / 👎 on titles steers suggestions ("Because you liked …"); a **Top 10 in your house this week** row; cast photos and **actor pages**; who's in it shows when you pause. |
+| **Skip Recap** | "Previously on…" recaps are found automatically and get a Skip Recap button. |
+| **Night mode** | Clearer dialogue and quieter loud scenes, on every player (Account → Player, or ☾ in the player). |
 | **Who's watching?** | Profiles for a shared TV or tablet: anyone who sets a PIN (*Account*) can be switched to with it, and admins can let children's accounts be picked without one. *Switch profile* is in the account menu; *Account → Ask “Who's watching?”* shows the picker when Marquee opens on that device. Five wrong PINs lock a profile for 10 minutes. |
 | **Activity** | *Activity* (admins) shows who's watching what right now, on which device, whether at home or away, direct or converted (and on the graphics card or CPU), plus the server's CPU and memory use. |
 | **Casting** | Chromecast / Google TV from Chrome and Edge, AirPlay from Safari. Includes subtitles, resume position and next episode. |
@@ -331,6 +336,8 @@ lib/scanner.js      folder walking, ffprobe, show grouping, TMDB enrichment
 lib/media.js        ffprobe/ffmpeg: probe, thumbnails, direct-play check, live transcode, seek points
 lib/hwaccel.js      encoder choice (NVENC / QSV / VAAPI / x264), start-up tests, fallback
 lib/hls.js          adaptive streaming: VOD playlists, on-demand segment conversion per session
+lib/offline.js      copies for the phone app's downloads (MP4s made in the background, kept a week)
+lib/ratings.js      maturity ratings as ages, and what each profile is allowed to see
 lib/intro.js        intro and credits detection (Chromaprint audio fingerprints compared across a season)
 lib/tokens.js       signed, expiring playback links for cast devices and native players
 lib/watcher.js      notices folder changes (polls folder times; works on Docker bind mounts and network drives)
@@ -367,6 +374,6 @@ isn't installed.
 
 ## Not yet supported
 
-Music and photo libraries, and parental content ratings. On Roku: profiles. Hardware conversion, casting and the TV apps are tested here only against
+Music and photo libraries. Hardware conversion, casting and the TV apps are tested here only against
 ffmpeg, a simulated Cast SDK, the BrightScript compiler and Android's build tools (not on real TVs),
 so please report problems with specific graphics cards or TVs.

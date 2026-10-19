@@ -4,6 +4,42 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.9.0 — Significant update
+
+**Twelve things the big streaming apps do.**
+- **Kids profiles and maturity ratings.** Titles now have their rating (PG-13, TV-14, 12A…,
+  fetched from TMDB for your country, or set with *⋯ → Edit*). In *Settings → Users*, give a
+  profile a limit (*Little kids*, *Kids*, *Older kids*, *Teens*) and choose whether unrated titles
+  show; anything above it is hidden everywhere: home, libraries, search, collections, My List,
+  playback. Kids profiles have a KIDS label on the picker and by the logo. Ratings show as a small
+  badge on titles.
+- **Downloads in the phone app (1.8.0).** ⬇ on a movie or an episode saves it to the phone to
+  watch without the internet: the original file when the phone plays it as it is, or a smaller
+  copy (1080p / 720p / 480p) that the server makes first (kept on the server for a week).
+  **Downloads** (in the bottom bar, the menu, and the "can't reach the server" page) shows what's
+  saved and what's coming. Subtitles come too, the next episode plays if it's downloaded, and your
+  place is sent to the server when you're back online.
+- **Your languages, remembered per show.** Pick Japanese audio with English subtitles once and
+  every episode of that show starts that way, on every device.
+- **Continue Watching on the Android TV home screen (TV 1.4.0).** Your Continue Watching titles
+  appear in the TV's own "Play next" row, with progress; pick one to play it.
+- **Lock-screen and Bluetooth controls** on Android: play/pause, back/ahead 10 s and next episode
+  from headphones, the notification and the lock screen.
+- **Skip Recap.** "Previously on…" at the start of an episode is found automatically (it matches
+  earlier episodes of the season), with a Skip Recap button.
+- **Cast while paused, and actor pages.** Pause for a moment and the player lists who's in it.
+  Cast lists now have photos; pick someone to see everything they're in on your server.
+- **👍 / 👎.** Rate titles from their pop-up. Thumbs-down titles stop being suggested, and a
+  "Because you liked …" row follows what you like.
+- **Top 10 in your house this week**, a row with big numbers, from what everyone watched.
+- **Night mode.** Clearer dialogue and quieter loud scenes: ☾ in the web player, *Sound* in the
+  Android players' Audio & Subtitles, or Account → Player (the Roku follows that setting).
+- **Voice search on Android TV.** The mic button by the search box (or the remote's search key);
+  "Hey Google, search Marquee for …" works too.
+- **Profiles on the Roku (1.5.0).** "Who's watching?" when the channel starts, and *Switch
+  profile* in the menu, with a number pad for PINs.
+- Fixed: changing quality or sound track mid-video could occasionally fail to start.
+
 ## 0.8.3
 
 **One player design on every device.**
