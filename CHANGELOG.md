@@ -4,6 +4,15 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.7.4
+
+- **Home banner on TVs:** on short screens (the Android TV app and TV browsers show pages at about
+  960×540) the title, details and buttons sit lower and smaller, so a long title no longer runs
+  up under the top bar. Long titles get a smaller size and stop at two lines everywhere.
+- The banner's title is no longer a stop when moving with the remote (Up from Play goes straight to
+  the top bar).
+- The **More info** pop-up on TVs has a shorter picture, so the summary and episodes start on screen.
+
 ## 0.7.3
 
 **Setting up a TV finds Marquee for you.**

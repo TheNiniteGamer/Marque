@@ -23,7 +23,7 @@ initTvMode();
 
 // ---------- moving with the arrow keys ----------
 // Things on a card besides the card itself (play, ⋯) are reached through the card's pop-up instead.
-const TV_SKIP = '.play-hover, .card-menu, .card-text, .rail-btn, .tabbar *, [tabindex="-1"], [disabled]';
+const TV_SKIP = '.play-hover, .card-menu, .card-text, .rail-btn, .hero-title a, .tabbar *, [tabindex="-1"], [disabled]';
 const FOCUSABLE = 'a[href], button, select, input:not([type=hidden]), textarea, [tabindex]';
 function tvScope() {
   return [...document.querySelectorAll('.modal-backdrop')].pop() || document.querySelector('.profile-picker')

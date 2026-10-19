@@ -408,7 +408,7 @@ function heroBanner(h) {
       ${h.trailerId ? html`<video id="hero-video" muted playsinline loop preload="none" data-src="/api/items/${h.trailerId}/stream"></video>` : ''}</div>
     <div class="hero-body">
       <div class="hero-kind"><span class="m-badge" aria-hidden="true">M</span>${isShow ? 'SERIES' : /youtube/i.test(lib?.name || '') ? 'VIDEO' : 'FILM'}</div>
-      <h1 class="hero-title"><a href="${hrefFor(h)}">${h.title}</a></h1>
+      <h1 class="hero-title${h.title.length > 18 ? ' long' : ''}"><a href="${hrefFor(h)}">${h.title}</a></h1>
       <div class="hero-meta">
         ${h.year ? html`<span>${h.year}</span>` : ''}
         <span>${isShow ? `${h.seasonCount} season${h.seasonCount === 1 ? '' : 's'}` : fmtDuration(h.duration)}</span>

@@ -100,12 +100,29 @@ h2 { font-size: 20px; margin: 0; }
 .m-badge { display: grid; place-items: center; width: 20px; height: 28px; border-radius: 2px; background: var(--accent); color: #fff; font-family: var(--display); font-weight: 900; font-size: 17px; letter-spacing: 0; }
 .hero-title { margin: 0; font-family: var(--display); font-weight: 900; font-size: clamp(40px, 6.4vw, 108px); line-height: .92; letter-spacing: -.02em; text-shadow: 0 2px 20px rgba(0,0,0,.35); }
 .hero-title a:hover { text-decoration: none; }
+.hero-title.long { font-size: clamp(32px, 4.4vw, 76px); }
+/* Long titles stop at two lines (no running up under the top bar). */
+.hero-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; padding-bottom: .08em; text-shadow: 0 2px 6px rgba(0,0,0,.3); }
 .hero-meta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; color: #dedede; font-weight: 600; font-size: 15px; }
 .hero-overview { margin: 0; font-size: clamp(15px, 1.2vw, 19px); line-height: 1.45; text-shadow: 0 1px 4px rgba(0,0,0,.6);
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .hero-mute { position: absolute; z-index: 2; right: var(--pad); bottom: max(32%, 200px); width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.7); background: rgba(0,0,0,.3); color: #fff; cursor: pointer; display: grid; place-items: center; }
 .hero-mute svg { width: 20px; height: 20px; }
+/* Short screens: TVs show pages at about 960×540 (the Android TV app, TV browsers), and some laptops.
+   The banner text sits lower and smaller, sized by the screen's height, so it stays clear of the top bar. */
+@media (min-width: 641px) and (max-height: 760px) {
+  .hero-body { bottom: max(21%, 100px); gap: 12px; width: min(620px, 58vw); }
+  .hero-title { font-size: clamp(30px, 8.5vh, 76px); }
+  .hero-title.long { font-size: clamp(26px, 6.4vh, 56px); }
+  .hero-kind { font-size: 12px; }
+  .hero-meta { font-size: 14px; }
+  .hero-overview { -webkit-line-clamp: 2; font-size: 15px; }
+  .hero-mute { bottom: max(22%, 104px); }
+  /* The More info pop-up: a shorter picture, so the summary and episodes start on screen. */
+  .dlg-hero { aspect-ratio: auto; height: 58vh; }
+  .dlg-title { font-size: clamp(28px, 7.5vh, 60px); }
+}
 .tag { display: inline-block; border: 1px solid #8c8c8c; padding: 0 6px; border-radius: 3px; font-size: 12px; line-height: 18px; font-weight: 600; }
 
 /* ---------- rows + cards ---------- */
