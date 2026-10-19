@@ -76,7 +76,9 @@ public class MainActivity extends Activity {
         web.setDownloadListener(this::download);
 
         String asked = searchQuery(getIntent());
+        String play = WatchNext.playId(getIntent());
         if (state != null) web.restoreState(state);
+        else if (play != null) web.loadUrl(startUrl() + "#/play/" + play);
         else web.loadUrl(asked != null ? startUrl() + "#/search?q=" + Uri.encode(asked) : startUrl());
         if (tv) web.requestFocus();
         // A newer app on the server? (Asks once per version; Account → Check for updates any time.)
@@ -202,6 +204,9 @@ public class MainActivity extends Activity {
         if (Updater.onStatus(this, intent)) return;
         String q = searchQuery(intent);
         if (q != null) showSearch(q);
+        // A Continue Watching card on the TV's home screen.
+        String play = WatchNext.playId(intent);
+        if (play != null && web != null) web.evaluateJavascript("location.hash = '#/play/" + play + "'", null);
     }
 
     @Override
@@ -209,6 +214,7 @@ public class MainActivity extends Activity {
         super.onResume();
         if (web != null) web.onResume();
         Updater.resume(this);
+        if (web != null) WatchNext.sync(this, base);
     }
 
     @Override

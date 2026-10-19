@@ -16,6 +16,8 @@ import java.util.Map;
 final class Net {
     private Net() {}
 
+    static final String SIGNED_OUT = "You're signed out. Sign in again in the app.";
+
     // The sign-in cookie, read from the web view on the main thread and reused by background requests.
     private static volatile String cookie;
 
@@ -43,7 +45,7 @@ final class Net {
         HttpURLConnection c = open(url, 15000);
         try {
             int code = c.getResponseCode();
-            if (code == 401) throw new IOException("You're signed out. Sign in again in the app.");
+            if (code == 401) throw new IOException(SIGNED_OUT);
             if (code != 200) throw new IOException("The server answered " + code);
             return Discovery.readAll(c.getInputStream(), 8 * 1024 * 1024);
         } finally {
