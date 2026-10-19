@@ -1,37 +1,86 @@
+' Keys: OK / ▶‖ play and pause · left/right (and ◀◀ ▶▶) scrub, held to go faster · Down to the
+' buttons (Episodes, Audio & Subtitles, Next Episode) · Up or OK skips the intro · Back leaves.
+
 sub init()
     m.video = m.top.findNode("video")
+    m.spinner = m.top.findNode("spinner")
+    m.spin = m.top.findNode("spin")
+    m.overlay = m.top.findNode("overlay")
+    m.heading = m.top.findNode("heading")
+    m.subheading = m.top.findNode("subheading")
+    m.bigPlay = m.top.findNode("bigPlay")
+    m.preview = m.top.findNode("preview")
+    m.previewFrame = m.top.findNode("previewFrame")
+    m.previewClip = m.top.findNode("previewClip")
+    m.previewSheet = m.top.findNode("previewSheet")
+    m.previewTime = m.top.findNode("previewTime")
+    m.played = m.top.findNode("played")
+    m.knob = m.top.findNode("knob")
+    m.remaining = m.top.findNode("remaining")
+    m.ctlPlay = m.top.findNode("ctlPlay")
+    m.actions = m.top.findNode("actions")
     m.skip = m.top.findNode("skip")
     m.upNext = m.top.findNode("upNext")
-    m.nextTitle = m.top.findNode("nextTitle")
+    m.idle = m.top.findNode("idle")
+    m.panel = m.top.findNode("panel")
+    m.audioList = m.top.findNode("audioList")
+    m.subList = m.top.findNode("subList")
     m.message = m.top.findNode("message")
+    m.hideTimer = m.top.findNode("hideTimer")
+    m.holdTimer = m.top.findNode("holdTimer")
+    m.commitTimer = m.top.findNode("commitTimer")
+    m.idleTimer = m.top.findNode("idleTimer")
+    m.countTimer = m.top.findNode("countTimer")
     m.reportTimer = m.top.findNode("reportTimer")
-    m.nextTimer = m.top.findNode("nextTimer")
-    m.video.notificationInterval = 1
+
+    m.barWidth = 1560
+    m.video.notificationInterval = 0.5
     m.video.observeField("state", "onState")
     m.video.observeField("position", "onPosition")
     m.reportTimer.observeField("fire", "onReportTimer")
-    m.nextTimer.observeField("fire", "playNext")
+    m.hideTimer.observeField("fire", "hideOverlay")
+    m.holdTimer.observeField("fire", "onHold")
+    m.commitTimer.observeField("fire", "commitScrub")
+    m.idleTimer.observeField("fire", "showIdle")
+    m.countTimer.observeField("fire", "onCountdown")
+    m.audioList.observeField("checkedItem", "onAudioPicked")
+    m.subList.observeField("checkedItem", "onSubtitlePicked")
     m.top.observeField("focusedChild", "onFocusChange")
+    if not m.global.hasField("autoNexts") then m.global.addFields({ autoNexts: 0 })
+
     m.started = false
     m.done = false
     m.mode = ""
-    m.message.text = "Loading…"
+    m.audio = 0
+    m.burn = invalid
+    m.scrubbing = false
+    m.zone = "bar"
+    m.ctlIndex = 1
+    m.ctls = []
+    m.upNextShown = false
+    m.upNextDismissed = false
+    m.upNextIndex = 0
+    m.tp = invalid
+    m.tpAskedAt = -1000
+    m.clock = CreateObject("roTimespan")
+    m.spin.control = "start"
 end sub
 
 sub onFocusChange()
-    if m.top.hasFocus() then m.video.setFocus(true)
+    if m.panel.visible and m.top.hasFocus() then m.panelList.setFocus(true)
 end sub
 
 sub onParams()
     id = m.top.params.id
     mqApi("/api/items/" + id, "onItem")
     mqApi("/api/items/" + id + "/playback", "onPlayback")
+    mqApi("/api/items/" + id + "/trickplay", "onTrickplay")
 end sub
 
 sub onItem(event as Object)
     r = event.getData()
     if r.status <> 200 or r.data = invalid then
-        m.message.text = "Can't play this: " + r.error
+        fail("Can't play this: " + r.error)
         return
     end if
     m.item = r.data
@@ -41,11 +90,22 @@ end sub
 sub onPlayback(event as Object)
     r = event.getData()
     if r.status <> 200 or r.data = invalid then
-        m.message.text = "Can't play this: " + r.error
+        fail("Can't play this: " + r.error)
         return
     end if
     m.pb = r.data
     start()
+end sub
+
+sub onTrickplay(event as Object)
+    r = event.getData()
+    if r.status = 200 and r.data <> invalid and mqIsTrue(r.data.ready) then m.tp = r.data
+end sub
+
+sub fail(text as String)
+    m.spin.control = "stop"
+    m.spinner.visible = false
+    m.message.text = text + Chr(10) + Chr(10) + "Press Back to return."
 end sub
 
 ' MP4 files with video and sound the Roku decodes play as they are; everything else is converted.
@@ -73,66 +133,560 @@ end function
 sub start()
     if m.item = invalid or m.pb = invalid or m.started then return
     m.started = true
-    m.message.text = ""
     x = m.item
-    c = CreateObject("roSGNode", "ContentNode")
-    title = mqStr(x.title)
-    if x.type = "episode" then title = mqStr(x.showTitle) + " · " + mqEpLabel(x) + " · " + title
-    c.title = title
-    if canPlayDirectly(x) then
-        c.url = mqMediaUrl("/api/items/" + x.id + "/stream")
-        c.streamFormat = "mp4"
-        m.mode = "direct"
+    if x.type = "episode" then
+        m.heading.text = mqStr(x.showTitle)
+        m.subheading.text = mqEpLabel(x) + "  " + mqStr(x.title)
     else
-        c.url = mqMediaUrl("/api/items/" + x.id + "/hls/master.m3u8?sid=" + mqStr(m.pb.sid))
-        c.streamFormat = "hls"
-        m.mode = "hls"
+        m.heading.text = mqStr(x.title)
+        m.subheading.text = mqStr(x.year)
     end if
+    m.duration = mqNum(x.duration)
+    if m.duration <= 0 and x.media <> invalid then m.duration = mqNum(x.media.duration)
+    if canPlayDirectly(x) then m.mode = "direct" else m.mode = "hls"
+
     startAt = mqNum(m.top.params.start)
     if startAt < 0 then
         startAt = 0
         p = x.progress
         if p <> invalid and not mqIsTrue(p.watched) and mqNum(p.position) > 15 then startAt = mqNum(p.position)
     end if
-    if startAt > 0 then c.PlayStart = startAt
-    ' Subtitles (text ones; picture subtitles need the server to draw them, which the web player does).
-    tracks = []
+
+    ' Subtitles: text ones go to the Roku's own subtitle display; picture ones are drawn in by the server.
+    m.subs = []
+    m.subTracks = []
     if x.subtitles <> invalid then
         for each s in x.subtitles
+            m.subs.Push(s)
             if s.burn = invalid then
                 lang = mqStr(s.lang)
                 if lang = "" then lang = "und"
-                tracks.Push({ Language: lang, TrackName: mqMediaUrl("/api/items/" + x.id + "/subtitles/" + s.id + ".vtt"), Description: mqStr(s.label) })
+                m.subTracks.Push({ Language: lang, TrackName: mqMediaUrl("/api/items/" + x.id + "/subtitles/" + s.id + ".vtt"), Description: mqStr(s.label) })
             end if
         end for
     end if
-    if tracks.Count() > 0 then c.SubtitleTracks = tracks
+    m.subOn = invalid
+    buildActions()
+    load(startAt)
+    m.reportTimer.control = "start"
+    ' The subtitle language picked last time, if this has it.
+    want = mqRead("subLang")
+    if want <> "" then
+        for i = 0 to m.subs.Count() - 1
+            if m.subs[i].burn = invalid and mqStr(m.subs[i].lang) = want then
+                setSubtitle(i)
+                exit for
+            end if
+        end for
+    end if
+    if m.subOn = invalid then m.video.globalCaptionMode = "Off"
+end sub
+
+' (Re)loads the stream at a position: on start, and when the sound track or drawn-in subtitles change.
+sub load(at as Float)
+    x = m.item
+    c = CreateObject("roSGNode", "ContentNode")
+    c.title = m.heading.text
+    if m.mode = "direct" then
+        c.url = mqMediaUrl("/api/items/" + x.id + "/stream")
+        c.streamFormat = "mp4"
+    else
+        q = "?sid=" + mqStr(m.pb.sid) + "&audio=" + m.audio.ToStr()
+        if m.burn <> invalid then q = q + "&burn=" + mqStr(m.burn)
+        c.url = mqMediaUrl("/api/items/" + x.id + "/hls/master.m3u8" + q)
+        c.streamFormat = "hls"
+    end if
+    if at > 0 then c.PlayStart = at
+    if m.subTracks.Count() > 0 then c.SubtitleTracks = m.subTracks
     m.video.content = c
     m.video.control = "play"
-    m.video.setFocus(true)
-    m.reportTimer.control = "start"
+    m.subApplied = false
+    showSpinner(true)
 end sub
+
+' ---------- state ----------
 
 sub onState()
     s = m.video.state
-    if s = "paused" then
+    showSpinner(s = "buffering")
+    if s = "playing" then
+        m.message.text = ""
+        m.ctlPlay.uri = "pkg:/images/pl_pause.png"
+        m.bigPlay.visible = false
+        m.idleTimer.control = "stop"
+        if m.overlay.visible and not m.scrubbing then m.hideTimer.control = "start"
+        if m.subOn <> invalid and not m.subApplied then applyTextSubtitle()
+    else if s = "paused" then
+        m.ctlPlay.uri = "pkg:/images/pl_play.png"
+        m.bigPlay.visible = true
         report(false)
+        m.idleTimer.control = "start"
     else if s = "finished" then
         report(true)
         finished()
     else if s = "error" then
-        m.message.text = "This video can't be played: " + mqStr(m.video.errorMsg)
+        fail("This video can't be played: " + mqStr(m.video.errorMsg))
         report(true)
     end if
 end sub
 
-sub onPosition()
-    intro = invalid
-    if m.item <> invalid then intro = m.item.intro
-    at = m.video.position
-    inIntro = intro <> invalid and at >= mqNum(intro.start) and at < mqNum(intro.end) - 1
-    m.skip.visible = inIntro
+sub showSpinner(on as Boolean)
+    m.spinner.visible = on
+    if on then m.spin.control = "start" else m.spin.control = "stop"
 end sub
+
+sub onPosition()
+    at = m.video.position
+    if not m.scrubbing then drawBar(at)
+    ' Skip Intro while the intro is on.
+    intro = m.item.intro
+    m.skip.visible = intro <> invalid and at >= mqNum(intro.start) and at < mqNum(intro.end) - 1 and not m.upNext.visible
+    ' The next episode's card at the credits (or 20 s before the end when no credits were found).
+    if m.item.next <> invalid and not m.upNextShown and not m.upNextDismissed and m.duration > 0 then
+        creditsAt = m.duration - 20
+        if m.item.credits <> invalid and mqNum(m.item.credits.start) > 0 then creditsAt = mqNum(m.item.credits.start)
+        if at >= creditsAt and at < m.duration - 1 then showUpNext(false)
+    end if
+end sub
+
+function duration() as Float
+    if m.video.duration > 0 then return m.video.duration
+    return m.duration
+end function
+
+sub drawBar(at as Float)
+    d = duration()
+    if d <= 0 then return
+    f = at / d
+    if f < 0 then f = 0
+    if f > 1 then f = 1
+    m.played.width = m.barWidth * f
+    m.knob.translation = [m.barWidth * f - 16, -12]
+    m.remaining.text = mqClock(d - at)
+end sub
+
+' ---------- the controls ----------
+
+sub buildActions()
+    m.ctls = [{ kind: "icon", node: m.top.findNode("ctlBack"), action: "back10" }, { kind: "icon", node: m.ctlPlay, action: "play" }, { kind: "icon", node: m.top.findNode("ctlFwd"), action: "fwd10" }]
+    labels = []
+    if m.item.type = "episode" and m.item.showId <> invalid then labels.Push(["Episodes", "episodes"])
+    if m.subs.Count() > 0 or (m.item.audioTracks <> invalid and m.item.audioTracks.Count() > 1) then labels.Push(["Audio & Subtitles", "tracks"])
+    if m.item.next <> invalid then labels.Push(["Next Episode", "next"])
+    for each l in labels
+        g = m.actions.createChild("Group")
+        t = g.createChild("Label")
+        t.text = l[0]
+        t.font = "font:MediumBoldSystemFont"
+        u = g.createChild("Rectangle")
+        u.height = 5
+        u.color = "0xE31B23FF"
+        w = t.boundingRect().width
+        if w < 20 then w = Len(l[0]) * 20
+        u.width = w
+        u.translation = [0, 52]
+        m.ctls.Push({ kind: "text", node: g, label: t, line: u, action: l[1] })
+    end for
+    paintControls()
+end sub
+
+sub paintControls()
+    for i = 0 to m.ctls.Count() - 1
+        c = m.ctls[i]
+        on = m.zone = "controls" and i = m.ctlIndex
+        if c.kind = "icon" then
+            if on then
+                c.node.opacity = 1.0
+                c.node.scale = [1.25, 1.25]
+            else
+                c.node.opacity = 0.7
+                c.node.scale = [1.0, 1.0]
+            end if
+        else
+            c.line.visible = on
+            if on then c.label.color = "0xFFFFFFFF" else c.label.color = "0xB0B0B0FF"
+        end if
+    end for
+    if m.zone = "bar" then m.knob.scale = [1.3, 1.3] else m.knob.scale = [1.0, 1.0]
+    m.knob.scaleRotateCenter = [16, 16]
+end sub
+
+sub showOverlay(zone = "" as String)
+    hideIdle()
+    if zone <> "" then m.zone = zone
+    if not m.overlay.visible then
+        m.overlay.visible = true
+        drawBar(m.video.position)
+    end if
+    m.bigPlay.visible = m.video.state = "paused"
+    paintControls()
+    m.hideTimer.control = "stop"
+    if m.video.state = "playing" and not m.scrubbing then m.hideTimer.control = "start"
+end sub
+
+sub hideOverlay()
+    if m.scrubbing or m.video.state = "paused" then return
+    m.overlay.visible = false
+    m.zone = "bar"
+end sub
+
+sub togglePause()
+    if m.video.state = "paused" then
+        m.video.control = "resume"
+    else if m.video.state = "playing" or m.video.state = "buffering" then
+        m.video.control = "pause"
+    end if
+    showOverlay()
+end sub
+
+sub act(action as String)
+    if action = "play" then
+        togglePause()
+    else if action = "back10" then
+        jump(-10)
+    else if action = "fwd10" then
+        jump(10)
+    else if action = "tracks" then
+        openPanel()
+    else if action = "next" then
+        playNext(false)
+    else if action = "episodes" then
+        leave()
+        m.top.navigate = { screen: "EpisodesScreen", params: { id: m.item.showId, title: mqStr(m.item.showTitle), season: m.item.season }, replace: true }
+    end if
+end sub
+
+sub jump(by as Float)
+    d = duration()
+    t = m.video.position + by
+    if t < 0 then t = 0
+    if d > 0 and t > d - 2 then t = d - 2
+    m.video.seek = t
+    drawBar(t)
+    showOverlay()
+end sub
+
+' ---------- scrubbing ----------
+
+sub beginScrub(dir as Integer, fast as Boolean)
+    if not m.scrubbing then
+        m.scrubbing = true
+        m.scrubPos = m.video.position
+        m.wasPaused = m.video.state = "paused"
+    end if
+    m.holdDir = dir
+    m.holdFast = fast
+    m.holdTicks = 0
+    m.commitTimer.control = "stop"
+    showOverlay("bar")
+    m.hideTimer.control = "stop"
+    scrubStep()
+    m.holdTimer.control = "start"
+end sub
+
+sub onHold()
+    scrubStep()
+end sub
+
+sub scrubStep()
+    m.holdTicks = m.holdTicks + 1
+    size = 10
+    if m.holdTicks > 4 then size = 30
+    if m.holdTicks > 12 then size = 60
+    if m.holdFast then size = size * 3
+    d = duration()
+    m.scrubPos = m.scrubPos + m.holdDir * size
+    if m.scrubPos < 0 then m.scrubPos = 0
+    if d > 0 and m.scrubPos > d - 2 then m.scrubPos = d - 2
+    drawBar(m.scrubPos)
+    showPreview(m.scrubPos)
+end sub
+
+sub endHold()
+    m.holdTimer.control = "stop"
+    if m.scrubbing then m.commitTimer.control = "start"
+end sub
+
+sub commitScrub()
+    if not m.scrubbing then return
+    m.holdTimer.control = "stop"
+    m.commitTimer.control = "stop"
+    m.scrubbing = false
+    m.preview.visible = false
+    m.video.seek = m.scrubPos
+    if m.wasPaused then m.video.control = "resume"
+    showOverlay()
+end sub
+
+' The picture at that time, from the server's preview sheets (10×10 pictures, one every 10 s).
+sub showPreview(at as Float)
+    m.previewTime.text = mqClock(at)
+    tp = m.tp
+    if tp = invalid and m.clock.TotalSeconds() - m.tpAskedAt > 30 then
+        m.tpAskedAt = m.clock.TotalSeconds()
+        mqApi("/api/items/" + m.item.id + "/trickplay", "onTrickplay")
+    end if
+    scale = 1.5
+    w = 240
+    h = 135
+    if tp <> invalid then
+        w = Int(mqNum(tp.width))
+        h = Int(mqNum(tp.height))
+        cols = Int(mqNum(tp.cols))
+        rows = Int(mqNum(tp.rows))
+        n = Int(at / mqNum(tp.interval))
+        if n >= Int(mqNum(tp.count)) then n = Int(mqNum(tp.count)) - 1
+        if n < 0 then n = 0
+        per = cols * rows
+        sheet = Int(n / per)
+        idx = n - sheet * per
+        col = idx mod cols
+        row = Int(idx / cols)
+        uri = mqMediaUrl("/api/items/" + m.item.id + "/trickplay/" + sheet.ToStr() + ".jpg")
+        if m.previewSheet.uri <> uri then
+            m.previewSheet.width = w * cols
+            m.previewSheet.height = h * rows
+            m.previewSheet.uri = uri
+        end if
+        m.previewSheet.translation = [-col * w, -row * h]
+        m.previewClip.clippingRect = [0, 0, w, h]
+        m.previewClip.scale = [scale, scale]
+        m.previewClip.visible = true
+        m.previewFrame.visible = true
+    else
+        m.previewClip.visible = false
+        m.previewFrame.visible = false
+    end if
+    pw = w * scale + 6
+    ph = h * scale + 6
+    m.previewFrame.width = pw
+    m.previewFrame.height = ph
+    m.previewTime.width = pw
+    m.previewTime.translation = [0, ph + 8]
+    d = duration()
+    f = 0.0
+    if d > 0 then f = at / d
+    x = 96 + m.barWidth * f - pw / 2
+    if x < 60 then x = 60
+    if x > 1860 - pw then x = 1860 - pw
+    m.preview.translation = [x, 880 - ph - 70]
+    m.preview.visible = true
+end sub
+
+' ---------- Skip Intro, Up Next ----------
+
+sub skipIntro()
+    m.video.seek = mqNum(m.item.intro.end)
+    m.skip.visible = false
+end sub
+
+sub showUpNext(stillWatching as Boolean)
+    nxt = m.item.next
+    if nxt = invalid then return
+    m.upNextShown = true
+    m.stillWatching = stillWatching
+    m.top.findNode("nextThumb").uri = mqArt("thumb", nxt)
+    m.top.findNode("nextKind").text = "NEXT EPISODE  ·  " + mqEpLabel(nxt)
+    m.top.findNode("nextTitle").text = mqStr(nxt.title)
+    m.upNextIndex = 0
+    m.count = 10
+    m.skip.visible = false
+    m.overlay.visible = false
+    m.upNext.visible = true
+    paintUpNext()
+    if not stillWatching then m.countTimer.control = "start"
+end sub
+
+sub paintUpNext()
+    first = "Next Episode in " + m.count.ToStr()
+    second = "Watch Credits"
+    if m.stillWatching then
+        m.top.findNode("nextKind").text = "ARE YOU STILL WATCHING?"
+        first = "Continue Watching"
+        second = "Back to browsing"
+    end if
+    texts = [first, second]
+    for i = 0 to 1
+        bg = m.top.findNode("nextBg" + i.ToStr())
+        t = m.top.findNode("nextText" + i.ToStr())
+        t.text = texts[i]
+        if i = m.upNextIndex then
+            bg.color = "0xFFFFFFFF"
+            t.color = "0x000000FF"
+        else
+            bg.color = "0x3A3A3AFF"
+            t.color = "0xFFFFFFFF"
+        end if
+    end for
+end sub
+
+sub onCountdown()
+    m.count = m.count - 1
+    if m.count <= 0 then
+        m.countTimer.control = "stop"
+        playNext(true)
+    else
+        paintUpNext()
+    end if
+end sub
+
+sub dismissUpNext()
+    m.countTimer.control = "stop"
+    m.upNext.visible = false
+    m.upNextDismissed = true
+end sub
+
+sub finished()
+    m.reportTimer.control = "stop"
+    if m.item.next <> invalid then
+        ' Three episodes in a row with nobody touching the remote: ask first.
+        if m.global.autoNexts >= 3 then
+            showUpNext(true)
+        else
+            playNext(true)
+        end if
+    else
+        leave()
+        m.top.navigate = { back: true }
+    end if
+end sub
+
+sub playNext(auto as Boolean)
+    nxt = m.item.next
+    if nxt = invalid then return
+    if auto then
+        if m.global.autoNexts >= 3 then
+            showUpNext(true)
+            return
+        end if
+        m.global.autoNexts = m.global.autoNexts + 1
+    end if
+    leave()
+    m.top.navigate = { screen: "PlayerScreen", params: { id: nxt.id, start: 0 }, replace: true }
+end sub
+
+' ---------- paused for a while ----------
+
+sub showIdle()
+    if m.video.state <> "paused" or m.panel.visible or m.upNext.visible then return
+    x = m.item
+    m.top.findNode("idleTitle").text = m.heading.text
+    if x.type = "episode" then m.top.findNode("idleSub").text = mqEpLabel(x) + "  " + mqStr(x.title) else m.top.findNode("idleSub").text = ""
+    m.top.findNode("idleOverview").text = mqStr(x.overview)
+    m.overlay.visible = false
+    m.idle.visible = true
+end sub
+
+sub hideIdle()
+    m.idle.visible = false
+end sub
+
+' ---------- Audio & Subtitles ----------
+
+sub openPanel()
+    m.applying = true
+    a = CreateObject("roSGNode", "ContentNode")
+    tracks = m.item.audioTracks
+    if tracks = invalid or tracks.Count() = 0 then tracks = [{ label: "Original" }]
+    for each t in tracks
+        n = a.createChild("ContentNode")
+        n.title = mqStr(t.label)
+    end for
+    m.audioList.content = a
+    m.audioList.checkedItem = m.audio
+    s = CreateObject("roSGNode", "ContentNode")
+    n = s.createChild("ContentNode")
+    n.title = "Off"
+    for each sub_ in m.subs
+        n = s.createChild("ContentNode")
+        n.title = mqStr(sub_.label)
+    end for
+    m.subList.content = s
+    if m.subOn = invalid then m.subList.checkedItem = 0 else m.subList.checkedItem = m.subOn + 1
+    m.applying = false
+    m.overlay.visible = false
+    m.panel.visible = true
+    m.panelList = m.subList
+    if m.subs.Count() = 0 then m.panelList = m.audioList
+    m.panelList.setFocus(true)
+end sub
+
+sub closePanel()
+    m.panel.visible = false
+    m.top.setFocus(true)
+    showOverlay("controls")
+end sub
+
+sub onAudioPicked()
+    if m.applying then return
+    i = m.audioList.checkedItem
+    if i = m.audio or m.item.audioTracks = invalid or i >= m.item.audioTracks.Count() then return
+    m.audio = i
+    avail = m.video.availableAudioTracks
+    if m.mode = "direct" and avail <> invalid and avail.Count() = m.item.audioTracks.Count() then
+        m.video.audioTrack = avail[i].Track
+    else
+        ' The server converts with the chosen sound track.
+        m.mode = "hls"
+        load(m.video.position)
+    end if
+end sub
+
+sub onSubtitlePicked()
+    if m.applying then return
+    i = m.subList.checkedItem - 1
+    if i < 0 then
+        setSubtitle(-1)
+        mqWrite("subLang", "")
+    else
+        setSubtitle(i)
+        mqWrite("subLang", mqStr(m.subs[i].lang))
+    end if
+end sub
+
+' -1: off. Text subtitles are shown by the Roku; picture ones need the stream reloaded with them drawn in.
+sub setSubtitle(i as Integer)
+    wasBurn = m.burn
+    if i < 0 then
+        m.subOn = invalid
+        m.burn = invalid
+        m.video.globalCaptionMode = "Off"
+    else if m.subs[i].burn <> invalid then
+        m.subOn = i
+        m.burn = m.subs[i].burn
+        m.video.globalCaptionMode = "Off"
+    else
+        m.subOn = i
+        m.burn = invalid
+        applyTextSubtitle()
+    end if
+    burnChanged = (wasBurn = invalid) <> (m.burn = invalid)
+    if not burnChanged and wasBurn <> invalid and m.burn <> invalid then burnChanged = wasBurn <> m.burn
+    if burnChanged and m.video.content <> invalid then
+        m.mode = "hls"
+        load(m.video.position)
+    end if
+end sub
+
+sub applyTextSubtitle()
+    if m.subOn = invalid or m.subs[m.subOn].burn <> invalid then return
+    url = mqMediaUrl("/api/items/" + m.item.id + "/subtitles/" + m.subs[m.subOn].id + ".vtt")
+    track = url
+    avail = m.video.availableSubtitleTracks
+    if avail <> invalid then
+        for each a in avail
+            if mqStr(a.TrackName) = url or (mqStr(a.Description) <> "" and mqStr(a.Description) = mqStr(m.subs[m.subOn].label)) then
+                track = a.TrackName
+                exit for
+            end if
+        end for
+    end if
+    m.video.subtitleTrack = track
+    m.video.globalCaptionMode = "On"
+    m.subApplied = true
+end sub
+
+' ---------- progress ----------
 
 sub onReportTimer()
     if m.video.state = "playing" then report(false)
@@ -149,51 +703,140 @@ end sub
 sub onReported()
 end sub
 
-' Stop converting now instead of when the server notices nobody is watching.
-sub endConversion()
+' Stop everything before leaving the player.
+sub leave()
+    report(true)
+    for each t in [m.reportTimer, m.hideTimer, m.holdTimer, m.commitTimer, m.idleTimer, m.countTimer]
+        t.control = "stop"
+    end for
+    m.video.control = "stop"
     if m.mode = "hls" and m.pb <> invalid then mqApi("/api/hls/" + mqStr(m.pb.sid), "onReported", "DELETE")
 end sub
 
-sub finished()
-    m.reportTimer.control = "stop"
-    nxt = m.item.next
-    if nxt <> invalid then
-        m.nextTitle.text = mqEpLabel(nxt) + " · " + mqStr(nxt.title)
-        m.upNext.visible = true
-        m.nextTimer.control = "start"
-    else
-        endConversion()
-        m.top.navigate = { back: true }
-    end if
-end sub
-
-sub playNext()
-    nxt = m.item.next
-    if nxt = invalid then return
-    m.nextTimer.control = "stop"
-    endConversion()
-    m.top.navigate = { screen: "PlayerScreen", params: { id: nxt.id, start: 0 }, replace: true }
-end sub
+' ---------- keys ----------
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
-    if not press then return false
+    if not press then
+        if key = "left" or key = "right" or key = "fastforward" or key = "rewind" then
+            endHold()
+            return true
+        end if
+        return false
+    end if
+    m.global.autoNexts = 0
+
     if key = "back" then
-        report(true)
-        m.reportTimer.control = "stop"
-        m.nextTimer.control = "stop"
-        m.video.control = "stop"
-        endConversion()
+        if m.panel.visible then
+            closePanel()
+            return true
+        end if
+        leave()
         m.top.navigate = { back: true }
         return true
     end if
-    if key = "up" and m.skip.visible then
-        m.video.seek = mqNum(m.item.intro.end)
-        m.skip.visible = false
+    if m.item = invalid or not m.started then return true
+
+    if m.panel.visible then
+        if key = "left" and m.subList.hasFocus() then
+            m.panelList = m.audioList
+            m.audioList.setFocus(true)
+        else if key = "right" and m.audioList.hasFocus() and m.subs.Count() > 0 then
+            m.panelList = m.subList
+            m.subList.setFocus(true)
+        end if
         return true
     end if
-    if key = "OK" and m.upNext.visible then
-        playNext()
+
+    if m.idle.visible then
+        hideIdle()
+        if key = "OK" or key = "play" then togglePause() else showOverlay()
         return true
     end if
-    return false
+
+    if m.upNext.visible then
+        if key = "up" or key = "down" or key = "left" or key = "right" then
+            m.upNextIndex = 1 - m.upNextIndex
+            paintUpNext()
+            return true
+        end if
+        if key = "OK" then
+            if m.upNextIndex = 0 then
+                m.countTimer.control = "stop"
+                playNext(false)
+            else if m.stillWatching then
+                leave()
+                m.top.navigate = { back: true }
+            else
+                dismissUpNext()
+            end if
+            return true
+        end if
+    end if
+
+    if key = "play" then
+        togglePause()
+        return true
+    end if
+    if key = "replay" then
+        jump(-10)
+        return true
+    end if
+    if key = "fastforward" or key = "rewind" then
+        dir = 1
+        if key = "rewind" then dir = -1
+        beginScrub(dir, true)
+        return true
+    end if
+
+    if not m.overlay.visible then
+        if (key = "OK" or key = "up") and m.skip.visible then
+            skipIntro()
+        else if key = "OK" then
+            togglePause()
+        else if key = "left" then
+            beginScrub(-1, false)
+        else if key = "right" then
+            beginScrub(1, false)
+        else if key = "down" then
+            showOverlay("controls")
+        else
+            showOverlay("bar")
+        end if
+        return true
+    end if
+
+    if m.zone = "bar" then
+        if key = "left" then
+            beginScrub(-1, false)
+        else if key = "right" then
+            beginScrub(1, false)
+        else if key = "OK" then
+            if m.scrubbing then commitScrub() else togglePause()
+        else if key = "down" then
+            if m.scrubbing then commitScrub()
+            m.zone = "controls"
+            showOverlay()
+        else if key = "up" then
+            if m.skip.visible then
+                skipIntro()
+            else
+                m.overlay.visible = false
+            end if
+        end if
+        return true
+    end if
+
+    ' The buttons under the bar.
+    if key = "left" and m.ctlIndex > 0 then
+        m.ctlIndex = m.ctlIndex - 1
+    else if key = "right" and m.ctlIndex < m.ctls.Count() - 1 then
+        m.ctlIndex = m.ctlIndex + 1
+    else if key = "up" then
+        m.zone = "bar"
+    else if key = "OK" then
+        act(m.ctls[m.ctlIndex].action)
+        return true
+    end if
+    showOverlay()
+    return true
 end function

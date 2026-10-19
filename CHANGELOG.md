@@ -4,6 +4,22 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.7.1
+
+**Roku player redone** to work like the big streaming apps (channel 1.1.0: download it again from
+Account → *Watch on a TV* and install it over the old one):
+- **OK pauses and plays.** Controls appear on any key and hide by themselves: title at the top,
+  a progress bar with the time left, and back 10 s / play / ahead 10 s.
+- **Scrubbing with preview pictures:** left/right move through the video (hold to speed up),
+  showing the picture at that point; release to jump there.
+- **Episodes**, **Audio & Subtitles** (including Blu-ray/DVD picture subtitles, drawn in by the
+  server, and other sound tracks) and **Next Episode** buttons under the bar.
+- **Skip Intro** button, a **Next Episode** countdown card at the credits with *Watch Credits*,
+  and "Are you still watching?" after three episodes in a row.
+- Paused for a while, it shows what you're watching.
+- Also fixed on the Roku home screen: the banner's buttons move with left/right, and pictures
+  are no longer stretched.
+
 ## 0.7.0 — Significant update
 
 **Marquee on your TV.**

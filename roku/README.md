@@ -34,17 +34,27 @@ On the home page ✱ opens search; on the code screen it changes the server.
 ## Remote
 
 - **Arrows** move, **OK** opens, **Back** goes back.
-- In the player: **OK** / **▶‖** play and pause, **left/right** and **◀◀ / ▶▶** skip, **Back** stops
-  (your place is saved). When the intro is on, **Up** skips it. At the end of an episode the next
-  one starts after a few seconds (**OK** starts it right away).
+- **In the player** (laid out like the big streaming apps):
+  - **OK** or **▶‖** pauses and plays. Any key shows the controls; they hide again after a few
+    seconds.
+  - **Left / right** scrub through the video with preview pictures (hold to go faster, release to
+    jump there); **◀◀ / ▶▶** scrub faster; **↺** jumps back 10 s.
+  - **Down** reaches the buttons: back 10 s, play/pause, ahead 10 s, **Episodes**,
+    **Audio & Subtitles** and **Next Episode**.
+  - **Skip Intro** appears during the intro: **OK** (or **Up**) skips it.
+  - At the credits a **Next Episode** card counts down from 10 and starts it (or choose *Watch
+    Credits*). After three episodes in a row without touching the remote it asks whether you're
+    still watching.
+  - Paused for a while, the screen shows what you're watching. **Back** leaves (your place is
+    saved).
 
 ## Notes
 
 - Files the Roku can play as they are (MP4 with H.264, or HEVC on 4K models, and AAC/AC3/MP3 sound)
   play directly; everything else is converted by the server as it plays, like in a browser.
-- Text subtitles (SRT, ASS, embedded and downloaded ones) are offered in the Roku's own subtitle
-  menu (**✱** during playback). Picture subtitles (Blu-ray, DVD) aren't available on Roku yet: use
-  the web player or the Android apps for those.
+- Subtitles are in **Audio & Subtitles**. Text ones (SRT, ASS, embedded, downloaded) are shown by
+  the Roku; picture ones (Blu-ray, DVD) are drawn into the video by the server. The language you
+  pick is remembered for the next video.
 - Who's-watching profiles aren't on Roku yet: it uses the account the code was entered from.
 - `fonts/Archivo-Black.ttf` is under the SIL Open Font License (`fonts/Archivo-OFL.txt`).
 

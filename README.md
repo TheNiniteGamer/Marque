@@ -366,7 +366,6 @@ isn't installed.
 
 ## Not yet supported
 
-Music and photo libraries, and parental content ratings. On Roku: profiles and picture
-(Blu-ray/DVD) subtitles. Hardware conversion, casting and the TV apps are tested here only against
+Music and photo libraries, and parental content ratings. On Roku: profiles. Hardware conversion, casting and the TV apps are tested here only against
 ffmpeg, a simulated Cast SDK, the BrightScript compiler and Android's build tools (not on real TVs),
 so please report problems with specific graphics cards or TVs.

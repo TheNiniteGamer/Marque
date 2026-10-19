@@ -149,3 +149,20 @@ function mqApi(path as String, callback as String, method = "GET" as String, bod
     m.tasks = keep
     return t
 end function
+
+' 0:42 / 12:05 / 1:02:33
+function mqClock(sec as Dynamic) as String
+    s = Int(mqNum(sec))
+    if s < 0 then s = 0
+    h = Int(s / 3600)
+    mi = Int((s - h * 3600) / 60)
+    se = s - h * 3600 - mi * 60
+    ss = se.ToStr()
+    if se < 10 then ss = "0" + ss
+    if h > 0 then
+        ms = mi.ToStr()
+        if mi < 10 then ms = "0" + ms
+        return h.ToStr() + ":" + ms + ":" + ss
+    end if
+    return mi.ToStr() + ":" + ss
+end function
