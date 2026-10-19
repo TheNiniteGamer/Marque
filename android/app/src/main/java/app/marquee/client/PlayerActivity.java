@@ -67,6 +67,7 @@ public class PlayerActivity extends Activity {
     // The controls, worked by touch on a phone and by the remote on a TV (like the Roku channel).
     private boolean tv;
     private PlayerControls controlsUi;
+    private MediaControls mediaControls; // headphones, Bluetooth, notification / lock screen, Assistant
     private boolean direct;
     private boolean directCapable;  // the phone can play the original file
     private int burn = -1;          // picture subtitle track the server draws into the video, or -1
@@ -120,6 +121,7 @@ public class PlayerActivity extends Activity {
         });
 
         controlsUi = new PlayerControls(this, tv);
+        mediaControls = new MediaControls(this);
         // Phones: a back arrow and picture-in-picture at the top (a TV remote has its own Back).
         View back = findViewById(R.id.back), pip = findViewById(R.id.pip);
         back.setOnClickListener(v -> finish());
@@ -241,6 +243,8 @@ public class PlayerActivity extends Activity {
             setSubtitles(pick.optString("id"), false);
         }
         controlsUi.onBegin();
+        String art = base + "/api/art/" + (isEp ? "thumb" : "backdrop") + "/" + it.optString("id") + "?v=" + it.optString("artV", "");
+        mediaControls.setItem(title.getText().toString(), subtitle.getText().toString(), duration, art);
         open(start);
         ui.removeCallbacks(tick);
         ui.post(tick);
@@ -362,6 +366,8 @@ public class PlayerActivity extends Activity {
 
     boolean isPlaying() { return video.isPlaying(); }
 
+    boolean hasNext() { return item != null && item.optJSONObject("next") != null; }
+
     void togglePlay() {
         if (video.isPlaying()) { video.pause(); report(); } else video.start();
         updatePlayIcon();
@@ -373,6 +379,7 @@ public class PlayerActivity extends Activity {
         if (item == null) return;
         double t = now();
         controlsUi.tick(t);
+        mediaControls.update(video.isPlaying(), t);
         showSubtitle(cues.isEmpty() ? "" : Vtt.textAt(cues, (long) (t * 1000)));
         updateIntro(t);
         updatePlayIcon();
@@ -707,6 +714,7 @@ public class PlayerActivity extends Activity {
     protected void onDestroy() {
         ui.removeCallbacksAndMessages(null);
         controlsUi.release();
+        mediaControls.release();
         if (item != null && video.getCurrentPosition() > 0) report(true);
         video.stopPlayback();
         // Stop the server's conversion right away instead of waiting for it to time out.

@@ -48,6 +48,11 @@
     <string name="update_allow_message">Android needs your OK, once, for Marquee to install its own updates. On the next screen, turn on \"Allow from this source\", then press Back.</string>
     <string name="update_open_settings">Open settings</string>
     <string name="update_allow_manual">Open Settings → Apps → Security &amp; restrictions → Unknown sources (or Special app access → Install unknown apps), turn on Marquee, then come back and choose Update again.</string>
+    <string name="playback_channel">Playing</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="back_10">Back 10 seconds</string>
+    <string name="ahead_10">Ahead 10 seconds</string>
     <string name="youre_watching">You\'re watching</string>
     <string name="episodes">Episodes</string>
     <string name="audio_subtitles">Audio &amp; Subtitles</string>
