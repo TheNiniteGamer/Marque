@@ -4,6 +4,12 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.8.1
+
+- **TV mode:** side-by-side choices (the fade time on the TV's Settings page, a library's
+  *All / Unwatched*) are highlighted with a clean white block instead of an outline cut off into a
+  bracket, and are a little bigger.
+
 ## 0.8.0
 
 **A simple Settings page on TVs.** In TV mode (the Android TV app and TV browsers):

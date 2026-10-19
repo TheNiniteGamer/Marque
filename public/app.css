@@ -734,6 +734,10 @@ body.tv .nav-links a { padding: 6px 14px; border-radius: 20px; transition: backg
 body.tv .nav-links a:focus-visible { outline: none; background: #fff; color: #000; }
 body.tv .brand { padding: 2px 10px; margin-left: -10px; border-radius: 8px; }
 body.tv .brand:focus-visible { outline: none; background: #fff; }
+/* Choices side by side (e.g. 5 s / 10 s / …, All / Unwatched): the highlighted one turns white; an
+   outline would be cut off by the group's rounded box. */
+body.tv .seg button { height: 44px; padding: 0 18px; font-size: 16px; }
+body.tv .seg button:focus-visible { outline: none; background: #fff; color: #000; font-weight: 700; }
 body.tv .episode:focus-within { background: #2e2e2e; }
 
 /* ---------- hover previews ---------- */
