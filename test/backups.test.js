@@ -136,7 +136,7 @@ test('settings are validated', async () => {
   assert.equal((await admin('PATCH', '/api/backups/settings', { time: '25:00' })).status, 400);
   assert.equal((await admin('PATCH', '/api/backups/settings', { keep: 0 })).status, 400);
   const ok = await admin('PATCH', '/api/backups/settings', { time: '04:30', keep: 5, auto: true });
-  assert.deepEqual(ok.data.settings, { auto: true, time: '04:30', keep: 5 });
+  assert.deepEqual(ok.data.settings, { auto: true, time: '04:30', keep: 5, copyTo: null, copyKeep: 14 });
 });
 
 // ---------- unit tests of the backup manager ----------
