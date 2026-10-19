@@ -4,6 +4,20 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.7.6
+
+**Android TV player redone** to work like the Roku one (Android TV app 1.1.0: install the new
+`Marquee-TV.apk` from Account → *Watch on a TV* over the old one):
+- **OK pauses and plays**; any key shows the title, a progress bar with the time left, and back
+  10 s / play-pause / ahead 10 s centred under it. They hide after 5 seconds of playing.
+- **Left / right scrub with preview pictures** (hold to speed up, let go to jump there).
+- **Down** reaches **Episodes** (opens the show's page), **Audio & Subtitles** (a side panel with
+  sound track, subtitles and quality) and **Next Episode**.
+- **Skip Intro / Skip Credits** with OK or Up, a **Next Episode** countdown card at the credits
+  (fading like the skip buttons when autoplay is off), "Are you still watching?" after three
+  episodes in a row, and "You're watching" when paused for a while.
+- The phone app (1.5.0) keeps its touch controls, now in Marquee's red.
+
 ## 0.7.5
 
 - **TV remote and text boxes:** moving onto a text box (a library's *Filter…*, search, the TV

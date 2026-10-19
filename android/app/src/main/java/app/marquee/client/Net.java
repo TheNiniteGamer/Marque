@@ -51,6 +51,23 @@ final class Net {
         }
     }
 
+    /** For pictures (preview sheets, thumbnails). */
+    static byte[] getBytes(String url) throws IOException {
+        HttpURLConnection c = open(url, 15000);
+        try {
+            if (c.getResponseCode() != 200) throw new IOException("The server answered " + c.getResponseCode());
+            java.io.InputStream in = c.getInputStream();
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[16384];
+            int n;
+            while ((n = in.read(buf)) > 0 && out.size() < 32 * 1024 * 1024) out.write(buf, 0, n);
+            in.close();
+            return out.toByteArray();
+        } finally {
+            c.disconnect();
+        }
+    }
+
     static JSONObject getJson(String url) throws IOException {
         try { return new JSONObject(getText(url)); } catch (org.json.JSONException e) { throw new IOException("Unexpected answer from the server"); }
     }

@@ -21,8 +21,18 @@ install apps, and open `http://YOUR-PC:32500/downloads/Marquee-TV.apk`. Or from 
 ## Remote
 
 - **Arrows** move between titles, **OK** opens one, **Back** closes pop-ups and goes back.
-- In the player: **OK** plays/pauses, **left/right** jump back 10 s / ahead 30 s, **up/down** show
-  the controls (then the arrows move between them), and the media keys work.
+- **In the player** (laid out like the big streaming apps, and like Marquee's Roku channel):
+  - **OK** or **▶‖** pauses and plays. Any key shows the title, a progress bar with the time
+    left, and back 10 s / play-pause / ahead 10 s in the middle; they hide after a few seconds.
+  - **Left / right** scrub with preview pictures (hold to go faster, let go to jump there);
+    **◀◀ / ▶▶** scrub faster.
+  - **Down** reaches the buttons: **Episodes** on the left, the middle three, and **Audio &
+    Subtitles** (sound track, subtitles, quality) and **Next Episode** on the right.
+  - **Skip Intro** / **Skip Credits**: **OK** (or **Up**) presses it; it fades after the time set
+    in Account → Player.
+  - At the credits a **Next Episode** card counts down from 10 (or choose *Watch Credits*); after
+    three episodes in a row it asks whether you're still watching. Paused for a while, the screen
+    shows what you're watching. **Back** leaves the player.
 
 ## Build
 

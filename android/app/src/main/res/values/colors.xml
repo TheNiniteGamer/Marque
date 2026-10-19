@@ -6,7 +6,7 @@
     <color name="line">#FF2B303A</color>
     <color name="text">#FFE8EAED</color>
     <color name="muted">#FF9AA0AA</color>
-    <color name="accent">#FFF5A524</color>
-    <color name="accent_ink">#FF16181D</color>
+    <color name="accent">#FFE31B23</color>
+    <color name="accent_ink">#FFFFFFFF</color>
     <color name="scrim">#B3000000</color>
 </resources>

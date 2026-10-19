@@ -127,6 +127,9 @@ public class MainActivity extends Activity {
         } else if (requestCode == REQ_PLAYER && web != null) {
             // Let the page refresh progress / Continue Watching.
             web.evaluateJavascript("window.dispatchEvent(new Event('marquee-native-closed'))", null);
+            // "Episodes" in the TV player: open the show's page.
+            String hash = data != null ? data.getStringExtra("openHash") : null;
+            if (hash != null && hash.startsWith("#/")) web.evaluateJavascript("location.hash = " + org.json.JSONObject.quote(hash), null);
         }
     }
 
