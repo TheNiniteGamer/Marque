@@ -22,7 +22,7 @@ module.exports = function register(app) {
       finished: downloader.jobs.filter((j) => j.userId === user.id && ['done', 'failed'].includes(j.status) && j.finishedAt > Date.now() - 86400_000)
         .map((j) => ({ id: j.id, title: j.title || j.url, status: j.status, finishedAt: j.finishedAt, files: j.files.length })),
     } : null,
-    ...(user.role === 'admin' ? { requestsPending: require('../lib/requests').pendingCount(store), health: app.health?.last?.level || null, dataDir: DATA_DIR, mediaRoot: MEDIA_ROOT, updateAvailable: updater.updateAvailable(), significantUpdate: updater.significantUpdate(), updating: updater.helper().state === 'updating' } : {}),
+    ...(user.role === 'admin' ? { adminBlockedHere: !!store.data.settings.adminAtHomeOnly && app.isRemote(req), requestsPending: require('../lib/requests').pendingCount(store), health: app.health?.last?.level || null, dataDir: DATA_DIR, mediaRoot: MEDIA_ROOT, updateAvailable: updater.updateAvailable(), significantUpdate: updater.significantUpdate(), updating: updater.helper().state === 'updating' } : {}),
   }));
 
   route('GET', '/api/libraries', async (req, res, p, url, user) =>

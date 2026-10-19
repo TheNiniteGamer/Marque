@@ -7,7 +7,7 @@ module.exports = function register(app) {
     logs, fs, os, pipeline, lib, metadata, hlsLib, findProblems,
     ENCODER_NAMES, store, matcher, updater, hwaccel, hls, opensubs, activity,
     maintenance, intro, backups, auth, transcodes, HttpError, json, readBody,
-    readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary, path, fromHostPath, health,
+    readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary, path, fromHostPath, health, isRemote,
   } = app;
 
   // --- activity (admin): who is watching what right now ---
@@ -273,7 +273,18 @@ module.exports = function register(app) {
     configured: (process.env.REMOTE_ACCESS || '').split(',').map((x) => x.trim()).filter(Boolean),
     seen: store.data.remoteSeen || null,
     viaRemoteNow: viaHttpsProxy(req),
+    adminAtHomeOnly: !!store.data.settings.adminAtHomeOnly,
   }), 'admin');
+  route('PATCH', '/api/remote', async (req, res) => {
+    const body = await readBody(req);
+    if (body.adminAtHomeOnly !== undefined) {
+      // Switching it on from outside would lock you out of the switch itself.
+      if (body.adminAtHomeOnly && isRemote(req)) throw new HttpError(400, 'Switch this on from a device at home');
+      store.data.settings.adminAtHomeOnly = !!body.adminAtHomeOnly;
+      store.save();
+    }
+    json(res, 200, { adminAtHomeOnly: !!store.data.settings.adminAtHomeOnly });
+  }, 'admin');
 
   // --- the health check (admin): ?run=1 checks again now ---
   route('GET', '/api/health-check', async (req, res, p, url) => json(res, 200, url.searchParams.has('run') ? health.run() : health.status()), 'admin');

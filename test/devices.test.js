@@ -90,3 +90,20 @@ test('TVs looking for Marquee on the network see which PC it is', async () => {
   assert.equal(h.name, 'Marquee');
   assert.equal(h.server, 'Living room PC');
 });
+
+test('admin settings can be limited to home', async () => {
+  const login = await fetch(srv.base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'password1' }) });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  // Through a tunnel / Tailscale the visitor's own address arrives in X-Forwarded-For.
+  const away = (method, url, body) => fetch(srv.base + url, { method, headers: { cookie, 'x-forwarded-for': '203.0.113.9', ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  assert.equal((await away('PATCH', '/api/remote', { adminAtHomeOnly: true })).status, 400, 'not switched on from outside (it would lock you out)');
+  assert.equal((await admin('PATCH', '/api/remote', { adminAtHomeOnly: true })).data.adminAtHomeOnly, true);
+  assert.equal((await admin('GET', '/api/users')).status, 200, 'at home: fine');
+  const r = await away('GET', '/api/users');
+  assert.equal(r.status, 403);
+  assert.match((await r.json()).error, /only be used at home/);
+  assert.equal((await away('GET', '/api/home')).status, 200, 'watching away from home still works');
+  assert.equal((await (await away('GET', '/api/status')).json()).adminBlockedHere, true);
+  await admin('PATCH', '/api/remote', { adminAtHomeOnly: false });
+  assert.equal((await away('GET', '/api/users')).status, 200);
+});

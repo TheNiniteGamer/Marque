@@ -469,13 +469,29 @@ for (const group of ['auth', 'library', 'playback', 'admin', 'downloads', 'reque
 
 // ---------- server ----------
 function serveStatic(req, res, pathname) {
-  const rel = decodeURIComponent(pathname).replace(/^\/+/, '');
+  const rel = safeDecode(pathname).replace(/^\/+/, '');
   let file = path.join(PUBLIC_DIR, rel);
-  if (!file.startsWith(PUBLIC_DIR) || !rel || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(PUBLIC_DIR, 'index.html');
+  if (!file.startsWith(PUBLIC_DIR + path.sep) || !rel || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(PUBLIC_DIR, 'index.html');
   sendFile(req, res, file, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
+// A malformed %-escape in an address is the client's mistake (400), not a server error.
+function safeDecode(s) {
+  try { return decodeURIComponent(s); } catch { throw new HttpError(400, 'Bad address'); }
+}
+
+// What the web page may load: its own scripts (and Google's Cast SDK), pictures from anywhere over
+// https (posters in search results), video from Marquee itself (blob: for adaptive streaming), and
+// nothing may frame it. Inline scripts aren't allowed, so injected markup can't run code.
+const CSP = [
+  "default-src 'self'", "script-src 'self' https://www.gstatic.com", "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:", "media-src 'self' blob:", "connect-src 'self' https://www.gstatic.com",
+  "worker-src 'self' blob:", "font-src 'self' data:", "frame-src 'none'", "object-src 'none'",
+  "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
+].join('; ');
+
 const SECURITY_HEADERS = {
+  'Content-Security-Policy': CSP,
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'same-origin',
@@ -483,8 +499,14 @@ const SECURITY_HEADERS = {
 };
 
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost');
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
+  // Some addresses can't be parsed at all ("//["): answered as a bad request. (This used to throw
+  // outside the error handling below, and an unhandled error stops the whole server.)
+  let url;
+  try { url = new URL(req.url, 'http://localhost'); } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    return res.end('Bad address');
+  }
   if (viaHttpsProxy(req)) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
   noteRemoteOrigin(req);
   try {
@@ -498,7 +520,7 @@ const server = http.createServer(async (req, res) => {
       for (const r of routes) {
         const m = r.method === method && r.re.exec(url.pathname);
         if (!m) continue;
-        const params = Object.fromEntries(Object.entries(m.groups || {}).map(([k, v]) => [k, decodeURIComponent(v)]));
+        const params = Object.fromEntries(Object.entries(m.groups || {}).map(([k, v]) => [k, safeDecode(v)]));
         let user = auth.authenticate(req, { queryToken: r.access === 'media' ? url.searchParams.get('at') : null });
         if (r.access === 'media') {
           // Playback files also open with a signed link (Chromecast, AirPlay, the Android player).
@@ -511,6 +533,8 @@ const server = http.createServer(async (req, res) => {
         if (r.access !== 'public') {
           if (!user) throw Object.assign(new HttpError(401, 'Please sign in'), { setupRequired: !auth.hasUsers() });
           if (r.access === 'admin' && user.role !== 'admin') throw new HttpError(403, 'Admins only');
+          // Optional: admin settings only from home, so a leaked admin password is no use from outside.
+          if (r.access === 'admin' && store.data.settings.adminAtHomeOnly && isRemote(req)) throw new HttpError(403, 'Admin settings can only be used at home (Settings → Remote access)');
           if (r.access === 'download' && !canDownload(user)) throw new HttpError(403, 'You are not allowed to download videos');
         }
         return await r.handler(req, res, params, url, user);
@@ -522,7 +546,9 @@ const server = http.createServer(async (req, res) => {
   } catch (err) {
     const status = err.status || 500;
     if (status === 500) console.error(`[http] ${req.method} ${url.pathname}:`, err);
-    if (!res.headersSent) json(res, status, { error: err.message || 'Internal error', ...(err.setupRequired ? { setupRequired: true } : {}), ...(err.duplicate ? { duplicate: true } : {}) });
+    // Unexpected errors can mention files and folders on the server: details go to the log only.
+    const message = !err.status ? 'Something went wrong on the server (details are in Settings → Logs)' : err.message || 'Internal error';
+    if (!res.headersSent) json(res, status, { error: message, ...(err.setupRequired ? { setupRequired: true } : {}), ...(err.duplicate ? { duplicate: true } : {}) });
     else res.destroy();
   }
 });
@@ -630,6 +656,9 @@ function shutdown() {
   store.flush();
   process.exit(0);
 }
+// A stray error in some background job shouldn't take the whole server down (Node stops on an
+// unhandled rejection): it's written to the log (Settings → Logs) instead.
+process.on('unhandledRejection', (err) => console.error('[server] unexpected error (the server keeps running):', err));
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 

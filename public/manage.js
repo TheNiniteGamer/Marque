@@ -24,7 +24,7 @@ function showAuth({ setupRequired = false, message = '' } = {}) {
         <h1>${setupRequired ? 'Create your admin account' : 'Sign in'}</h1>
         ${setupRequired ? html`<p class="muted">Welcome! This first account can manage libraries, users and downloads.</p>` : ''}
         <label>Username<input class="input" name="username" autocomplete="username" required ${byCode ? '' : 'autofocus'}></label>
-        <label>Password<input class="input" type="password" name="password" autocomplete="${setupRequired ? 'new-password' : 'current-password'}" required></label>
+        <label>Password<input class="input" type="password" name="password" autocomplete="${setupRequired ? 'new-password' : 'current-password'}" ${setupRequired ? raw('minlength="8"') : ''} required></label>
         ${setupRequired ? html`<label>Confirm password<input class="input" type="password" name="confirm" autocomplete="new-password" required></label>` : ''}
         <div class="form-error" id="auth-error">${message}</div>
         <button class="btn primary" type="submit">${setupRequired ? 'Create account' : 'Sign in'}</button>
@@ -282,7 +282,7 @@ async function viewAccount({ query, seq }) {
     <form class="panel form" id="pw-form">
       <h2>Change password</h2>
       <label>Current password<input class="input" type="password" name="currentPassword" autocomplete="current-password" required></label>
-      <label>New password<input class="input" type="password" name="newPassword" autocomplete="new-password" minlength="6" required></label>
+      <label>New password<input class="input" type="password" name="newPassword" autocomplete="new-password" minlength="8" required></label>
       <label>Confirm new password<input class="input" type="password" name="confirm" autocomplete="new-password" required></label>
       <div class="form-error" id="pw-error"></div>
       <div><button class="btn primary" type="submit">Update password</button></div>
@@ -385,7 +385,7 @@ function showUserForm(user = null) {
       <div class="row" style="align-items:flex-end">
         <label style="flex:1;min-width:180px">Username<input class="input" name="username" required value="${user?.username || ''}" autocomplete="off"></label>
         <label style="flex:1;min-width:180px">${user ? 'New password' : 'Password'}
-          <input class="input" type="password" name="password" autocomplete="new-password" ${user ? 'placeholder="Leave blank to keep"' : 'required minlength="6"'}></label>
+          <input class="input" type="password" name="password" autocomplete="new-password" ${user ? 'placeholder="Leave blank to keep"' : 'required minlength="8"'}></label>
         <label style="flex:1;min-width:140px">Role
           <select name="role" ${self ? 'disabled' : ''}>
             <option value="user" ${user?.role !== 'admin' ? 'selected' : ''}>User</option>

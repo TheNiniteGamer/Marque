@@ -600,12 +600,20 @@ function remoteSection(r) {
     <h2 style="margin:28px 0 12px">Remote access</h2>
     <div class="panel" id="remote-panel">${body}
       ${r.viaRemoteNow ? html`<p class="muted" style="font-size:13px;margin:10px 0 0">🔒 You're connected remotely over HTTPS right now.</p>` : ''}
+      <label class="check" style="margin-top:12px"><input type="checkbox" id="admin-home-only" ${r.adminAtHomeOnly ? 'checked' : ''}>
+        Admin settings only at home <span class="muted">· away from home, admins can still watch, but Settings, users and the other admin pages only work on your home network, so a leaked admin password can't be used to change anything from outside.</span></label>
     </div>`;
 }
 
 function bindRemoteSection() {
   const b = $('#copy-remote');
   if (b) b.onclick = () => navigator.clipboard?.writeText(b.dataset.url).then(() => toast('Address copied'), () => toast(b.dataset.url));
+  const home = $('#admin-home-only');
+  if (home) {
+    home.onchange = async () => {
+      try { await api('/api/remote', { method: 'PATCH', body: { adminAtHomeOnly: home.checked } }); toast(home.checked ? 'Admin settings now only work at home' : 'Admin settings work from anywhere again'); } catch (err) { toast(err.message, true); home.checked = !home.checked; }
+    };
+  }
 }
 
 // ---------- Settings → Backups ----------

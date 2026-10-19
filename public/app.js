@@ -246,6 +246,10 @@ function noteDownloads(d) {
   if (fresh.length && parseHash().path === '/downloads') router();
 }
 
+// Pictures that fail to load (e.g. an actor's photo) are taken away, showing what's behind them.
+// (One listener instead of inline onerror handlers, which the Content-Security-Policy doesn't allow.)
+document.addEventListener('error', (e) => { if (e.target instanceof HTMLImageElement && e.target.hasAttribute('data-hide-broken')) e.target.remove(); }, true);
+
 // ---------- cards ----------
 function progressBar(x) {
   if (!x.progress || x.progress.watched || !x.progress.position) return '';
@@ -690,7 +694,7 @@ function extrasSection(list) {
 // The cast, with photos: each opens the person's page (the titles in your library they're in).
 function personCard(c) {
   return html`<a class="person-card" href="#/person/${encodeURIComponent(c.name)}">
-    <span class="person-photo" style="background:${avatarColor(c.name)}">${c.photo ? html`<img loading="lazy" src="${c.photo}" alt="" onerror="this.remove()">` : ''}<b>${c.name.slice(0, 1)}</b></span>
+    <span class="person-photo" style="background:${avatarColor(c.name)}">${c.photo ? html`<img loading="lazy" src="${c.photo}" alt="" data-hide-broken>` : ''}<b>${c.name.slice(0, 1)}</b></span>
     <span class="person-name">${c.name}</span>${c.character ? html`<span class="person-role">${c.character}</span>` : ''}</a>`;
 }
 function castSection(cast) {
@@ -703,7 +707,7 @@ async function viewPerson({ params: [name], seq }) {
   document.title = `${p.name} · Marquee`;
   for (const t of p.titles) knownItems.set(t.id, t);
   setView(seq, html`<div class="person-head">
-      <span class="person-photo big" style="background:${avatarColor(p.name)}">${p.photo ? html`<img src="${p.photo}" alt="" onerror="this.remove()">` : ''}<b>${p.name.slice(0, 1)}</b></span>
+      <span class="person-photo big" style="background:${avatarColor(p.name)}">${p.photo ? html`<img src="${p.photo}" alt="" data-hide-broken>` : ''}<b>${p.name.slice(0, 1)}</b></span>
       <div><h1>${p.name}</h1><p class="muted">${p.titles.length} title${p.titles.length === 1 ? '' : 's'} in your library</p></div></div>
     <div class="grid sized">${p.titles.map((t) => posterCard(t))}</div>`);
 }
@@ -926,6 +930,10 @@ function cacheSummary(m) {
 async function viewSettings({ query, seq }) {
   view.onclick = null;
   if (state.user.role !== 'admin') { location.replace('#/account'); return; }
+  if (state.status?.adminBlockedHere) {
+    setView(seq, html`<div class="toolbar"><h1>Settings</h1></div><div class="panel">🔒 Settings are switched to <b>only at home</b> (Settings → Remote access). Open Marquee on your home network to change them.</div>`);
+    return;
+  }
   const [, s, users, metaSettings, updates, remote, backupInfo, transcoding, introInfo, problems, maint, health] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'),
     api('/api/settings'), api('/api/updates'), api('/api/remote'), api('/api/backups'), api('/api/transcoding'), api('/api/intro'), api('/api/problems'), api('/api/maintenance'),
     api('/api/health-check').catch(() => null)]);
