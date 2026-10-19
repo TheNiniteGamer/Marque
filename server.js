@@ -132,6 +132,7 @@ const backups = new Backups(store, {
   dir: path.resolve(process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups')),
   label: process.env.BACKUP_LABEL || null,
   isBusy: () => scanner.status().scanning,
+  labelFor: hostLabel,
   onRestored: () => { auth.prune(); scanner.enqueueAll(); },
 });
 const auth = new Auth(store);

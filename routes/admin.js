@@ -7,7 +7,7 @@ module.exports = function register(app) {
     logs, fs, os, pipeline, lib, metadata, hlsLib, findProblems,
     ENCODER_NAMES, store, matcher, updater, hwaccel, hls, opensubs, activity,
     maintenance, intro, backups, auth, transcodes, HttpError, json, readBody,
-    readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary,
+    readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary, path, fromHostPath,
   } = app;
 
   // --- activity (admin): who is watching what right now ---
@@ -278,7 +278,22 @@ module.exports = function register(app) {
   // --- backups (admin) ---
   route('GET', '/api/backups', async (req, res) => json(res, 200, backups.status()), 'admin');
   route('POST', '/api/backups', async (req, res) => json(res, 201, await backups.create('manual')), 'admin');
-  route('PATCH', '/api/backups/settings', async (req, res) => { backups.update(await readBody(req)); json(res, 200, backups.status()); }, 'admin');
+  route('PATCH', '/api/backups/settings', async (req, res) => {
+    const body = await readBody(req);
+    // A folder typed as the host PC knows it ("E:\\Backups") is found where Docker shows it.
+    if (body.copyTo) {
+      const typed = String(body.copyTo).trim();
+      body.copyTo = fs.existsSync(path.resolve(typed)) ? path.resolve(typed) : fromHostPath(typed) || path.resolve(typed);
+    }
+    try { backups.update(body); } catch (err) { throw new HttpError(err.status || 400, err.message); }
+    json(res, 200, backups.status());
+  }, 'admin');
+  route('POST', '/api/backups/copy', async (req, res) => {
+    const r = await backups.copyOut();
+    if (!r) throw new HttpError(400, 'Choose a folder to copy backups to, and make a backup first');
+    if (!r.ok) throw new HttpError(500, `Couldn't copy the backup: ${r.error}`);
+    json(res, 200, backups.status());
+  }, 'admin');
   // A fresh backup straight to the browser (nothing is stored on the server).
   route('GET', '/api/backups/download', async (req, res) => {
     const name = `marquee-backup-${new Date().toISOString().slice(0, 10)}.tar.gz`;

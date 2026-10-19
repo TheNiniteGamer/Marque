@@ -632,6 +632,18 @@ function backupsSection(b) {
         <input class="input" type="time" id="bk-time" value="${s.time}" style="width:120px">
         <span class="bk-keep muted">keep the last <input class="input" type="number" id="bk-keep" min="1" max="365" value="${s.keep}" aria-label="Number of automatic backups to keep"> automatic backups</span>
       </div>
+      <div class="bk-copy">
+        <div><b>Also keep a copy somewhere else</b> <span class="muted">· another drive, a network share, or a OneDrive / Google Drive / Dropbox
+          folder (which then copies it off this PC), so the backups survive if this PC's disk dies.</span></div>
+        ${b.copy ? html`
+          <div class="row bk-settings">📁 <code>${b.copy.label}</code>
+            <span class="bk-keep muted">keep the last <input class="input" type="number" id="bk-copy-keep" min="1" max="365" value="${b.copy.keep}" aria-label="Number of copies to keep there"> there</span>
+            <button class="btn small" id="bk-copy-pick">Change…</button><button class="btn small" id="bk-copy-now">Copy the latest now</button><button class="btn small" id="bk-copy-off">Stop copying</button></div>
+          <div class="${b.copy.last && !b.copy.last.ok ? 'bk-copy-bad' : 'muted'}" style="font-size:13px">${b.copy.last ? (b.copy.last.ok
+            ? `✓ Last copied ${fmtDate(b.copy.last.at)} · ${b.copy.count} backup${b.copy.count === 1 ? '' : 's'} there`
+            : `✕ The last copy failed (${fmtDate(b.copy.last.at)}): ${b.copy.last.error}`) : 'Nothing copied yet: each backup from now on is.'}</div>`
+        : html`<div class="row bk-settings"><button class="btn small" id="bk-copy-pick">Choose a folder…</button></div>`}
+      </div>
       ${b.backups.length ? html`<div class="bk-list">${b.backups.map((x) => html`
         <div class="bk-row" data-name="${x.name}">
           <span>${fmtDate(x.createdAt)}</span><span class="chip">${KIND[x.kind] || x.kind}</span><span class="muted">${fmtSize(x.size)}</span>
@@ -666,6 +678,21 @@ function bindBackupsSection() {
   $('#bk-auto').onchange = (e) => patch({ auto: e.target.checked });
   $('#bk-time').onchange = (e) => patch({ time: e.target.value });
   $('#bk-keep').onchange = (e) => patch({ keep: Number(e.target.value) });
+  $('#bk-copy-pick').onclick = async () => {
+    const dir = await pickFolder();
+    if (!dir) return;
+    try { await api('/api/backups/settings', { method: 'PATCH', body: { copyTo: dir } }); toast('Backups will also be copied there'); } catch (err) { toast(err.message, true); }
+    router();
+  };
+  if ($('#bk-copy-keep')) $('#bk-copy-keep').onchange = (e) => patch({ copyKeep: Number(e.target.value) });
+  if ($('#bk-copy-off')) $('#bk-copy-off').onclick = async () => { await patch({ copyTo: '' }); router(); };
+  if ($('#bk-copy-now')) {
+    $('#bk-copy-now').onclick = async (e) => {
+      e.target.disabled = true; e.target.textContent = 'Copying…';
+      try { await api('/api/backups/copy', { method: 'POST' }); toast('Copied'); } catch (err) { toast(err.message, true); }
+      router();
+    };
+  }
   $('#bk-now').onclick = async (e) => {
     e.target.disabled = true; e.target.textContent = 'Backing up…';
     try { const b = await api('/api/backups', { method: 'POST' }); toast(`Backup saved (${fmtSize(b.size)})`); } catch (err) { toast(err.message, true); }

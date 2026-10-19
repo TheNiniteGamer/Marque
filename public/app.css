@@ -851,3 +851,5 @@ body.tv .episode:focus-within { background: #2e2e2e; }
 .bell-body { color: var(--muted); font-size: 13px; }
 .bell-when { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .bell-foot { display: block; padding: 10px 14px; text-align: center; color: var(--muted); }
+.bk-copy { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.bk-copy-bad { color: #ff8a8a; font-size: 13px; }

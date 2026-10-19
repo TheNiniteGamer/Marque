@@ -121,6 +121,11 @@ another drive or a synced folder (OneDrive/Dropbox) for extra safety.
 - **Safety copy:** before restoring, Marquee saves a backup of how things are now, so a restore can
   be undone.
 - **Kept forever:** backups you make yourself are never deleted automatically.
+- **A second copy somewhere else:** *Settings → Backups → Also keep a copy somewhere else* copies
+  every backup to another folder as well (another drive, a network share, or a OneDrive / Google
+  Drive / Dropbox folder, which then copies it off the PC), keeping the newest 14 there by default.
+  In Docker, share that folder's drive first (see *Other drives*). If a copy fails (a drive
+  unplugged, a share offline), Settings and the health check say so.
 
 ### Graphics card (faster video conversion)
 
