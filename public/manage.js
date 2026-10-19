@@ -161,6 +161,14 @@ async function viewAccount({ query, seq }) {
       <label class="check"><input type="checkbox" id="tv-mode" ${tv.on ? 'checked' : ''}> TV mode: bigger highlights, and the arrow keys or a remote move between titles</label>
       <p class="muted" style="margin:0;font-size:13px">These are saved in this browser.</p>
     </div>
+    ${window.MarqueeAndroid ? html`<div class="panel form" id="app-panel">
+      <h2>This app</h2>
+      <p class="muted" style="margin:0">Marquee for ${/MarqueeTV/.test(navigator.userAgent) ? 'Android TV' : 'Android'} ${(() => { try { return window.MarqueeAndroid.version(); } catch { return ''; } })()}</p>
+      ${typeof window.MarqueeAndroid.checkUpdates === 'function'
+        ? html`<div class="row"><button class="btn" type="button" id="app-update">Check for updates</button></div>
+          <p class="muted" style="margin:0;font-size:13px">The app also checks when it opens. Updates come from this server and keep you signed in.</p>`
+        : html`<p class="muted" style="margin:0;font-size:13px">This version can't update itself: install the new one once from the link below, and later versions can.</p>`}
+    </div>` : ''}
     <form class="panel form" id="link-form">
       <h2>Watch on a TV</h2>
       <p class="muted" style="margin:0">Open Marquee on your Roku or Android TV (or the TV's web browser). It shows a code: type it here to sign that TV in as you.</p>
@@ -219,6 +227,7 @@ async function viewAccount({ query, seq }) {
     router();
   };
   if (query?.get('code') || parseHash().path === '/link') $('#link-form').scrollIntoView({ block: 'center' });
+  $('#app-update')?.addEventListener('click', () => { try { window.MarqueeAndroid.checkUpdates(); } catch { toast('Update check failed', true); } });
   $('#player-prefs').onchange = async (e) => {
     const k = e.target.dataset.acct;
     if (!k) return;

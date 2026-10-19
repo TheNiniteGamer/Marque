@@ -74,6 +74,8 @@ public class MainActivity extends Activity {
         if (state != null) web.restoreState(state);
         else web.loadUrl(startUrl());
         if (tv) web.requestFocus();
+        // A newer app on the server? (Asks once per version; Account → Check for updates any time.)
+        if (state == null) Updater.check(this, base, false);
     }
 
     private String startUrl() { return base + (tv ? "/?tv=1" : "/"); }
@@ -152,9 +154,16 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        Updater.onStatus(this, intent);
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         if (web != null) web.onResume();
+        Updater.resume(this);
     }
 
     @Override
@@ -243,6 +252,12 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String version() {
             return a.appVersion();
+        }
+
+        /** Account → Check for updates. */
+        @JavascriptInterface
+        public void checkUpdates() {
+            a.runOnUiThread(() -> Updater.check(a, a.base, true));
         }
     }
 }

@@ -26,6 +26,11 @@ final class Prefs {
         p(c).edit().putString("server", url).putString("recent", new JSONArray(recent).toString()).apply();
     }
 
+    /** The app version the user said "Later" to (not offered again at start-up). */
+    static long skippedUpdate(Context c) { return p(c).getLong("skippedUpdate", 0); }
+
+    static void setSkippedUpdate(Context c, long code) { p(c).edit().putLong("skippedUpdate", code).apply(); }
+
     static void clearServer(Context c) { p(c).edit().remove("server").apply(); }
 
     static List<String> recent(Context c) {

@@ -15,8 +15,8 @@ BT="$SDK/build-tools/${BUILD_TOOLS:-34.0.0}"
 JAR="$SDK/platforms/android-34/android.jar"
 [ -x "$BT/aapt2" ] && [ -f "$JAR" ] || { echo "Need build-tools 34.0.0 and platform android-34 in $SDK"; exit 1; }
 
-VERSION_NAME="${VERSION_NAME:-1.1.1}"
-VERSION_CODE="${VERSION_CODE:-5}"
+VERSION_NAME="${VERSION_NAME:-1.2.0}"
+VERSION_CODE="${VERSION_CODE:-6}"
 OUT=build
 rm -rf "$OUT"; mkdir -p "$OUT/res" "$OUT/gen" "$OUT/classes" "$OUT/dex"
 
@@ -45,3 +45,5 @@ echo "• sign"
   --ks-key-alias marquee --out "$OUT/Marquee-TV.apk" "$OUT/app.aligned.apk"
 "$BT/apksigner" verify "$OUT/Marquee-TV.apk"
 echo "Built $OUT/Marquee-TV.apk ($(du -h "$OUT/Marquee-TV.apk" | cut -f1))"
+# The server offers it from /downloads, and the app updates itself from there.
+node "$APP/publish.js" androidtv "$OUT/Marquee-TV.apk" "$VERSION_CODE" "$VERSION_NAME"

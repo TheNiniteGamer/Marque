@@ -10,6 +10,14 @@ The easiest way: on the TV, install a downloader app (e.g. *Downloader* by AFTVn
 install apps, and open `http://YOUR-PC:32500/downloads/Marquee-TV.apk`. Or from a computer with
 `adb`: `adb connect TV-IP && adb install Marquee-TV.apk`.
 
+## Updates
+
+From version 1.2.0 the app updates itself from your Marquee server: when it opens it says when a
+newer version is there (*Update* / *Later*), and **Account → This app → Check for updates** checks
+any time. *Update* downloads it and Android asks you to confirm; you stay signed in. The first time,
+Android asks you to allow Marquee to install apps (turn on *Allow from this source*, then Back).
+Versions before 1.2.0 need the new one installed once the old way.
+
 ## Sign in
 
 1. Open Marquee on the TV. It looks for servers on your network straight away and lists each one
@@ -42,4 +50,6 @@ Same requirements as the phone app (Android SDK platform 34 + build-tools 34, JD
 ANDROID_HOME=/path/to/sdk ./build.sh      # -> build/Marquee-TV.apk
 ```
 
-`public/downloads/Marquee-TV.apk` in the server is a copy of the latest build.
+`build.sh` also copies the build to the server's `public/downloads/` and records its version in
+`public/downloads/apps.json`, which is where the app looks for updates. Raise `VERSION_CODE` for each
+release.

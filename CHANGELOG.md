@@ -4,6 +4,16 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.7.8
+
+**The Android apps update themselves.** From Android TV app 1.2.0 / phone app 1.6.0:
+- When the app opens and your server has a newer version, it offers **Update** (or *Later*, which
+  stops it asking about that version). **Account → This app → Check for updates** checks any time.
+- *Update* downloads the new version from your server and Android asks you to confirm; you stay
+  signed in. The first time, Android asks you to allow Marquee to install apps.
+- Install 1.2.0 / 1.6.0 once the usual way (Account → *Watch on a TV*); after that, updates come
+  through the app.
+
 ## 0.7.7
 
 - **Android TV / Android player:** the empty dark box at the bottom of the picture is gone. It was
