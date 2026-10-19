@@ -10,19 +10,22 @@ function showAuth({ setupRequired = false, message = '' } = {}) {
   clearTimeout(pollTimer);
   document.body.classList.add('auth-mode');
   document.title = 'Sign in · Marquee';
+  // On a TV, linking with a code is the way in; the password form is there behind a button.
+  const byCode = tv.on && !setupRequired;
   view.innerHTML = html`
     <div class="auth-wrap">
-      <form class="auth-card" id="auth-form">
+      <form class="auth-card" id="auth-form" ${byCode ? 'hidden' : ''}>
         <div class="auth-brand">MARQUEE</div>
         <h1>${setupRequired ? 'Create your admin account' : 'Sign in'}</h1>
         ${setupRequired ? html`<p class="muted">Welcome! This first account can manage libraries, users and downloads.</p>` : ''}
-        <label>Username<input class="input" name="username" autocomplete="username" required autofocus></label>
+        <label>Username<input class="input" name="username" autocomplete="username" required ${byCode ? '' : 'autofocus'}></label>
         <label>Password<input class="input" type="password" name="password" autocomplete="${setupRequired ? 'new-password' : 'current-password'}" required></label>
         ${setupRequired ? html`<label>Confirm password<input class="input" type="password" name="confirm" autocomplete="new-password" required></label>` : ''}
         <div class="form-error" id="auth-error">${message}</div>
         <button class="btn primary" type="submit">${setupRequired ? 'Create account' : 'Sign in'}</button>
       </form>
     </div>`.s;
+  if (byCode) tvCodeSignIn();
   $('#auth-form').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target.elements;
@@ -45,6 +48,48 @@ function showAuth({ setupRequired = false, message = '' } = {}) {
       f.password.select();
     }
   };
+}
+
+// On a TV, typing a password with a remote is slow: the TV shows a code to enter on a phone instead.
+async function tvCodeSignIn() {
+  const box = document.createElement('div');
+  box.className = 'auth-card tv-code';
+  box.innerHTML = html`<div class="auth-brand">MARQUEE</div><p class="muted">Getting a code…</p>`.s;
+  $('.auth-wrap').prepend(box);
+  const form = $('#auth-form');
+  const usePassword = () => {
+    form.hidden = false;
+    box.querySelector('#tv-use-password')?.remove();
+    form.elements.username.focus();
+  };
+  let stop = false;
+  const ask = async () => {
+    let pair;
+    try { pair = await (await fetch('/api/devices/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: /MarqueeTV/.test(navigator.userAgent) ? 'Android TV' : 'TV browser' }) })).json(); } catch { /* below */ }
+    if (!pair?.code) { box.remove(); usePassword(); return; } // no code to be had (e.g. too many tries): passwords still work
+    const passwordShown = !form.hidden;
+    box.innerHTML = html`<div class="auth-brand">MARQUEE</div>
+      <h1>Link this TV</h1>
+      <ol class="tv-steps muted">
+        <li>On your phone or computer, open <b>${location.host}/#/link</b><br>(or Marquee → <b>Account</b> → <b>Watch on a TV</b>)</li>
+        <li>Enter this code:</li>
+      </ol>
+      <div class="tv-code-value" aria-live="polite">${pair.code.slice(0, 3)} ${pair.code.slice(3)}</div>
+      <p class="muted" style="font-size:13px">This TV signs in by itself a few seconds later, and stays signed in.</p>
+      ${passwordShown ? '' : html`<button class="btn" type="button" id="tv-use-password">Sign in with a password instead</button>`}`.s;
+    box.querySelector('#tv-use-password')?.addEventListener('click', usePassword);
+    if (!passwordShown) box.querySelector('#tv-use-password').focus();
+    const expires = Date.now() + pair.expiresIn * 1000 - 5000;
+    const poll = async () => {
+      if (stop || !document.contains(box)) return;
+      if (Date.now() > expires) return ask(); // a fresh code
+      const r = await fetch(`/api/devices/pair/${pair.id}?cookie=1`).then((x) => x.json()).catch(() => null);
+      if (r?.status === 'linked') { stop = true; location.reload(); return; }
+      setTimeout(poll, 3000);
+    };
+    setTimeout(poll, 3000);
+  };
+  ask();
 }
 
 async function signOut() {
@@ -82,8 +127,10 @@ function renderUserMenu() {
 document.addEventListener('click', (e) => { const pop = $('#user-pop'); if (pop && !e.target.closest('#user-menu')) pop.hidden = true; });
 
 // ---------- account ----------
-async function viewAccount({ seq }) {
+async function viewAccount({ query, seq }) {
   const u = state.user;
+  const devices = await api('/api/devices').catch(() => []);
+  const host = location.host;
   if (!setView(seq, html`
     <div class="toolbar"><h1>Account</h1><button class="btn" id="acct-signout">Sign out</button></div>
     <div class="panel">
@@ -104,8 +151,21 @@ async function viewAccount({ seq }) {
           ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']].map(([v, l]) => html`<option value="${v}" ${(store.get('quality', '') || '') === v ? 'selected' : ''}>${l}</option>`)}</select></label>
       <label class="check"><input type="checkbox" data-pref="groupCollections" ${store.get('groupCollections', true) ? 'checked' : ''}> Show movies that are in a collection as the collection (home page and libraries)</label>
       <label class="check"><input type="checkbox" data-pref="askProfile" ${store.get('askProfile', false) ? 'checked' : ''}> Ask “Who's watching?” when Marquee opens (for a shared TV or tablet)</label>
+      <label class="check"><input type="checkbox" id="tv-mode" ${tv.on ? 'checked' : ''}> TV mode: bigger highlights, and the arrow keys or a remote move between titles</label>
       <p class="muted" style="margin:0;font-size:13px">These are saved in this browser.</p>
     </div>
+    <form class="panel form" id="link-form">
+      <h2>Watch on a TV</h2>
+      <p class="muted" style="margin:0">Open Marquee on your Roku or Android TV (or the TV's web browser). It shows a code: type it here to sign that TV in as you.</p>
+      <div class="row"><input class="input code-input" name="code" maxlength="7" placeholder="ABC123" value="${query?.get('code') || ''}" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Code shown on the TV">
+        <button class="btn primary" type="submit">Link TV</button></div>
+      <div class="form-error" id="link-error"></div>
+      ${devices.length ? html`<div class="device-list">${devices.map((d) => html`<div class="device-row"><span><b>${d.name}</b> <span class="muted">· linked ${fmtDate(d.createdAt)}${d.lastSeenAt ? ` · last used ${fmtDate(d.lastSeenAt)}` : ''}</span></span>
+        <button class="btn small danger" type="button" data-unlink="${d.id}">Unlink</button></div>`)}</div>` : ''}
+      <p class="muted" style="margin:0;font-size:13px">The apps: <a class="link" href="/downloads/Marquee-TV.apk" download="Marquee-TV.apk">Android TV app</a> ·
+        <a class="link" href="/downloads/Marquee-Roku.zip" download="Marquee-Roku.zip">Roku channel</a> (added from a computer with the Roku in developer mode: see <code>roku/README.md</code>).
+        On a phone, <b>${host}/#/link</b> opens this box.</p>
+    </form>
     <form class="panel form" id="pin-form">
       <h2>Profile PIN</h2>
       <p class="muted" style="margin:0">${u.hasPin ? 'You have a PIN.' : u.noPin ? 'Your profile can be picked on “Who\'s watching?” without a PIN (set by an admin).' : 'Set a PIN to appear on the “Who\'s watching?” screen, so people sharing a device can switch to your profile with it instead of your password.'}</p>
@@ -134,6 +194,24 @@ async function viewAccount({ seq }) {
       <p class="muted" style="margin:0;font-size:13px">Changing your password signs you out on your other devices.</p>
     </form>`)) return;
   $('#acct-signout').onclick = signOut;
+  $('#tv-mode').onchange = (e) => { try { localStorage.setItem('marquee:tvMode', String(e.target.checked)); } catch { /* ignore */ } initTvMode(); toast(e.target.checked ? 'TV mode on' : 'TV mode off'); };
+  $('#link-form').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const r = await api('/api/devices/link', { method: 'POST', body: { code: e.target.elements.code.value } });
+      toast(`${r.name} is signed in`);
+      history.replaceState(null, '', '#/account');
+      router();
+    } catch (err) { $('#link-error').textContent = err.message; }
+  };
+  $('#link-form').onclick = async (e) => {
+    const id = e.target.closest('[data-unlink]')?.dataset.unlink;
+    if (!id || !confirm('Unlink this TV? It will need a new code to sign in again.')) return;
+    await api(`/api/devices/${id}`, { method: 'DELETE' });
+    toast('TV unlinked');
+    router();
+  };
+  if (query?.get('code') || parseHash().path === '/link') $('#link-form').scrollIntoView({ block: 'center' });
   $('#prefs').onchange = (e) => { const k = e.target.dataset.pref; if (k) { store.set(k, e.target.type === 'checkbox' ? e.target.checked : e.target.value); toast('Saved'); } };
   const savePin = async (pin) => {
     const f = $('#pin-form').elements;

@@ -4,6 +4,24 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.7.0 — Significant update
+
+**Marquee on your TV.**
+- **Roku channel** (`roku/`): home rows, libraries, My List, search, details and episode lists,
+  and a player that resumes, skips intros, offers subtitles and goes on to the next episode. Added
+  in Roku's developer mode with `Marquee-Roku.zip` (Account → *Watch on a TV*).
+- **Android TV app** (`androidtv/`, `Marquee-TV.apk`): shows up on the TV's home screen, works with
+  the remote, and plays in Android's own player.
+- **Linking with a code is how TVs sign in:** the TV shows a code; type it on your phone at
+  `/#/link` (or Account → *Watch on a TV*) and the TV signs itself in. The password form is behind
+  *Sign in with a password instead*. Linked TVs are listed on the Account page with *Unlink*.
+- **TV mode** for the web interface, on by itself in the Android TV app and most TV browsers (or
+  Account → *TV mode*): bigger highlights, the arrow keys move to the nearest title, OK opens,
+  Back closes pop-ups and goes back to the title you came from.
+- **Hover previews** on computers: rest the pointer on a title for a bigger card with its trailer
+  playing quietly, Play, My List and More info.
+- The phone app (1.4.0) also gets the Back button closing pop-ups first.
+
 ## 0.6.0 — Significant update
 
 **A new look, in red and black.** Every page has changed; everything you could do before is still

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Looks for Marquee servers on the home network: asks every address of the Roku's own network
+     for /api/health, a batch at a time (like the Android app does). -->
+<component name="DiscoverTask" extends="Task">
+  <interface>
+    <field id="port" type="integer" value="32500" />
+    <field id="found" type="array" />
+  </interface>
+  <script type="text/brightscript" uri="DiscoverTask.brs" />
+</component>

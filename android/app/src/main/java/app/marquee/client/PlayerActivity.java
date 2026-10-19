@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Rational;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
@@ -575,6 +576,33 @@ public class PlayerActivity extends Activity {
             direct = directCapable = false;
             open(now());
         }
+    }
+
+    // ---------------------------------------------------------------- remote and keyboard
+    // Centre (or space) plays and pauses, left/right jump back 10 s / ahead 30 s while the controls
+    // are hidden (when they show, the arrows move between the buttons), plus the media keys.
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        boolean shown = controls.getVisibility() == View.VISIBLE;
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE: case KeyEvent.KEYCODE_SPACE: togglePlay(); setControls(true); return true;
+            case KeyEvent.KEYCODE_MEDIA_PLAY: if (!video.isPlaying()) togglePlay(); setControls(true); return true;
+            case KeyEvent.KEYCODE_MEDIA_PAUSE: if (video.isPlaying()) togglePlay(); setControls(true); return true;
+            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD: seekTo(now() + 30); setControls(true); return true;
+            case KeyEvent.KEYCODE_MEDIA_REWIND: seekTo(now() - 10); setControls(true); return true;
+            case KeyEvent.KEYCODE_MEDIA_NEXT: if (next.getVisibility() == View.VISIBLE) playNext(); return true;
+            case KeyEvent.KEYCODE_DPAD_CENTER: case KeyEvent.KEYCODE_ENTER:
+                if (!shown) { togglePlay(); setControls(true); return true; }
+                break;
+            case KeyEvent.KEYCODE_DPAD_LEFT: if (!shown) { seekTo(now() - 10); setControls(true); return true; } break;
+            case KeyEvent.KEYCODE_DPAD_RIGHT: if (!shown) { seekTo(now() + 30); setControls(true); return true; } break;
+            case KeyEvent.KEYCODE_DPAD_UP: case KeyEvent.KEYCODE_DPAD_DOWN:
+                if (!shown) { setControls(true); playPause.requestFocus(); return true; }
+                break;
+            default: break;
+        }
+        if (shown) poke();
+        return super.onKeyDown(keyCode, event);
     }
 
     // ---------------------------------------------------------------- chrome

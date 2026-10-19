@@ -48,6 +48,32 @@ module.exports = function register(app) {
     json(res, 200, { ok: true });
   }, 'public');
 
+  // --- linking a TV with a code ---
+  const pairLimits = new Map(); // ip -> [timestamps]
+  route('POST', '/api/devices/pair', async (req, res) => {
+    const ip = clientIp(req);
+    const recent = (pairLimits.get(ip) || []).filter((t) => t > Date.now() - 600_000);
+    if (recent.length >= 20) throw new HttpError(429, 'Too many codes asked for. Try again in a few minutes.');
+    pairLimits.set(ip, [...recent, Date.now()]);
+    const body = await readBody(req);
+    try { json(res, 200, auth.startPairing(body.name)); } catch (err) { throw new HttpError(err.status || 400, err.message); }
+  }, 'public');
+  // The TV asks until someone enters the code. ?cookie=1 (the web interface on a TV) signs that browser in.
+  route('GET', '/api/devices/pair/:id', async (req, res, { id }, url) => {
+    const r = auth.claimPairing(id);
+    if (!r) throw new HttpError(404, 'This code has expired. Ask for a new one.');
+    if (r.status === 'linked' && url.searchParams.get('cookie') === '1') res.setHeader('Set-Cookie', auth.deviceCookie(req, r.token));
+    json(res, 200, r.status === 'linked' ? { status: 'linked', token: r.token, user: publicUser(r.user) } : r);
+  }, 'public');
+  route('POST', '/api/devices/link', async (req, res, p, url, user) => {
+    try { json(res, 200, { ok: true, name: auth.linkDevice(req, user, (await readBody(req)).code) }); } catch (err) { throw new HttpError(err.status || 400, err.message); }
+  });
+  route('GET', '/api/devices', async (req, res, p, url, user) => json(res, 200, auth.devices(user)));
+  route('DELETE', '/api/devices/:id', async (req, res, { id }, url, user) => {
+    try { auth.removeDevice(user, id); } catch (err) { throw new HttpError(err.status || 400, err.message); }
+    json(res, 200, { ok: true });
+  });
+
   // --- profiles ("Who's watching?") ---
   route('GET', '/api/profiles', async (req, res, p, url, user) => json(res, 200, { current: user.id, profiles: auth.profiles() }));
   route('POST', '/api/auth/switch', async (req, res, p, url, user) => {

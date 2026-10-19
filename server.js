@@ -487,7 +487,7 @@ const server = http.createServer(async (req, res) => {
         const m = r.method === method && r.re.exec(url.pathname);
         if (!m) continue;
         const params = Object.fromEntries(Object.entries(m.groups || {}).map(([k, v]) => [k, decodeURIComponent(v)]));
-        let user = auth.authenticate(req);
+        let user = auth.authenticate(req, { queryToken: r.access === 'media' ? url.searchParams.get('at') : null });
         if (r.access === 'media') {
           // Playback files also open with a signed link (Chromecast, AirPlay, the Android player).
           if (!user && url.searchParams.has('mt')) user = mediaTokenUser(url.searchParams.get('mt'), params.id);

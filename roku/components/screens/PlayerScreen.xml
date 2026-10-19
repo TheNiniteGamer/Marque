@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The player: plays the file as it is when the Roku can, otherwise the server's converted
+     stream; remembers where you are, offers to skip the intro, and goes on to the next episode. -->
+<component name="PlayerScreen" extends="Group">
+  <interface>
+    <field id="params" type="assocarray" onChange="onParams" />
+    <field id="navigate" type="assocarray" />
+    <field id="refresh" type="boolean" />
+  </interface>
+  <children>
+    <Rectangle width="1920" height="1080" color="0x000000FF" />
+    <Video id="video" width="1920" height="1080" enableUI="true" />
+    <Group id="skip" visible="false" translation="[1440,860]">
+      <Rectangle width="380" height="72" color="0xFFFFFFFF" />
+      <Label text="▲  Skip intro" width="380" height="72" horizAlign="center" vertAlign="center" color="0x000000FF" font="font:MediumBoldSystemFont" />
+    </Group>
+    <Group id="upNext" visible="false" translation="[1240,800]">
+      <Rectangle width="580" height="170" color="0x181818EE" />
+      <Label text="UP NEXT" translation="[28,24]" color="0xA8A8A8FF" font="font:SmallBoldSystemFont" />
+      <Label id="nextTitle" translation="[28,64]" width="520" wrap="true" maxLines="2" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" />
+    </Group>
+    <Label id="message" translation="[160,480]" width="1600" wrap="true" horizAlign="center" color="0xFFFFFFFF" font="font:MediumSystemFont" />
+    <Timer id="reportTimer" duration="10" repeat="true" />
+    <Timer id="nextTimer" duration="6" repeat="false" />
+  </children>
+  <script type="text/brightscript" uri="PlayerScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/components/common.brs" />
+</component>

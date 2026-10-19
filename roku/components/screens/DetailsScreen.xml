@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A movie, show or episode: artwork, details, and what you can do with it. -->
+<component name="DetailsScreen" extends="Group">
+  <interface>
+    <field id="params" type="assocarray" onChange="onParams" />
+    <field id="navigate" type="assocarray" />
+    <field id="refresh" type="boolean" onChange="onRefresh" />
+  </interface>
+  <children>
+    <Poster id="backdrop" width="1920" height="1080" loadDisplayMode="scaleToZoom" />
+    <Poster uri="pkg:/images/fade_left.png" width="1920" height="1080" />
+    <Poster uri="pkg:/images/fade_bottom.png" translation="[0,560]" width="1920" height="520" />
+    <Group translation="[96,110]">
+      <Label id="eyebrow" color="0xE6E6E6FF" font="font:SmallBoldSystemFont" />
+      <Label id="title" translation="[0,40]" width="1100" wrap="true" maxLines="2" color="0xFFFFFFFF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="80" /></Label>
+      <Label id="meta" translation="[0,230]" width="1100" color="0xDEDEDEFF" font="font:MediumBoldSystemFont" />
+      <Label id="progress" translation="[0,280]" width="1100" color="0xBDBDBDFF" font="font:SmallSystemFont" />
+      <Label id="overview" translation="[0,325]" width="1000" wrap="true" maxLines="4" color="0xE6E6E6FF" font="font:MediumSystemFont" />
+    </Group>
+    <ButtonGroup id="buttons" translation="[96,640]" minWidth="460" buttonHeight="70" itemSpacings="[12]"
+      textColor="0xFFFFFFFF" focusedTextColor="0x000000FF" focusBitmapUri="pkg:/images/white.png" focusFootprintBitmapUri="pkg:/images/grey.png"
+      iconUri="" focusedIconUri="" textFont="font:MediumBoldSystemFont" focusedTextFont="font:MediumBoldSystemFont" />
+    <Label id="side" translation="[1240,660]" width="580" wrap="true" maxLines="8" color="0xA8A8A8FF" font="font:SmallSystemFont" />
+  </children>
+  <script type="text/brightscript" uri="DetailsScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/components/common.brs" />
+</component>

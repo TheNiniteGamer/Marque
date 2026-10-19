@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A whole library, or My List: a grid of titles. -->
+<component name="GridScreen" extends="Group">
+  <interface>
+    <field id="params" type="assocarray" onChange="onParams" />
+    <field id="navigate" type="assocarray" />
+    <field id="refresh" type="boolean" onChange="onRefresh" />
+  </interface>
+  <children>
+    <Label id="title" translation="[96,60]" width="1400" color="0xFFFFFFFF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="56" /></Label>
+    <Label id="count" translation="[96,140]" width="1400" color="0xA8A8A8FF" font="font:SmallSystemFont" />
+    <MarkupGrid id="grid" translation="[96,200]" itemComponentName="CardItem" numColumns="4" numRows="4" itemSize="[420,236]" itemSpacing="[16,28]"
+      vertFocusAnimationStyle="floatingFocus" drawFocusFeedback="true" />
+  </children>
+  <script type="text/brightscript" uri="GridScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/components/common.brs" />
+</component>

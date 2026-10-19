@@ -150,6 +150,19 @@ NVENC / VAAPI / QSV support. Set `HWACCEL=nvenc|vaapi|qsv|software` to force a c
 - **AirPlay:** Safari on Mac, iPhone and iPad shows its AirPlay button in the player.
 - Casting uses a signed link that lasts 12 hours and only opens that one video.
 
+### Watching on a TV (Roku, Android TV, TV browsers)
+
+- **Android TV / Google TV / Fire TV:** install `Marquee-TV.apk` (Account → *Watch on a TV* has the
+  link; see [`androidtv/README.md`](androidtv/README.md)).
+- **Roku:** add the channel in Roku's developer mode with `Marquee-Roku.zip` (same place; see
+  [`roku/README.md`](roku/README.md)).
+- **A TV's own web browser** works too: Marquee switches to TV mode by itself on most TVs.
+
+**Signing in:** the TV shows a **code**. On your phone or computer, open
+`http://YOUR-PC:32500/#/link` (or **Account → Watch on a TV**), type the code, and the TV signs in
+as you a few seconds later. Nobody types a password with a remote (*Sign in with a password
+instead* is there if you need it). Linked TVs are listed on that page, where you can unlink them.
+
 ### Updating
 
 Marquee checks GitHub for new versions twice a day. Admins see a green dot on their avatar when an
@@ -178,6 +191,8 @@ never gets access to Docker itself.
 | Feature | What Marquee does |
 | --- | --- |
 | **Look** | A red-and-black design: a top bar, a featured banner on the home page (with its trailer playing quietly when there is one), rows that scroll sideways (Continue Watching, My List, New in each library, collections, "Because you watched …", genres), wide cards with titles on the artwork, and a **More info** pop-up with episodes, extras and **More like this**. Works on phones (with a bar along the bottom) and in the Android app. |
+| **TV apps** | A **Roku** channel and an **Android TV** app, signed in by typing the code the TV shows into your phone. TV mode in the web interface: bigger highlights, the remote's arrows move between titles, Back closes pop-ups. |
+| **Hover previews** | On a computer, resting the pointer on a title opens a larger card with its trailer playing quietly (when there is one), Play, My List and More info. |
 | **Accounts** | Sign-in screen, with an admin account created on first run. Admins add users, choose which libraries each one can see, and decide who can use the downloader. Each user has their own watch history, Continue Watching and resume points. |
 | **Libraries** | Movie and TV Show libraries, each combining one or more folders, which can be on different drives. Everything inside the folders is found, including shows in folders of their own (`Kids/Bluey/…`). Add, edit and remove them in Settings with a built-in folder picker that lists your drives, accepts typed paths and shows how many videos a folder holds; whole drives can be shared with Docker (see *Other drives*). |
 | **Scanning** | Probes new or changed files with `ffprobe`, removes deleted ones, and rescans periodically. If a drive is offline, its items and watch history are kept. |
@@ -300,6 +315,8 @@ Press `?` anywhere for the full list.
 - **Player:** `Space`/`K` play/pause · `←`/`J` back 10 s · `→`/`L` forward 30 s · `↑`/`↓` volume ·
   `M` mute · `F` fullscreen · `C` subtitles · `N` next episode · `<`/`>` speed ·
   `P` picture-in-picture · `S` skip intro · `Esc` close
+- **TV remote (TV mode):** arrows move · OK opens · Back closes or goes back · in the player OK
+  plays/pauses and the media keys work
 
 ## Architecture
 
@@ -330,8 +347,11 @@ lib/store.js        JSON-file database with atomic writes
 public/             single-page web client (vanilla JS): app.js (browse/play), manage.js (accounts, downloads),
                     fonts/ (Archivo and Figtree, SIL Open Font License),
                     extras.js (menus, edit/match dialogs, My List, settings panels, shortcuts), select.js (☑ Select and
-                    bulk actions), cast.js (Google Cast),
+                    bulk actions), cast.js (Google Cast), tv.js (TV mode: moving with a remote),
                     vendor/hls.js (Apache-2.0, for adaptive streaming in browsers without native HLS)
+android/            the Android app (WebView + native player), built without Gradle
+androidtv/          the Android TV app: android/'s code with a TV manifest and banner
+roku/               the Roku channel (BrightScript / SceneGraph)
 Dockerfile, docker-compose.yml, *.bat   container image and Windows helpers
 ```
 
@@ -346,6 +366,7 @@ isn't installed.
 
 ## Not yet supported
 
-Music and photo libraries, image-based subtitles (PGS/VobSub), and parental content ratings.
-Hardware conversion and casting are tested here only against ffmpeg and a simulated Cast SDK, so
-please report problems with specific graphics cards or TVs.
+Music and photo libraries, and parental content ratings. On Roku: profiles and picture
+(Blu-ray/DVD) subtitles. Hardware conversion, casting and the TV apps are tested here only against
+ffmpeg, a simulated Cast SDK, the BrightScript compiler and Android's build tools (not on real TVs),
+so please report problems with specific graphics cards or TVs.

@@ -2,8 +2,11 @@ package app.marquee.client;
 
 import android.app.Activity;
 import android.app.DownloadManager;
+import android.app.UiModeManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -25,7 +28,8 @@ import android.widget.Toast;
 
 /**
  * The Marquee web interface in a web view, plus a bridge so videos open in the native player
- * (window.MarqueeAndroid.play) and the user can switch servers.
+ * (window.MarqueeAndroid.play) and the user can switch servers. On a TV (the Android TV app, or
+ * this app on a TV) the interface runs in TV mode, moved around with the remote.
  */
 public class MainActivity extends Activity {
     private static final int REQ_FILE = 1;
@@ -37,6 +41,7 @@ public class MainActivity extends Activity {
     private String base;
     private ValueCallback<Uri[]> fileCallback;
     private boolean mainFrameFailed;
+    private boolean tv;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -47,11 +52,12 @@ public class MainActivity extends Activity {
             finish();
             return;
         }
+        tv = isTv();
         setContentView(R.layout.activity_main);
         web = findViewById(R.id.web);
         errorView = findViewById(R.id.error);
         errorText = findViewById(R.id.error_text);
-        ((Button) findViewById(R.id.retry)).setOnClickListener(v -> { errorView.setVisibility(View.GONE); web.loadUrl(base + "/"); });
+        ((Button) findViewById(R.id.retry)).setOnClickListener(v -> { errorView.setVisibility(View.GONE); web.loadUrl(startUrl()); });
         ((Button) findViewById(R.id.change_server)).setOnClickListener(v -> switchServer());
 
         CookieManager.getInstance().setAcceptCookie(true);
@@ -59,14 +65,23 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
-        s.setUserAgentString(s.getUserAgentString() + " MarqueeAndroid/" + appVersion());
+        s.setUserAgentString(s.getUserAgentString() + " MarqueeAndroid/" + appVersion() + (tv ? " MarqueeTV" : ""));
         web.addJavascriptInterface(new Bridge(this), "MarqueeAndroid");
         web.setWebViewClient(new Client(this));
         web.setWebChromeClient(new Chrome(this));
         web.setDownloadListener(this::download);
 
         if (state != null) web.restoreState(state);
-        else web.loadUrl(base + "/");
+        else web.loadUrl(startUrl());
+        if (tv) web.requestFocus();
+    }
+
+    private String startUrl() { return base + (tv ? "/?tv=1" : "/"); }
+
+    private boolean isTv() {
+        UiModeManager ui = (UiModeManager) getSystemService(UI_MODE_SERVICE);
+        return getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+            || (ui != null && ui.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION);
     }
 
     private String appVersion() {
@@ -115,10 +130,16 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Back first closes what's open on the page (a pop-up, a menu), then goes back a page; on the
+    // home page it leaves the app.
     @Override
     public void onBackPressed() {
-        if (web != null && errorView.getVisibility() != View.VISIBLE && web.canGoBack()) web.goBack();
-        else super.onBackPressed();
+        if (web == null || errorView.getVisibility() == View.VISIBLE) { super.onBackPressed(); return; }
+        web.evaluateJavascript("window.marqueeBack ? String(window.marqueeBack()) : 'none'", v -> {
+            if ("\"true\"".equals(v)) return;
+            if ("\"none\"".equals(v) && web.canGoBack()) web.goBack();
+            else finish();
+        });
     }
 
     @Override

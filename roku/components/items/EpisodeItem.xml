@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One episode in the list: picture with progress, title, length and summary. -->
+<component name="EpisodeItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onContent" />
+    <field id="focusPercent" type="float" onChange="onFocus" />
+  </interface>
+  <children>
+    <Rectangle id="bg" width="1300" height="200" color="0x262626FF" opacity="0" />
+    <Poster id="thumb" translation="[16,16]" width="300" height="168" loadDisplayMode="scaleToZoom" />
+    <Rectangle id="track" translation="[16,178]" width="300" height="6" color="0x787878C0" visible="false" />
+    <Rectangle id="bar" translation="[16,178]" height="6" color="0xE31B23FF" visible="false" />
+    <Label id="title" translation="[350,22]" width="760" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" />
+    <Label id="length" translation="[1120,22]" width="160" horizAlign="right" color="0xA8A8A8FF" font="font:SmallSystemFont" />
+    <Label id="overview" translation="[350,72]" width="900" wrap="true" maxLines="3" color="0xBDBDBDFF" font="font:SmallSystemFont" />
+  </children>
+  <script type="text/brightscript" uri="EpisodeItem.brs" />
+</component>

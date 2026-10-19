@@ -291,6 +291,91 @@ document.addEventListener('click', (e) => {
 document.addEventListener('scroll', (e) => { if (e.target.classList?.contains('shelf')) updateRail(e.target); }, true);
 window.addEventListener('resize', updateRails);
 
+// ---------- hover previews ----------
+// Resting the mouse on a card for a moment grows it into a panel: play, My List, watched, more info,
+// and the trailer playing quietly when there is one. Computers with a mouse only (not TV mode).
+let previewTimer = null, previewEl = null, previewCard = null;
+const canPreview = () => matchMedia('(hover: hover) and (pointer: fine)').matches && !tv.on && !document.body.classList.contains('selecting');
+function closePreview() {
+  clearTimeout(previewTimer);
+  const el = previewEl;
+  previewEl = null; previewCard = null;
+  if (!el) return;
+  el.querySelector('video')?.pause();
+  el.classList.remove('open');
+  setTimeout(() => el.remove(), 200);
+}
+function showPreview(card) {
+  const x = knownItems.get(card.dataset.sel);
+  if (!x || x.type === 'collection' || x.kind || !document.contains(card)) return;
+  closePreview();
+  const art = card.querySelector('.art').getBoundingClientRect();
+  const w = Math.min(art.width * 1.5, window.innerWidth - 24);
+  const left = Math.max(12, Math.min(art.left + art.width / 2 - w / 2, window.innerWidth - w - 12));
+  const top = Math.max(window.scrollY + 8, art.top + window.scrollY - art.height * 0.25);
+  const isShow = x.type === 'show', isEp = x.type === 'episode';
+  const watched = isShow ? x.episodeCount > 0 && !x.unwatchedCount : !!x.progress?.watched;
+  const title = isEp ? x.showTitle : x.title;
+  const ribbon = ribbonFor(x);
+  const el = document.createElement('div');
+  el.className = 'hover-preview';
+  el.style.cssText = `left:${left}px;top:${top}px;width:${w}px;transform-origin:${((art.left + art.width / 2 - left) / w) * 100}% 30%`;
+  el.innerHTML = html`
+    <a class="hp-art" href="${hrefFor(x)}" aria-label="${title}"><img src="${artUrl(isEp ? 'thumb' : 'backdrop', x)}" alt="">
+      ${x.trailerId ? html`<video muted loop playsinline preload="none"></video>` : ''}<span class="art-title">${title}</span></a>
+    <div class="hp-body">
+      <div class="hp-actions">
+        <button class="round white" data-play="${isShow ? `show:${x.id}` : x.id}" aria-label="Play ${title}">${icon('play')}</button>
+        ${!isEp ? html`<button class="round" data-hp="list" aria-label="${x.inWatchlist ? 'Remove from My List' : 'Add to My List'}" title="${x.inWatchlist ? 'Remove from My List' : 'Add to My List'}">${icon(x.inWatchlist ? 'check' : 'plus')}</button>` : ''}
+        <button class="round" data-hp="watched" aria-label="${watched ? 'Mark unwatched' : 'Mark watched'}" title="${watched ? 'Mark unwatched' : 'Mark watched'}">${watched ? '↺' : icon('check')}</button>
+        <a class="round more" href="${hrefFor(x)}" aria-label="More info" title="More info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></a>
+      </div>
+      <div class="hp-meta">
+        ${ribbon ? html`<span class="new">${ribbon === 'NEW' ? 'New' : 'New episodes'}</span>` : ''}
+        ${isEp ? html`<span>${epLabel(x).replace(' · ', ':')} · ${x.title}</span>` : ''}
+        ${x.year && !isEp ? html`<span>${x.year}</span>` : ''}
+        <span>${isShow ? `${x.seasonCount} season${x.seasonCount === 1 ? '' : 's'}` : fmtDuration(x.duration)}</span>
+        ${x.rating ? html`<span>★ ${x.rating}</span>` : ''}
+      </div>
+      ${fmtLeft(x) ? html`<div class="hp-left">${fmtLeft(x)}</div>` : ''}
+      ${x.genres?.length ? html`<div class="hp-genres">${x.genres.slice(0, 3).join(' • ')}</div>` : ''}
+    </div>`.s;
+  document.body.append(el);
+  previewEl = el; previewCard = card;
+  requestAnimationFrame(() => el.classList.add('open'));
+  el.addEventListener('mouseleave', (e) => { if (!card.contains(e.relatedTarget)) closePreview(); });
+  el.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-hp]');
+    if (!b) { if (e.target.closest('a, [data-play]')) closePreview(); return; }
+    closePreview();
+    if (b.dataset.hp === 'list') await toggleWatchlist(x).catch((err) => toast(err.message, true));
+    if (b.dataset.hp === 'watched') await setWatchedFor(x, !watched).catch((err) => toast(err.message, true));
+  });
+  const v = el.querySelector('video');
+  if (v && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    setTimeout(() => {
+      if (previewEl !== el) return;
+      v.src = `/api/items/${x.trailerId}/stream`;
+      v.play().then(() => v.classList.add('playing')).catch(() => {});
+    }, 700);
+  }
+}
+document.addEventListener('mouseover', (e) => {
+  if (!canPreview() || e.target.closest('.hover-preview')) return;
+  const card = e.target.closest('.shelf .card, .grid .card');
+  if (!card) { if (!previewEl) clearTimeout(previewTimer); return; }
+  if (card === previewCard) return;
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => showPreview(card), 650);
+});
+document.addEventListener('mouseout', (e) => {
+  const card = e.target.closest('.card');
+  if (!card || card.contains(e.relatedTarget)) return;
+  if (previewEl && e.relatedTarget && previewEl.contains(e.relatedTarget)) return;
+  if (card === previewCard) closePreview(); else clearTimeout(previewTimer);
+});
+document.addEventListener('scroll', () => { if (previewEl) closePreview(); }, true);
+
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-play]');
   if (!btn) return;
@@ -1840,6 +1925,11 @@ class Player {
         c: () => { const sel = $('[data-a=subs]', this.root); if (!sel) return; sel.value = this.subId ? '' : (this.pickDefaultSub() || ''); sel.dispatchEvent(new Event('change', { bubbles: true })); },
         s: () => { const b = $('[data-a=skip-intro]', this.root); if (b && !b.hidden) b.click(); },
         Escape: () => { if (!document.fullscreenElement) this.close(); },
+        // TV remotes
+        MediaPlayPause: () => this.toggle(), MediaPlay: () => this.toggle(), MediaPause: () => this.toggle(),
+        MediaFastForward: () => this.seek(this.time + 30), MediaRewind: () => this.seek(this.time - 10),
+        GoBack: () => this.close(), BrowserBack: () => this.close(),
+        Enter: () => { if (!e.target.closest?.('button, select, input, a')) this.toggle(); },
         n: () => { if (this.item.next) this.playNext(); },
         p: () => this.togglePip(),
         '<': () => this.stepSpeed(-1), '>': () => this.stepSpeed(1),
@@ -1892,6 +1982,7 @@ const routes = [
   [/^\/search$/, viewSearch],
   [/^\/settings$/, viewSettings],
   [/^\/account$/, viewAccount],
+  [/^\/link$/, viewAccount],
   [/^\/downloads$/, viewDownloads],
   [/^\/watchlist$/, viewWatchlist],
   [/^\/collections$/, viewCollections],
@@ -1910,6 +2001,7 @@ let openedFromPage = false;
 function openDetailLayer() {
   if (!$('#detail-layer')) {
     openedFromPage = !firstRoute && !!view.dataset.path;
+    tv.returnHref = document.activeElement?.getAttribute?.('href') || null;
     $('#detail-root').innerHTML = '<div class="detail-layer" id="detail-layer"><div class="dlg" id="detail-panel" role="dialog" aria-modal="true" aria-label="Details"></div></div>';
     $('#detail-layer').addEventListener('mousedown', (e) => { if (e.target.id === 'detail-layer') closeDetail(); });
     // Moving between titles inside the pop-up replaces it, so closing (or Back) returns to the page.
@@ -1949,6 +2041,7 @@ async function router() {
   if (path !== '/search' && !isPlay) { $('#search-input').value = ''; if (document.activeElement !== $('#search-input')) $('#search-form').classList.remove('open'); }
   renderNav();
   endSelect();
+  closePreview();
   if (isPlay || isDetail) pauseHero();
   const seq = ++renderSeq;
   const changedPage = path !== lastPath;
@@ -1975,6 +2068,7 @@ async function router() {
   }
   try {
     await match[1]({ params: match[0].exec(path).slice(1), query, seq });
+    if (seq === renderSeq && !isPlay) tvStart();
     if (!isPlay && changedPage && seq === renderSeq && scrollMemo.has(path)) {
       requestAnimationFrame(() => window.scrollTo(0, scrollMemo.get(path)));
     }

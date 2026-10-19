@@ -101,10 +101,10 @@ module.exports = function register(app) {
   });
 
   // --- adaptive streaming (HLS) ---
-  // ?sid=<session>&audio=<track>&q=<quality, to offer just one>&mt=<token>
+  // ?sid=<session>&audio=<track>&q=<quality, to offer just one>&mt=<token> (or at=<device token>, Roku)
   const hlsQuery = (url) => {
     const q = new URLSearchParams();
-    for (const k of ['sid', 'audio', 'burn', 'mt']) if (url.searchParams.get(k)) q.set(k, url.searchParams.get(k));
+    for (const k of ['sid', 'audio', 'burn', 'mt', 'at']) if (url.searchParams.get(k)) q.set(k, url.searchParams.get(k));
     return `?${q}`;
   };
   const hlsItem = (id, user) => {
@@ -203,7 +203,8 @@ module.exports = function register(app) {
   route('GET', '/api/items/:id/subtitles/:sub', async (req, res, { id, sub }, url, user) => {
     const item = getItem(id, user);
     const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
-    const vtt = subs.shiftVtt(await subtitleVtt(item, sub), offset);
+    // "ext0.vtt" works too (players that tell formats apart by the file name, like Roku).
+    const vtt = subs.shiftVtt(await subtitleVtt(item, sub.replace(/\.vtt$/i, '')), offset);
     res.writeHead(200, { 'Content-Type': 'text/vtt; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(vtt);
   }, 'media');
