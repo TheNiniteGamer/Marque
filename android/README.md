@@ -19,6 +19,8 @@ A small Android app (Android 8.0+) for watching your Marquee server on a phone o
   without the internet (the original file, or a smaller copy the server makes). Downloads use
   Wi-Fi only unless you turn that off on the Downloads screen. **Downloads** in the bottom bar lists them; it opens
   from the "can't reach the server" page too. Your place is sent to the server once you're online.
+- **Notifications:** new episodes of shows you watch and news about your requests, checked about
+  every half hour (Android 13+ asks once whether that's OK).
 - **Lock screen, headphones and Bluetooth:** play/pause, back/ahead 10 s and next episode.
 - **Night mode:** *Sound* in Audio & Subtitles (Android 9+).
 - **Quality:** Original, Auto (adaptive streaming, the default away from home) or a fixed

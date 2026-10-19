@@ -216,6 +216,9 @@ never gets access to Docker itself.
 | **Kids profiles & ratings** | Titles carry their maturity rating (PG-13, TV-14, 12A…, from TMDB for your country, or set by hand with *⋯ → Edit*), shown as a badge. Give a profile a limit in *Settings → Users* (and choose whether unrated titles show): anything above it disappears everywhere for that profile. |
 | **Downloads on the phone** | The Android app saves movies and episodes to watch offline: the original file when the phone plays it, or a 1080p / 720p / 480p copy the server makes first. *Downloads* lists them; progress goes back to the server when you're online again. |
 | **Personal touches** | Sound and subtitle languages are remembered per show; 👍 / 👎 on titles steers suggestions ("Because you liked …"); a **Top 10 in your house this week** row; cast photos and **actor pages**; who's in it shows when you pause. |
+| **Requests** | Anyone can ask for a film or show (looked up on TMDB / TVmaze, or typed in) with a note; admins approve, decline or mark it added on the Requests page. It's marked as here by itself when it turns up, and whoever asked gets a notification. |
+| **Notifications** | A bell with new episodes of shows you watch (or have on My List) and news about your requests; the phone app shows them as phone notifications. |
+| **Health check** | Settings shows disk space, offline folders, backups (and whether they're copied off the PC), update and graphics-card problems at a glance; admins are notified when something turns bad. |
 | **Skip Recap** | "Previously on…" recaps are found automatically and get a Skip Recap button. |
 | **Night mode** | Clearer dialogue and quieter loud scenes, on every player (Account → Player, or ☾ in the player). |
 | **Who's watching?** | Profiles for a shared TV or tablet: anyone who sets a PIN (*Account*) can be switched to with it, and admins can let children's accounts be picked without one. *Switch profile* is in the account menu; *Account → Ask “Who's watching?”* shows the picker when Marquee opens on that device. Five wrong PINs lock a profile for 10 minutes. |
@@ -314,7 +317,15 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
   from local proxies) for sign-in rate limits. It marks cookies `Secure` and sends HSTS. The very
   first admin account can only be created from the home network or your own Tailscale devices.
   Set `TRUST_PROXY=0` if Marquee isn't behind a proxy you control.
-- Backups contain password hashes and your TMDB key: keep them somewhere private.
+- **Admin settings only at home** (Settings → Remote access): away from home, admins can still
+  watch, but Settings, users and the other admin pages only answer on the home network, so a
+  leaked admin password can't change anything from outside. Recommended once Marquee is reachable
+  from outside.
+- The web pages send a Content-Security-Policy (only Marquee's own scripts, plus Google's Cast SDK,
+  can run; no framing), and server error details stay in Settings → Logs rather than the browser.
+  New passwords need at least 8 characters.
+- Backups contain password hashes and your TMDB key: keep them somewhere private (that includes
+  the second copy you may keep in a cloud folder).
 - On Linux hosts (not needed on Windows), the container runs as uid 999. Make sure that user can
   write to your YouTube and backups folders (`chown 999 /path/to/youtube /path/to/backups`).
 
@@ -341,6 +352,9 @@ lib/scanner.js      folder walking, ffprobe, show grouping, TMDB enrichment
 lib/media.js        ffprobe/ffmpeg: probe, thumbnails, direct-play check, live transcode, seek points
 lib/hwaccel.js      encoder choice (NVENC / QSV / VAAPI / x264), start-up tests, fallback
 lib/hls.js          adaptive streaming: VOD playlists, on-demand segment conversion per session
+lib/requests.js     requests ("can we get …?"): asking, the admin's list, noticing when a title arrives
+lib/notifications.js  each person's notifications (new episodes, requests, health)
+lib/health.js       the health check (disk space, folders, backups, updates, errors)
 lib/offline.js      copies for the phone app's downloads (MP4s made in the background, kept a week)
 lib/ratings.js      maturity ratings as ages, and what each profile is allowed to see
 lib/intro.js        intro and credits detection (Chromaprint audio fingerprints compared across a season)

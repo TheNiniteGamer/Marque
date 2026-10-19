@@ -4,6 +4,29 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.10.0 — Significant update
+
+**Requests, notifications, and looking after itself.**
+- **Requests.** "Ask for it" on the search page (or Requests in the menu): look a film or show up
+  (TMDB / TVmaze) or type its name, with a note. Admins get a notification and a list (Requests in
+  the menu; a count on Settings) to approve, decline or mark as added, with a note back. When the
+  title turns up in a library it's marked as here by itself, and everyone who asked is told.
+- **Notifications.** A bell at the top: new episodes of shows you watch (or have on My List), and
+  what's happening with your requests. **Phone app (1.9.0):** they arrive as phone notifications
+  too (it checks every half hour; Android 13+ asks permission once).
+- **Backups off this PC.** Settings → Backups → *Also keep a copy somewhere else*: every backup is
+  copied to another drive, a network share, or a OneDrive / Google Drive / Dropbox folder.
+- **Health check** at the top of Settings: disk space, offline library folders, backups that
+  stopped or aren't copied, a failed update, the graphics card being given up on, lots of errors.
+  Admins get a notification when something turns bad.
+- **Security.**
+  - Fixed: one specially made web address could stop the server.
+  - A Content-Security-Policy (only Marquee's own scripts can run), and server error details are
+    kept out of the browser.
+  - New passwords need 8 characters.
+  - New option, Settings → Remote access → *Admin settings only at home*: away from home you can
+    still watch, but the admin pages only work on your home network.
+
 ## 0.9.1
 
 **Faster on big libraries, and better phone downloads.**
