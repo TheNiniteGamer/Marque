@@ -9,7 +9,8 @@ sub init()
     else if m.global.token = "" then
         show("PairScreen", {}, false, true)
     else
-        show("HomeScreen", {}, false, true)
+        ' "Who's watching?" first (it goes straight on to Home when there's nobody to switch to).
+        show("ProfilesScreen", { atStart: true }, false, true)
     end if
 end sub
 

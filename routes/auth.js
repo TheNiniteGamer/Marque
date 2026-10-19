@@ -83,15 +83,14 @@ module.exports = function register(app) {
   });
 
   // --- profiles ("Who's watching?") ---
-  route('GET', '/api/profiles', async (req, res, p, url, user) => json(res, 200, { current: user.id, profiles: auth.profiles() }));
+  route('GET', '/api/profiles', async (req, res, p, url, user) => json(res, 200, { current: user.id, currentName: user.username, profiles: auth.profiles() }));
   route('POST', '/api/auth/switch', async (req, res, p, url, user) => {
     const body = await readBody(req);
     const target = auth.byId(String(body.userId || ''));
     if (target?.id === user.id) return json(res, 200, { user: publicUser(user) });
     await auth.checkSwitch(target, body.pin);
-    auth.destroySession(req, res);
-    auth.createSession(req, res, target);
-    json(res, 200, { user: publicUser(target) });
+    const token = auth.switchSession(req, res, target);
+    json(res, 200, { user: publicUser(target), ...(token ? { token } : {}) });
   });
   // Set or remove your own PIN (needs your password).
   route('POST', '/api/auth/pin', async (req, res, p, url, user) => {

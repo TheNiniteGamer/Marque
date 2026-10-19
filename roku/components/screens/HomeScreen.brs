@@ -90,6 +90,8 @@ sub onLibraries(event as Object)
         n.title = lib.name
     end for
     n = root.createChild("ContentNode")
+    n.title = "Switch profile"
+    n = root.createChild("ContentNode")
     n.title = "Sign out"
     m.menuList.content = root
 end sub
@@ -220,6 +222,8 @@ sub onMenuSelected()
     else if i >= libStart and i < libStart + m.libraries.Count() then
         lib = m.libraries[i - libStart]
         m.top.navigate = { screen: "GridScreen", params: { title: lib.name, path: "/api/libraries/" + lib.id + "/items" } }
+    else if i = libStart + m.libraries.Count() then
+        m.top.navigate = { screen: "ProfilesScreen", params: {} }
     else
         mqApi("/api/auth/logout", "onLoggedOut", "POST")
     end if

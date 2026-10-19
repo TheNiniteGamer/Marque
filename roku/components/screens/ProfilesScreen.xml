@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Who's watching?": the profiles on this Marquee (the people who set a PIN, and kids' profiles).
+     Shown when the channel starts if there's someone to switch to, and from Home's menu. A profile
+     with a PIN asks for it on a number pad. -->
+<component name="ProfilesScreen" extends="Group">
+  <interface>
+    <field id="params" type="assocarray" onChange="onParams" />
+    <field id="navigate" type="assocarray" />
+    <field id="refresh" type="boolean" />
+  </interface>
+  <children>
+    <Label text="MARQUEE" translation="[96,48]" color="0xE31B23FF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="38" /></Label>
+    <Group id="picker" visible="false">
+      <Label id="heading" text="Who's watching?" translation="[0,250]" width="1920" horizAlign="center" color="0xFFFFFFFF">
+        <Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="64" />
+      </Label>
+      <MarkupGrid id="grid" translation="[0,420]" itemComponentName="ProfileItem" numRows="1" itemSize="[240,320]" itemSpacing="[64,0]"
+        drawFocusFeedback="false" vertFocusAnimationStyle="fixedFocus" />
+      <Label id="hint" translation="[0,840]" width="1920" horizAlign="center" color="0x8C8C8CFF" font="font:SmallSystemFont" />
+    </Group>
+    <Group id="pad" visible="false">
+      <Label id="padTitle" translation="[0,190]" width="1920" horizAlign="center" color="0xFFFFFFFF">
+        <Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="52" />
+      </Label>
+      <Label id="dots" translation="[0,290]" width="1920" horizAlign="center" color="0xFFFFFFFF" font="font:LargeBoldSystemFont" />
+      <MarkupGrid id="keys" translation="[726,380]" itemComponentName="PinKeyItem" numColumns="3" numRows="4" itemSize="[140,88]" itemSpacing="[16,16]"
+        drawFocusFeedback="false" vertFocusAnimationStyle="fixedFocus" />
+      <Label id="padError" translation="[0,810]" width="1920" horizAlign="center" color="0xFF6B6BFF" font="font:MediumSystemFont" />
+      <Label text="Back: choose someone else" translation="[0,880]" width="1920" horizAlign="center" color="0x8C8C8CFF" font="font:SmallSystemFont" />
+    </Group>
+    <Label id="status" translation="[0,500]" width="1920" horizAlign="center" color="0xA8A8A8FF" font="font:MediumSystemFont" />
+  </children>
+  <script type="text/brightscript" uri="ProfilesScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/components/common.brs" />
+</component>

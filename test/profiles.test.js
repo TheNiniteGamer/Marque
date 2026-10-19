@@ -49,6 +49,25 @@ test('switching needs the right PIN; kids allowed without one', async () => {
   assert.equal(await me(tv), 'kid');
 });
 
+test('a linked Roku switching profile gets a new token and stays linked', async () => {
+  const call = (method, url, { token, body } = {}) => fetch(srv.base + url, {
+    method, headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body ? { 'content-type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const mum = srv.client();
+  await mum('POST', '/api/auth/login', { username: 'mum', password: 'mumpass1' });
+  const pair = await (await call('POST', '/api/devices/pair', { body: { name: 'Bedroom Roku' } })).json();
+  await mum('POST', '/api/devices/link', { code: pair.code });
+  const { token } = await (await call('GET', `/api/devices/pair/${pair.id}`)).json();
+  const r = await (await call('POST', '/api/auth/switch', { token, body: { userId: ids.kid } })).json();
+  assert.equal(r.user.username, 'kid');
+  assert.ok(r.token && r.token !== token, 'a new token for the new profile');
+  assert.equal((await call('GET', '/api/auth/me', { token })).status, 401, 'the old one is gone');
+  assert.equal((await (await call('GET', '/api/auth/me', { token: r.token })).json()).user.username, 'kid');
+  assert.deepEqual((await (await call('GET', '/api/devices', { token: r.token })).json()).map((d) => d.name), ['Bedroom Roku'], 'still a linked TV');
+  assert.equal((await mum('GET', '/api/devices')).data.length, 0);
+});
+
 test('five wrong PINs lock that profile for a while', async () => {
   for (let i = 0; i < 5; i++) assert.equal((await tv('POST', '/api/auth/switch', { userId: ids.dad, pin: `000${i}` })).status, 401);
   const locked = await tv('POST', '/api/auth/switch', { userId: ids.dad, pin: '4321' });

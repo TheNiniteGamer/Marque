@@ -168,3 +168,13 @@ function mqClock(sec as Dynamic) as String
     end if
     return mi.ToStr() + ":" + ss
 end function
+
+' A steady colour per person, the same as on the web.
+function mqAvatarColor(name as String) as String
+    colors = ["0x2F6FB3FF", "0xB3402FFF", "0x7A4FB3FF", "0x2F8A5CFF", "0xB3862FFF", "0x2F9BB3FF", "0xB32F7AFF", "0x5C6B2FFF"]
+    n& = 7
+    for i = 1 to Len(name)
+        n& = (n& * 31 + Asc(Mid(name, i, 1))) mod 4294967296&
+    end for
+    return colors[n& mod colors.Count()]
+end function

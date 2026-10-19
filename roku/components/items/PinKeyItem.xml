@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A key on the PIN pad (a digit, Del or OK): grey, white when highlighted. -->
+<component name="PinKeyItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onContent" />
+    <field id="focusPercent" type="float" onChange="onFocus" />
+    <field id="gridHasFocus" type="boolean" onChange="onFocus" />
+  </interface>
+  <children>
+    <Rectangle id="bg" width="140" height="88" color="0x333333FF" />
+    <Label id="text" width="140" height="88" horizAlign="center" vertAlign="center" color="0xFFFFFFFF" font="font:LargeBoldSystemFont" />
+  </children>
+  <script type="text/brightscript" uri="PinKeyItem.brs" />
+</component>
