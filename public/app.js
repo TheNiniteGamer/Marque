@@ -152,7 +152,8 @@ function renderNav() {
     <a href="#/" class="${on(path === '/')}">${icon('home')}Home</a>
     <button type="button" data-tab="search">${icon('search')}Search</button>
     <a href="#/watchlist" class="${on(path === '/watchlist')}">${icon('plus')}My List</a>
-    ${state.user?.canDownload ? html`<a href="#/downloads" class="${on(path === '/downloads')}">${icon('download')}Downloads</a>`
+    ${phoneDownloads() ? html`<button type="button" data-phone-downloads>${icon('download')}Downloads</button>`
+      : state.user?.canDownload ? html`<a href="#/downloads" class="${on(path === '/downloads')}">${icon('download')}Downloads</a>`
       : html`<a href="#/collections" class="${on(path.startsWith('/collection'))}">${icon('stack')}Collections</a>`}`.s;
   if (state.status) { noteUpdateAvailable(state.status); noteDownloads(state.status.myDownloads); }
 }
@@ -163,6 +164,13 @@ function openSearch() { $('#search-form').classList.add('open'); $('#search-inpu
 $('#search-btn').addEventListener('click', openSearch);
 $('#search-input').addEventListener('blur', () => { if (!$('#search-input').value) $('#search-form').classList.remove('open'); });
 document.addEventListener('click', (e) => { if (e.target.closest('[data-tab="search"]')) openSearch(); });
+// The phone app keeps downloads for watching offline (its own Downloads screen).
+function phoneDownloads() { return !!window.MarqueeAndroid?.offlineDownloads?.(); }
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-phone-downloads]')) window.MarqueeAndroid.openDownloads();
+  const d = e.target.closest('[data-offline]');
+  if (d) window.MarqueeAndroid.download(d.dataset.offline);
+});
 // Voice search: the Android TV app listens (the mic button, the remote's search key, or "Hey Google,
 // search Marquee for…") and hands back what was said.
 const voiceSearch = () => window.MarqueeAndroid?.voiceSearch?.();
@@ -724,6 +732,7 @@ async function viewShow({ params: [id], query, seq }) {
         ${e.overview ? html`<div class="ep-overview">${e.overview}</div>` : ''}
       </a>
       <div class="ep-actions">
+        ${phoneDownloads() ? html`<button class="watch-toggle ep-dl" data-offline="${e.id}" title="Download to watch offline" aria-label="Download ${e.title} to watch offline">${icon('download')}</button>` : ''}
         <button class="watch-toggle ${e.progress?.watched ? 'on' : ''}" data-watch="${e.id}" title="${e.progress?.watched ? 'Mark unwatched' : 'Mark watched'}" aria-label="${e.progress?.watched ? 'Mark unwatched' : 'Mark watched'}">✓</button>
         <button class="card-menu static" data-menu="${e.id}" aria-label="More options">⋯</button>
       </div>
@@ -821,7 +830,8 @@ async function viewItem({ params: [id], seq }) {
             ${resumable ? html`<button class="btn ghost" data-play="${id}" data-t="0">From the start</button>` : ''}` : ''}
           ${listButton(it)}
           <button class="round" id="item-watch" aria-label="${p?.watched ? 'Mark unwatched' : 'Mark watched'}" title="${p?.watched ? 'Mark unwatched' : 'Mark watched'}">${p?.watched ? '↺' : icon('check')}</button>
-          <a class="round" href="/api/items/${id}/stream?download=1" download aria-label="Download the original file" title="Download the original file">${icon('download')}</a>
+          ${phoneDownloads() ? html`<button class="round" data-offline="${id}" aria-label="Download to watch offline" title="Download to watch offline">${icon('download')}</button>`
+            : html`<a class="round" href="/api/items/${id}/stream?download=1" download aria-label="Download the original file" title="Download the original file">${icon('download')}</a>`}
           ${it.sourceUrl ? html`<a class="round" href="${it.sourceUrl}" target="_blank" rel="noopener" aria-label="Open the original video page" title="Open the original video page">${icon('link')}</a>` : ''}
         </div>
       </div>
@@ -893,7 +903,7 @@ async function viewSearch({ query, seq }) {
 // ---------- settings ----------
 function cacheSummary(m) {
   const labels = { database: 'Database', artwork: 'Artwork', thumbs: 'Thumbnails', trickplay: 'Seek previews', fingerprints: 'Intro detection',
-    subtitles: 'Subtitle copies', downloadedSubtitles: 'Downloaded subtitles', conversions: 'Converting now' };
+    subtitles: 'Subtitle copies', downloadedSubtitles: 'Downloaded subtitles', conversions: 'Converting now', offline: 'Copies for phone downloads' };
   const parts = Object.entries(labels).filter(([k]) => m.sizes[k] > 0).map(([k, l]) => `${l} ${fmtSize(m.sizes[k])}`);
   return parts.length ? parts.join(' · ') : 'Nothing yet';
 }

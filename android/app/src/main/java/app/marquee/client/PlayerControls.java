@@ -163,7 +163,7 @@ final class PlayerControls {
         addIcon(playIcon, "play");
         addIcon(a.findViewById(R.id.forward), "fwd10");
         addText(right, a.getString(R.string.audio_subtitles), "tracks"); // always has Speed at least
-        if (it.optJSONObject("next") != null) addText(right, a.getString(R.string.next_episode), "next");
+        if (a.hasNext()) addText(right, a.getString(R.string.next_episode), "next");
         zone = "bar";
         paint();
     }
@@ -486,7 +486,7 @@ final class PlayerControls {
     /** The end of the video. */
     void onEnded() {
         JSONObject n = a.item.optJSONObject("next");
-        if (n == null || !a.autoplayNext) { a.finish(); return; }
+        if (n == null || !a.hasNext() || !a.autoplayNext) { a.finish(); return; }
         if (upNext.getVisibility() == View.VISIBLE && stillWatching) return;
         stopCountdown();
         upNext.setVisibility(View.GONE);
@@ -710,7 +710,7 @@ final class PlayerControls {
             case KeyEvent.KEYCODE_MEDIA_PAUSE: if (a.isPlaying()) togglePause(); else show(null); return true;
             case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD: scrub(1, true, repeat); return true;
             case KeyEvent.KEYCODE_MEDIA_REWIND: scrub(-1, true, repeat); return true;
-            case KeyEvent.KEYCODE_MEDIA_NEXT: if (a.item.optJSONObject("next") != null) a.playNext(); return true;
+            case KeyEvent.KEYCODE_MEDIA_NEXT: if (a.hasNext()) a.playNext(); return true;
             default: break;
         }
 

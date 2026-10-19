@@ -49,6 +49,10 @@
             android:resizeableActivity="true"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
+        <activity
+            android:name=".DownloadsActivity"
+            android:exported="false" />
+
         <!-- Pictures for Continue Watching on the TV's home screen -->
         <provider
             android:name=".ArtProvider"

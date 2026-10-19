@@ -48,5 +48,17 @@
             android:text="@string/change_server"
             android:textAllCaps="false"
             android:textColor="@color/text" />
+
+        <!-- No connection: what's downloaded can still be watched -->
+        <Button
+            android:id="@+id/offline_downloads"
+            android:layout_width="220dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/btn_secondary"
+            android:text="@string/downloads_title"
+            android:textAllCaps="false"
+            android:textColor="@color/text"
+            android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>

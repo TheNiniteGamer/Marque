@@ -63,6 +63,7 @@ public class MainActivity extends Activity {
         errorText = findViewById(R.id.error_text);
         ((Button) findViewById(R.id.retry)).setOnClickListener(v -> { errorView.setVisibility(View.GONE); web.loadUrl(startUrl()); });
         ((Button) findViewById(R.id.change_server)).setOnClickListener(v -> switchServer());
+        findViewById(R.id.offline_downloads).setOnClickListener(v -> openDownloads());
 
         CookieManager.getInstance().setAcceptCookie(true);
         WebSettings s = web.getSettings();
@@ -119,6 +120,8 @@ public class MainActivity extends Activity {
         }
         return super.dispatchKeyEvent(e);
     }
+
+    void openDownloads() { startActivity(new Intent(this, DownloadsActivity.class)); }
 
     private String startUrl() { return base + (tv ? "/?tv=1" : "/"); }
 
@@ -215,6 +218,7 @@ public class MainActivity extends Activity {
         if (web != null) web.onResume();
         Updater.resume(this);
         if (web != null) WatchNext.sync(this, base);
+        if (web != null && !tv) OfflineStore.resume(this, base);
     }
 
     @Override
@@ -256,6 +260,7 @@ public class MainActivity extends Activity {
             a.mainFrameFailed = true;
             a.errorText.setText(a.getString(R.string.cant_reach, a.base));
             a.errorView.setVisibility(View.VISIBLE);
+            a.findViewById(R.id.offline_downloads).setVisibility(!a.tv && !OfflineStore.list(a).isEmpty() ? View.VISIBLE : View.GONE);
         }
 
         @Override
@@ -303,6 +308,22 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String version() {
             return a.appVersion();
+        }
+
+        /** Downloads for watching offline: on phones (a TV is always online). */
+        @JavascriptInterface
+        public boolean offlineDownloads() { return !a.tv; }
+
+        /** The download button on a title. */
+        @JavascriptInterface
+        public void download(String id) {
+            if (id != null && id.matches("[A-Za-z0-9_-]+")) a.runOnUiThread(() -> OfflineStore.choose(a, a.base, id));
+        }
+
+        /** Downloads in the menu. */
+        @JavascriptInterface
+        public void openDownloads() {
+            a.runOnUiThread(a::openDownloads);
         }
 
         /** The mic button by the search box. */

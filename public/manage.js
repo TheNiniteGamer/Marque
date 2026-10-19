@@ -112,7 +112,8 @@ function renderUserMenu() {
     <div class="user-pop" id="user-pop" hidden>
       <div class="user-pop-head"><b>${u.username}</b><span class="muted">${u.role === 'admin' ? 'Administrator' : 'User'}</span></div>
       ${tv.on ? html`<a href="#/account">Settings</a>` : html`<a href="#/account">Account</a>
-      ${u.canDownload ? html`<a href="#/downloads">Downloads</a>` : ''}
+      ${phoneDownloads() ? html`<button id="phone-downloads">Downloads on this phone</button>` : ''}
+      ${u.canDownload ? html`<a href="#/downloads">${phoneDownloads() ? 'Video downloader' : 'Downloads'}</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/activity">Activity</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/settings">Settings</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/settings?section=updates" class="upd-link">Update available</a>` : ''}`}
@@ -126,6 +127,7 @@ function renderUserMenu() {
     if (e.target.id === 'sign-out') signOut();
     if (e.target.id === 'switch-server') window.MarqueeAndroid?.changeServer();
     if (e.target.id === 'switch-profile') showProfilePicker();
+    if (e.target.id === 'phone-downloads') window.MarqueeAndroid.openDownloads();
     pop.hidden = true;
   };
 }

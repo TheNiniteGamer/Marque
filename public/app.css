@@ -280,6 +280,8 @@ body.detail-open { overflow: hidden; }
 .watch-toggle { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #5a5a5a; background: transparent; color: var(--muted); cursor: pointer; }
 .watch-toggle:hover { border-color: #fff; color: #fff; }
 .watch-toggle.on { background: #fff; border-color: #fff; color: #000; }
+.watch-toggle.ep-dl { display: inline-grid; place-items: center; padding: 0; }
+.watch-toggle.ep-dl svg { width: 16px; height: 16px; }
 .similar-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .similar-card { display: flex; flex-direction: column; border-radius: 6px; overflow: hidden; background: #2f2f2f; }
 .similar-card .art { position: relative; aspect-ratio: 16/9; background: var(--bg-3); }

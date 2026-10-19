@@ -37,6 +37,7 @@ const { Parties } = require('./lib/party');
 const { Trickplay } = require('./lib/trickplay');
 const { Activity } = require('./lib/activity');
 const { Maintenance } = require('./lib/maintenance');
+const offlineLib = require('./lib/offline');
 const { KINDS: ENCODER_NAMES } = require('./lib/hwaccel');
 
 const PORT = Number(process.env.PORT) || 32500;
@@ -116,6 +117,7 @@ const parties = new Parties();
 const trickplay = new Trickplay(DATA_DIR);
 const activity = new Activity();
 const maintenance = new Maintenance(store, DATA_DIR, { transcodeDir: TRANSCODE_DIR });
+const offline = new offlineLib.Offline(path.join(DATA_DIR, 'offline'), hwaccel);
 const intro = new IntroDetector(store, DATA_DIR, { isBusy: () => transcodes.size > 0 || hls.active > 0 });
 scanner.on('done', (libraryId) => intro.enqueue({ libraryId }));
 const watcher = new FolderWatcher(store, scanner, Number(process.env.WATCH_INTERVAL ?? 15) * 1000);
@@ -447,7 +449,7 @@ const app = {
   MediaTokens, IntroDetector, FolderWatcher, findProblems, collections, OpenSubtitles, Parties, Trickplay,
   Activity, Maintenance, ENCODER_NAMES, PORT, HOST, DATA_DIR, MEDIA_ROOT, SCAN_INTERVAL_MIN,
   MEDIA_LABELS, hostLabel, fromHostPath, folderPlaces, PUBLIC_DIR, THUMB_DIR, SUB_CACHE, SUB_DOWNLOADS, store, matcher,
-  scanner, updater, hwaccel, TRANSCODE_DIR, hls, tokens, opensubs, parties,
+  scanner, updater, hwaccel, TRANSCODE_DIR, hls, offline, offlineLib, tokens, opensubs, parties,
   trickplay, activity, maintenance, intro, watcher, backups, auth, downloader,
   transcodes, HttpError, json, readBody, readRaw, MIME, sendFile, getItem,
   getShow, getLibrary, getUser, librarySummary, validateLibraryInput, removeLibraryData, resolveArt, subtitleVtt,
@@ -596,6 +598,7 @@ async function main() {
   updater.startSchedule();
   watcher.start();
   maintenance.start();
+  offline.start();
   downloader.startAutoUpdate();
   setTimeout(() => matcher.backfillCollections().then(() => matcher.backfillRatings()).catch((err) => console.warn('[meta]', err.message)), 60_000).unref();
   backups.startSchedule();
@@ -608,6 +611,7 @@ async function main() {
 function shutdown() {
   for (const p of transcodes) p.kill('SIGKILL');
   hls.stopAll();
+  offline.stop();
   parties.closeAll();
   for (const p of downloader.procs.values()) p.kill('SIGTERM'); // interrupted downloads are requeued on next start
   store.flush();

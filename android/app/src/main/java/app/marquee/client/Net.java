@@ -76,6 +76,30 @@ final class Net {
 
     static void postJson(String url, JSONObject body) { send("POST", url, body); }
 
+    /** A POST whose answer matters (throws when it fails). */
+    static JSONObject postForJson(String url, JSONObject body) throws IOException {
+        HttpURLConnection c = open(url, 15000);
+        try {
+            c.setRequestMethod("POST");
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            try (OutputStream out = c.getOutputStream()) { out.write(body.toString().getBytes(StandardCharsets.UTF_8)); }
+            int code = c.getResponseCode();
+            if (code == 401) throw new IOException(SIGNED_OUT);
+            if (code < 200 || code >= 300) {
+                String msg = "The server answered " + code;
+                try { msg = new JSONObject(Discovery.readAll(c.getErrorStream(), 65536)).optString("error", msg); } catch (Exception ignored) { }
+                throw new IOException(msg);
+            }
+            String text = Discovery.readAll(c.getInputStream(), 1024 * 1024);
+            return text.isEmpty() ? new JSONObject() : new JSONObject(text);
+        } catch (org.json.JSONException e) {
+            throw new IOException("Unexpected answer from the server");
+        } finally {
+            c.disconnect();
+        }
+    }
+
     static void putJson(String url, JSONObject body) { send("PUT", url, body); }
 
     private static void send(String method, String url, JSONObject body) {

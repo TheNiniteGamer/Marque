@@ -7,7 +7,7 @@ const { playerPrefs } = require('../lib/auth');
 module.exports = function register(app) {
   const {
     fs, crypto, path, pipeline, media, subs, lib, hlsLib,
-    SUB_DOWNLOADS, store, hwaccel, hls, tokens, opensubs, parties, trickplay,
+    SUB_DOWNLOADS, store, hwaccel, hls, offline, offlineLib, tokens, opensubs, parties, trickplay,
     transcodes, HttpError, json, readBody, sendFile, getItem, resolveArt,
     subtitleVtt, castAddresses, remoteLimit, route,
   } = app;
@@ -26,6 +26,39 @@ module.exports = function register(app) {
     const limit = remoteLimit(req, item);
     if (limit && !limit.originalAllowed) throw new HttpError(403, `Away from home, videos play at up to ${limit.quality} (set by the server's admin)`);
   }
+
+  // --- downloads for watching offline (the phone app) ---
+  // What can be downloaded: the original file (when allowed), and the sizes a copy can be made at.
+  // ?quality=&audio= also says how that copy is coming along.
+  function offlineChoice(req, item, url, body = null) {
+    if (!item.media?.video) throw new HttpError(400, 'This file cannot be downloaded');
+    const quality = String(body?.quality ?? url.searchParams.get('quality') ?? '');
+    const audio = Number(body?.audio ?? url.searchParams.get('audio') ?? 0);
+    const limit = remoteLimit(req, item);
+    if (limit && offlineLib.SIZES[quality]?.height > limit.maxHeight) throw new HttpError(403, `Away from home, downloads are up to ${limit.quality} (set by the server's admin)`);
+    return { quality, audio };
+  }
+  route('GET', '/api/items/:id/offline', async (req, res, { id }, url, user) => {
+    const item = getItem(id, user);
+    if (!item.media?.video) throw new HttpError(400, 'This file cannot be downloaded');
+    const limit = remoteLimit(req, item);
+    const out = {
+      original: { allowed: !limit || limit.originalAllowed, size: item.size || null },
+      sizes: offlineLib.sizesFor(item).filter((s) => !limit || s.height <= limit.maxHeight),
+    };
+    if (url.searchParams.has('quality')) out.copy = offline.status(item, offlineChoice(req, item, url));
+    json(res, 200, out);
+  });
+  route('POST', '/api/items/:id/offline', async (req, res, { id }, url, user) => {
+    const item = getItem(id, user);
+    json(res, 200, offline.request(item, offlineChoice(req, item, url, await readBody(req))));
+  });
+  route('GET', '/api/items/:id/offline/file', async (req, res, { id }, url, user) => {
+    const item = getItem(id, user);
+    const choice = offlineChoice(req, item, url);
+    const name = `${path.basename(item.file, path.extname(item.file))} (${choice.quality}).mp4`;
+    sendFile(req, res, offline.path(item, choice), { type: 'video/mp4', headers: { 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}` } });
+  });
 
   route('GET', '/api/items/:id/stream', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);

@@ -81,6 +81,10 @@ public class PlayerActivity extends Activity {
     int skipFade = 10;
     // Night mode: speech lifted, loud scenes evened out (Android 9+, on the player's own sound).
     boolean nightMode;
+    // Watching a download (see OfflineStore): the file on the phone, no server needed.
+    private boolean offline;
+    private java.io.File offlineFile;
+    private boolean nextOffline;   // the next episode is downloaded too
     private android.media.audiofx.DynamicsProcessing night;
     private int nightSession;
     private String skipPart;
@@ -150,6 +154,7 @@ public class PlayerActivity extends Activity {
             autoSkipIntro = req.optBoolean("autoSkipIntro", false);
             skipFade = req.optInt("skipFade", 10);
             nightMode = req.optBoolean("nightMode", false);
+            offline = req.optBoolean("offline", false);
             qualityPref = req.optString("quality", "");
             load(req.getString("id"), req.optDouble("start", 0));
         } catch (Exception e) {
@@ -163,7 +168,18 @@ public class PlayerActivity extends Activity {
     }
 
     // ---------------------------------------------------------------- loading
+    /** start: seconds, or -1 for where this download was left off. */
     private void load(String id, double start) {
+        if (offline) {
+            JSONObject e = OfflineStore.get(this, id);
+            JSONObject it = e != null ? e.optJSONObject("item") : null;
+            if (it == null || !OfflineStore.isDone(this, id)) { fail(getString(R.string.offline_gone)); return; }
+            offlineFile = OfflineStore.file(this, e);
+            double at = start >= 0 ? start : e.optDouble("position", 0);
+            if (at > it.optDouble("duration", 0) - 30) at = 0; // finished last time: from the start
+            begin(it, null, at);
+            return;
+        }
         spinner.setVisibility(View.VISIBLE);
         io.execute(() -> {
             try {
@@ -213,6 +229,13 @@ public class PlayerActivity extends Activity {
         if ("original".equals(quality) && qs.length() > 0 && !originalAllowed()) quality = "auto";
         if (!"original".equals(quality) && !"auto".equals(quality) && !hasQuality(qs, quality)) quality = qs.optJSONObject(0).optString("id");
         hls = !"original".equals(quality);
+        if (offlineFile != null) {
+            directCapable = direct = true;
+            quality = "original";
+            hls = false;
+            JSONObject n = it.optJSONObject("next");
+            nextOffline = n != null && OfflineStore.isDone(this, n.optString("id"));
+        }
 
         subId = null;
         cues = new ArrayList<>();
@@ -251,7 +274,7 @@ public class PlayerActivity extends Activity {
         }
         controlsUi.onBegin();
         String art = base + "/api/art/" + (isEp ? "thumb" : "backdrop") + "/" + it.optString("id") + "?v=" + it.optString("artV", "");
-        mediaControls.setItem(title.getText().toString(), subtitle.getText().toString(), duration, art);
+        mediaControls.setItem(title.getText().toString(), subtitle.getText().toString(), duration, offlineFile != null ? null : art);
         open(start);
         ui.removeCallbacks(tick);
         ui.post(tick);
@@ -279,7 +302,7 @@ public class PlayerActivity extends Activity {
     }
 
     /** Decoders this phone has, as MIME types. */
-    private static Set<String> decoders() {
+    static Set<String> decoders() {
         Set<String> out = new HashSet<>();
         for (MediaCodecInfo info : new MediaCodecList(MediaCodecList.REGULAR_CODECS).getCodecInfos()) {
             if (info.isEncoder()) continue;
@@ -292,6 +315,12 @@ public class PlayerActivity extends Activity {
         t = Math.max(0, duration > 0 ? Math.min(t, duration - 2) : t);
         spinner.setVisibility(View.VISIBLE);
         String id = item.optString("id");
+        if (offlineFile != null) {
+            offset = 0;
+            pendingSeek = t;
+            video.setVideoURI(Uri.fromFile(offlineFile));
+            return;
+        }
         if (hls) {
             offset = 0;
             pendingSeek = t;
@@ -374,7 +403,10 @@ public class PlayerActivity extends Activity {
 
     boolean isPlaying() { return video.isPlaying(); }
 
-    boolean hasNext() { return item != null && item.optJSONObject("next") != null; }
+    boolean hasNext() {
+        JSONObject n = item != null ? item.optJSONObject("next") : null;
+        return n != null && (!offline || nextOffline);
+    }
 
     void togglePlay() {
         if (video.isPlaying()) { video.pause(); report(); } else video.start();
@@ -403,8 +435,8 @@ public class PlayerActivity extends Activity {
             Toast.makeText(this, R.string.intro_skipped, Toast.LENGTH_SHORT).show();
             in = false;
         }
-        // "Up next" as soon as the end credits start.
-        JSONObject n = item.optJSONObject("next");
+        // "Up next" as soon as the end credits start (offline: only when the next one is downloaded too).
+        JSONObject n = hasNext() ? item.optJSONObject("next") : null;
         // A film's end credits get "Skip Credits" instead.
         boolean inCredits = credits != null && n == null && duration > 0 && t >= credits.optDouble("start") && t < duration - 2;
         boolean inRecap = recap != null && t >= recap.optDouble("start") && t < recap.optDouble("end") - 1;
@@ -445,6 +477,7 @@ public class PlayerActivity extends Activity {
 
 
     private void markWatched() {
+        if (offline) { OfflineStore.savePosition(this, item.optString("id"), duration); return; }
         final String url = base + "/api/items/" + item.optString("id") + "/watched";
         io.execute(() -> {
             try { Net.postJson(url, new JSONObject().put("watched", true)); } catch (Exception ignored) { }
@@ -457,6 +490,7 @@ public class PlayerActivity extends Activity {
     private void report(boolean stopped) {
         if (item == null) return;
         lastReport = System.currentTimeMillis();
+        if (offline) { OfflineStore.savePosition(this, item.optString("id"), now()); return; }
         final String url = base + "/api/items/" + item.optString("id") + "/progress";
         final double pos = now();
         final boolean paused = !video.isPlaying();
@@ -472,6 +506,7 @@ public class PlayerActivity extends Activity {
 
     private void onEnded() {
         if (item == null) return;
+        if (offline) { OfflineStore.savePosition(this, item.optString("id"), duration); controlsUi.onEnded(); return; }
         final String url = base + "/api/items/" + item.optString("id") + "/progress";
         io.execute(() -> {
             try { Net.postJson(url, new JSONObject().put("position", duration)); } catch (Exception ignored) { }
@@ -481,11 +516,11 @@ public class PlayerActivity extends Activity {
 
     void playNext() {
         JSONObject n = item != null ? item.optJSONObject("next") : null;
-        if (n == null) return;
+        if (n == null || !hasNext()) return;
         if (credits != null && now() >= credits.optDouble("start") - 1) markWatched(); // left during the credits
         else report();
         video.stopPlayback();
-        load(n.optString("id"), 0);
+        load(n.optString("id"), offline ? -1 : 0);
     }
 
     // ---------------------------------------------------------------- choices
@@ -534,9 +569,11 @@ public class PlayerActivity extends Activity {
         if (id == null || burn >= 0) return;
         // Cues are fetched in the file's own timeline, so they line up in both direct and converted mode.
         final String url = base + "/api/items/" + item.optString("id") + "/subtitles/" + id;
+        final java.io.File local = offline ? OfflineStore.subtitle(this, item.optString("id"), id) : null;
         io.execute(() -> {
             try {
-                List<Vtt.Cue> c = Vtt.parse(Net.getText(url));
+                String text = local != null ? new String(java.nio.file.Files.readAllBytes(local.toPath()), java.nio.charset.StandardCharsets.UTF_8) : Net.getText(url);
+                List<Vtt.Cue> c = Vtt.parse(text);
                 runOnUiThread(() -> { if (id.equals(subId)) cues = c; });
             } catch (Exception e) {
                 runOnUiThread(() -> Toast.makeText(this, R.string.subtitles_failed, Toast.LENGTH_SHORT).show());

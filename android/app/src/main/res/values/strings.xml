@@ -74,4 +74,26 @@
     <string name="night_mode">Night mode</string>
     <string name="voice_prompt">What would you like to watch?</string>
     <string name="voice_unavailable">Voice search isn\'t available on this device</string>
+    <string name="offline_already">Already on this phone: see Downloads</string>
+    <string name="offline_failed">Couldn\'t start the download: %1$s</string>
+    <string name="offline_original">Original quality · %1$s</string>
+    <string name="offline_about">about %1$s</string>
+    <string name="offline_none">This can\'t be downloaded.</string>
+    <string name="offline_title">Download %1$s</string>
+    <string name="offline_started">Downloading %1$s. It\'ll be in Downloads.</string>
+    <string name="offline_server_failed">The server couldn\'t make a copy</string>
+    <string name="offline_cancelled">The download was cancelled</string>
+    <string name="offline_dm_failed">the download stopped (code %1$d)</string>
+    <string name="offline_gone">This download isn\'t on the phone any more.</string>
+    <string name="downloads_title">Downloads</string>
+    <string name="downloads_empty">Nothing downloaded yet.\n\nTap the download button on a movie or an episode to watch it without the internet.</string>
+    <string name="downloads_preparing">Getting it ready on the server… %1$d%%</string>
+    <string name="downloads_progress">Downloading… %1$d%%</string>
+    <string name="downloads_starting">Downloading…</string>
+    <string name="downloads_failed">Didn\'t finish: %1$s. Tap to try again.</string>
+    <string name="downloads_original">Original</string>
+    <string name="downloads_left">%1$d min left</string>
+    <string name="downloads_delete">Delete from this phone?</string>
+    <string name="downloads_delete_ok">Delete</string>
+    <string name="downloads_space">%1$s used · %2$s free on this phone</string>
 </resources>
