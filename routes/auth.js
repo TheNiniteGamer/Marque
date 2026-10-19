@@ -8,7 +8,7 @@ const { playerPrefs, cleanPrefs } = require('../lib/auth');
 module.exports = function register(app) {
   const {
     publicUser, store, auth, HttpError, json, readBody, getUser, isPrivateIp,
-    clientIp, route,
+    clientIp, route, tokens,
   } = app;
 
   // --- auth ---
@@ -43,13 +43,21 @@ module.exports = function register(app) {
 
   route('POST', '/api/auth/login', async (req, res) => {
     const ip = clientIp(req);
-    if (auth.isLimited(ip)) throw new HttpError(429, 'Too many failed attempts. Try again in a few minutes.');
     const body = await readBody(req);
-    const user = await auth.login(body.username, body.password);
-    if (!user) { auth.recordFailure(ip); throw new HttpError(401, 'Wrong username or password'); }
+    const name = String(body.username || '').slice(0, 64);
+    if (auth.isLimited(ip, name)) throw new HttpError(429, 'Too many failed attempts. Try again in a few minutes.');
+    const user = await auth.login(name, body.password);
+    if (!user) { auth.recordFailure(ip, name); throw new HttpError(401, 'Wrong username or password'); }
     auth.createSession(req, res, user);
     json(res, 200, { user: publicUser(user) });
   }, 'public');
+
+  // For TVs: the key to put in picture and video addresses instead of the sign-in (see auth.mediaKey).
+  route('GET', '/api/auth/media-key', async (req, res) => {
+    const key = auth.mediaKey(req);
+    if (!key) throw new HttpError(400, 'No sign-in to make a key for');
+    json(res, 200, { key });
+  });
 
   route('POST', '/api/auth/logout', async (req, res, p, url, user) => {
     if (user) auth.destroySession(req, res);
@@ -60,6 +68,7 @@ module.exports = function register(app) {
   const pairLimits = new Map(); // ip -> [timestamps]
   route('POST', '/api/devices/pair', async (req, res) => {
     const ip = clientIp(req);
+    if (pairLimits.size > 5000) for (const [k, v] of pairLimits) if (!v.some((t) => t > Date.now() - 600_000)) pairLimits.delete(k);
     const recent = (pairLimits.get(ip) || []).filter((t) => t > Date.now() - 600_000);
     if (recent.length >= 20) throw new HttpError(429, 'Too many codes asked for. Try again in a few minutes.');
     pairLimits.set(ip, [...recent, Date.now()]);
@@ -115,6 +124,7 @@ module.exports = function register(app) {
     if (!(await auth.login(user.username, body.currentPassword))) throw new HttpError(400, 'Current password is incorrect');
     await auth.updateUser(user, { password: body.newPassword || '' });
     auth.endSessionsFor(user.id, req.sessionKey); // sign out other devices
+    tokens.rotate(); // and playback links handed out before (they last up to 12 hours)
     json(res, 200, { ok: true });
   });
 
@@ -139,6 +149,7 @@ module.exports = function register(app) {
     const target = getUser(id);
     if (target.id === me.id) throw new HttpError(400, 'You cannot delete your own account');
     auth.deleteUser(target);
+    tokens.rotate(); // playback links they were given stop working too
     json(res, 200, { ok: true });
   }, 'admin');
 };

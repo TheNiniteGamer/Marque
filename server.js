@@ -134,7 +134,7 @@ const backups = new Backups(store, {
   label: process.env.BACKUP_LABEL || null,
   isBusy: () => scanner.status().scanning,
   labelFor: hostLabel,
-  onRestored: () => { auth.prune(); scanner.enqueueAll(); },
+  onRestored: () => { auth.prune(); tokens.rotate(); scanner.enqueueAll(); },
 });
 const auth = new Auth(store);
 const health = new Health({ store, dataDir: DATA_DIR, transcodeDir: TRANSCODE_DIR, backups, updater, hwaccel, logs, labelFor: hostLabel });
@@ -234,13 +234,14 @@ function sendFile(req, res, file, { type, headers = {} } = {}) {
 }
 
 // Lookups that also enforce the user's library access (hidden items look like they don't exist).
+// (Object.hasOwn: an id like "__proto__" or "constructor" must not find something built into JavaScript.)
 function getItem(id, user) {
-  const it = store.data.items[id];
+  const it = Object.hasOwn(store.data.items, id) ? store.data.items[id] : null;
   if (!canSeeTitle(store, user, it)) throw new HttpError(404, 'Item not found');
   return it;
 }
 function getShow(id, user) {
-  const s = store.data.shows[id];
+  const s = Object.hasOwn(store.data.shows, id) ? store.data.shows[id] : null;
   if (!canSeeTitle(store, user, s)) throw new HttpError(404, 'Show not found');
   return s;
 }
@@ -391,8 +392,10 @@ function clientIp(req) {
 const viaHttpsProxy = (req) => String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
 
 // Remember the address Marquee is reached at from outside (shown in Settings → Remote access).
+// Only from someone signed in, through a proxy on this PC or its Docker network: the address is
+// shown to the admin as the one to use, so a stranger mustn't be able to set it with made-up headers.
 function noteRemoteOrigin(req) {
-  if (!viaHttpsProxy(req)) return;
+  if (!viaHttpsProxy(req) || !isPrivateIp(req.socket.remoteAddress)) return;
   const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase();
   if (!host || /^(localhost|\d+\.\d+\.\d+\.\d+|\[)/.test(host)) return;
   const origin = `https://${host}`;
@@ -475,6 +478,8 @@ function serveStatic(req, res, pathname) {
   sendFile(req, res, file, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
+const PROTO_KEYS = new Set(['__proto__', 'constructor', 'prototype', 'hasOwnProperty', 'toString', 'valueOf']);
+
 // A malformed %-escape in an address is the client's mistake (400), not a server error.
 function safeDecode(s) {
   try { return decodeURIComponent(s); } catch { throw new HttpError(400, 'Bad address'); }
@@ -508,7 +513,6 @@ const server = http.createServer(async (req, res) => {
     return res.end('Bad address');
   }
   if (viaHttpsProxy(req)) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
-  noteRemoteOrigin(req);
   try {
     if (url.pathname.startsWith('/api/')) {
       if (req.method === 'OPTIONS') {
@@ -521,6 +525,13 @@ const server = http.createServer(async (req, res) => {
         const m = r.method === method && r.re.exec(url.pathname);
         if (!m) continue;
         const params = Object.fromEntries(Object.entries(m.groups || {}).map(([k, v]) => [k, safeDecode(v)]));
+        // Ids are looked up in plain objects: names JavaScript gives every object never match anything.
+        if (Object.values(params).some((v) => PROTO_KEYS.has(v))) throw new HttpError(404, 'Not found');
+        // Changes asked for by another site's page (a form or script there, using this browser's
+        // sign-in) are refused. Browsers say where a request comes from in Sec-Fetch-Site; apps
+        // (TVs, the Android app's own requests) don't send it.
+        const site = req.headers['sec-fetch-site'];
+        if (method !== 'GET' && site && site !== 'same-origin' && site !== 'none') throw new HttpError(403, 'Requests from other sites are not allowed');
         let user = auth.authenticate(req, { queryToken: r.access === 'media' ? url.searchParams.get('at') : null });
         if (r.access === 'media') {
           // Playback files also open with a signed link (Chromecast, AirPlay, the Android player).
@@ -530,6 +541,7 @@ const server = http.createServer(async (req, res) => {
             res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
           }
         }
+        if (user) noteRemoteOrigin(req);
         if (r.access !== 'public') {
           if (!user) throw Object.assign(new HttpError(401, 'Please sign in'), { setupRequired: !auth.hasUsers() });
           if (r.access === 'admin' && user.role !== 'admin') throw new HttpError(403, 'Admins only');

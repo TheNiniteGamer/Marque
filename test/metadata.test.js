@@ -73,6 +73,7 @@ test.before(async () => {
   clip(path.join(ROOT, 'Movies', 'Test Clip (2020).mp4'));
   clip(path.join(ROOT, 'TV', 'Some Show', 'Season 01', 'Some Show - S01E01.mp4'));
   srv = await startServer({
+    IMAGE_URLS_ALLOW_LOCAL: '1', // (the stand-in for TMDB runs on this PC)
     DATA_DIR: path.join(ROOT, 'data'),
     TMDB_API_BASE: `${BASE}/3`, TMDB_IMAGE_BASE: `${BASE}/img`, TVMAZE_API_BASE: `${BASE}/tvmaze`,
   });

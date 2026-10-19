@@ -231,7 +231,9 @@ module.exports = function register(app) {
     if (!p.photoSource) throw new HttpError(404, 'No photo');
     const dir = path.join(DATA_DIR, 'people');
     const key = crypto.createHash('sha1').update(p.photoSource).digest('hex');
-    let file = ['.jpg', '.png', '.webp', '.gif'].map((e) => path.join(dir, key + e)).find((f) => fs.existsSync(f));
+    // (Saved as <key>-<content hash>.<ext>, see metadata.saveImage.)
+    let file = null;
+    try { const f = fs.readdirSync(dir).find((x) => x.startsWith(`${key}-`)); if (f) file = path.join(dir, f); } catch { /* none yet */ }
     if (!file) {
       try { file = await metadata.downloadImage(p.photoSource, dir, key); } catch { throw new HttpError(404, 'No photo'); }
     }

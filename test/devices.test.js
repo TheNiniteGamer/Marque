@@ -107,3 +107,19 @@ test('admin settings can be limited to home', async () => {
   await admin('PATCH', '/api/remote', { adminAtHomeOnly: false });
   assert.equal((await away('GET', '/api/users')).status, 200);
 });
+
+test('TVs put a media key in picture and video addresses, not their sign-in', async () => {
+  const pair = await (await call('POST', '/api/devices/pair', { body: { name: 'Den Roku' } })).json();
+  await admin('POST', '/api/devices/link', { code: pair.code });
+  const { token } = await (await call('GET', `/api/devices/pair/${pair.id}`)).json();
+  const { key } = await (await call('GET', '/api/auth/media-key', { token })).json();
+  assert.ok(key && key !== token);
+  assert.equal((await call('GET', '/api/auth/media-key', { token })).status, 200);
+  assert.equal((await (await call('GET', '/api/auth/media-key', { token })).json()).key, key, 'one per sign-in');
+  const stream = (at) => fetch(`${srv.base}/api/items/${movieId}/stream?at=${encodeURIComponent(at)}`, { headers: { range: 'bytes=0-0' } });
+  assert.equal((await stream(key)).status, 206, 'opens the video');
+  assert.equal((await call('GET', '/api/auth/me', { token: key })).status, 401, 'but is no use as a sign-in');
+  assert.equal((await stream(token)).status, 206, 'older Roku builds (the sign-in itself) still work for now');
+  await call('POST', '/api/auth/logout', { token });
+  assert.equal((await stream(key)).status, 401, 'it ends with the sign-in');
+});

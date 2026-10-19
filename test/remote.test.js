@@ -54,6 +54,10 @@ test('security headers, HSTS only over HTTPS, secure cookies through the tunnel'
 test('settings show the remote address once it has been used', async () => {
   const login = await call('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'password1' } });
   const cookie = login.headers.get('set-cookie').split(';')[0];
+  // Requests nobody signed in to don't count: anyone could make up the headers.
+  await call('/api/health', { headers: { ...viaProxy('203.0.113.9'), 'x-forwarded-host': 'evil.example' } });
+  assert.equal((await call('/api/remote', { headers: { cookie } })).data.seen, null);
+  await call('/api/auth/me', { headers: { ...viaProxy('100.101.102.103'), cookie } });
   const r = await call('/api/remote', { headers: { cookie } });
   assert.deepEqual(r.data.configured, ['tailscale']);
   assert.equal(r.data.seen.origin, 'https://marquee.tail1234.ts.net');

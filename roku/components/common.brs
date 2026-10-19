@@ -41,11 +41,15 @@ function mqNum(v as Dynamic) as Float
     return 0
 end function
 
-' A playback file or picture on the server, signed in with this Roku's device token.
+' A playback file or picture on the server. The address carries the media key, which opens only
+' pictures and videos (so the sign-in itself never ends up in an address); until the key has
+' arrived, the sign-in is used as before.
 function mqMediaUrl(path as String) as String
     sep = "?"
     if Instr(1, path, "?") > 0 then sep = "&"
-    return m.global.server + path + sep + "at=" + m.global.token
+    key = m.global.mediaKey
+    if key = invalid or key = "" then key = m.global.token
+    return m.global.server + path + sep + "at=" + key
 end function
 
 ' kind: "backdrop", "poster" or "thumb".

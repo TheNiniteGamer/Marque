@@ -59,3 +59,30 @@ test('passwords need 8 characters', async () => {
   assert.equal((await admin('POST', '/api/users', { username: 'kim', password: 'seven77' })).status, 400);
   assert.equal((await admin('POST', '/api/users', { username: 'kim', password: 'eight888' })).status, 201);
 });
+
+test('ids that are names built into JavaScript find nothing, and change nothing', async () => {
+  for (const id of ['__proto__', 'constructor', 'toString']) {
+    assert.equal((await admin('GET', `/api/items/${id}`)).status, 404, id);
+    assert.equal((await admin('POST', `/api/items/${id}/subtitle-download`, { fileId: 1 })).status, 404, id);
+    assert.equal((await admin('PATCH', `/api/meta/${id}`, { title: 'x' })).status, 404, id);
+  }
+  assert.equal({}.downloadedSubs, undefined);
+  assert.equal({}.edits, undefined);
+});
+
+test('changes asked for by another site are refused; apps and this site are fine', async () => {
+  const send = (site) => fetch(`${srv.base}/api/auth/prefs`, { method: 'PUT', headers: { 'content-type': 'application/json', ...(site ? { 'sec-fetch-site': site } : {}), cookie: srv.cookieOf?.(admin) || '' }, body: '{"skipFade":5}' });
+  assert.equal((await send('cross-site')).status, 403);
+  assert.equal((await send('same-site')).status, 403, 'another port or subdomain counts as another site');
+  assert.notEqual((await send('same-origin')).status, 403);
+  assert.notEqual((await send(null)).status, 403, 'apps don’t send it');
+});
+
+test('an image address typed in can’t point at the server itself', async () => {
+  const { downloadImage } = require('../lib/metadata');
+  const dir = path.join(ROOT, 'img');
+  for (const url of ['http://127.0.0.1:1/x.png', 'http://localhost:1/x.png', 'http://169.254.169.254/latest/meta-data/', 'http://[::1]:1/x.png', 'http://0.0.0.0:1/']) {
+    await assert.rejects(downloadImage(url, dir, 'x', { untrusted: true }), /server itself/, url);
+  }
+  await assert.rejects(downloadImage('file:///etc/passwd', dir, 'x', { untrusted: true }), /http\(s\)/);
+});

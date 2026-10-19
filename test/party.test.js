@@ -64,7 +64,7 @@ test.after(async () => { await srv?.stop(); fs.rmSync(ROOT, { recursive: true, f
 
 test('members share play, pause, seek and the next video', async () => {
   const created = (await admin('POST', '/api/parties', { itemId: film.id, position: 12 })).data;
-  assert.match(created.id, /^[A-Z2-9]{6}$/);
+  assert.match(created.id, /^[A-Z2-9]{12}$/);
   assert.equal(created.position, 12);
   assert.equal(created.playing, false);
 

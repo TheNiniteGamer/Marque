@@ -35,7 +35,7 @@ module.exports = function register(app) {
     const quality = String(body?.quality ?? url.searchParams.get('quality') ?? '');
     const audio = Number(body?.audio ?? url.searchParams.get('audio') ?? 0);
     const limit = remoteLimit(req, item);
-    if (limit && offlineLib.SIZES[quality]?.height > limit.maxHeight) throw new HttpError(403, `Away from home, downloads are up to ${limit.quality} (set by the server's admin)`);
+    if (limit && Object.hasOwn(offlineLib.SIZES, quality) && offlineLib.SIZES[quality].height > limit.maxHeight) throw new HttpError(403, `Away from home, downloads are up to ${limit.quality} (set by the server's admin)`);
     return { quality, audio };
   }
   route('GET', '/api/items/:id/offline', async (req, res, { id }, url, user) => {
@@ -51,7 +51,7 @@ module.exports = function register(app) {
   });
   route('POST', '/api/items/:id/offline', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);
-    json(res, 200, offline.request(item, offlineChoice(req, item, url, await readBody(req))));
+    json(res, 200, offline.request(item, { ...offlineChoice(req, item, url, await readBody(req)), userId: user.role === 'admin' ? null : user.id }));
   });
   route('GET', '/api/items/:id/offline/file', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);
@@ -212,8 +212,16 @@ module.exports = function register(app) {
     if (!languages) throw new HttpError(400, 'Choose a language');
     json(res, 200, { results: await opensubs.search(item, store.data.shows[item.showId], languages) });
   });
+  // OpenSubtitles downloads use the server's daily allowance (and change the title for everyone), so
+  // each person (admins aside) gets 20 a day.
+  const subDownloads = new Map(); // userId -> [times]
   route('POST', '/api/items/:id/subtitle-download', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);
+    if (user.role !== 'admin') {
+      const today = (subDownloads.get(user.id) || []).filter((t) => t > Date.now() - 86400_000);
+      if (today.length >= 20) throw new HttpError(429, 'That’s 20 subtitle downloads today; try again tomorrow');
+      subDownloads.set(user.id, [...today, Date.now()]);
+    }
     const body = await readBody(req);
     if (!/^\d+$/.test(String(body.fileId || ''))) throw new HttpError(400, 'Pick a subtitle from the search results');
     const { text, remaining } = await opensubs.download(body.fileId);

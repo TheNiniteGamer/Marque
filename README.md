@@ -321,6 +321,10 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
   watch, but Settings, users and the other admin pages only answer on the home network, so a
   leaked admin password can't change anything from outside. Recommended once Marquee is reachable
   from outside.
+- Changes are refused when a browser says they come from another site (`Sec-Fetch-Site`), on top
+  of `SameSite=Lax` cookies. TVs put a media key (pictures and videos only) in addresses rather
+  than their sign-in. Sign-ins are limited per address and per username; PINs lock after repeated
+  wrong tries.
 - The web pages send a Content-Security-Policy (only Marquee's own scripts, plus Google's Cast SDK,
   can run; no framing), and server error details stay in Settings → Logs rather than the browser.
   New passwords need at least 8 characters.

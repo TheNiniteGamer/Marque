@@ -26,7 +26,7 @@ module.exports = function register(app) {
       // No TMDB key (films) or the source is down: a request can still be typed in by hand.
       return json(res, 200, { results: [], unavailable: err.message });
     }
-    json(res, 200, { results: requests.markResults(store, kind, results.slice(0, 12)) });
+    json(res, 200, { results: requests.markResults(store, user, kind, results.slice(0, 12)) });
   });
   route('GET', '/api/requests', async (req, res, p, url, user) => json(res, 200, { requests: requests.list(store, user), pending: user.role === 'admin' ? requests.pendingCount(store) : undefined }));
   route('POST', '/api/requests', async (req, res, p, url, user) => {

@@ -4,6 +4,26 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.10.1
+
+**Security fixes from a review of every part of the server.**
+- Pages from other sites (even on the same PC, or a neighbouring address behind the same tunnel)
+  can no longer make changes using your browser's sign-in.
+- Ids such as `__proto__` in addresses could reach JavaScript's built-in objects; they're refused.
+- The "reached from outside at" address on Settings → Remote access can only be set by signed-in
+  visits through your own tunnel (it could be faked before).
+- **Roku (1.6.0):** pictures and videos use a media key that only opens pictures and videos,
+  instead of the TV's sign-in, so a logged address can't be used to sign in. (Older Roku builds
+  keep working until updated.)
+- The secret behind playback links is no longer in backups (e.g. the copy in a cloud folder), and
+  is replaced after a restore, a password change or a deleted user.
+- Limits: 20 failed sign-ins per username per 10 minutes (on top of the per-address limit), PINs
+  locked for the rest of the day after 15 wrong tries, 10 phone-download copies waiting per person,
+  20 OpenSubtitles downloads per person a day, 5 watch parties per person (with longer, unguessable
+  links), and Activity can't be filled up with made-up players.
+- Artwork from a URL can't point at the server itself (or "link-local" addresses), and stops
+  reading at 15 MB. Actor photos are now really cached.
+
 ## 0.10.0 — Significant update
 
 **Requests, notifications, and looking after itself.**

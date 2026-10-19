@@ -1,7 +1,11 @@
 sub init()
     m.top.backgroundColor = "0x0B0B0BFF"
     m.top.backgroundUri = ""
-    m.global.addFields({ server: mqRead("server"), token: mqRead("token"), username: mqRead("username") })
+    m.global.addFields({ server: mqRead("server"), token: mqRead("token"), username: mqRead("username"), mediaKey: mqRead("mediaKey") })
+    ' Pictures and videos are fetched with a media key rather than the sign-in itself (see
+    ' mqMediaUrl). A new sign-in (linking, switching profile) gets a new key; signing out drops it.
+    m.global.observeField("token", "onToken")
+    if m.global.token <> "" then mqApi("/api/auth/media-key", "onMediaKey")
     m.stack = []
     m.screens = m.top.findNode("screens")
     if m.global.server = "" then
@@ -11,6 +15,20 @@ sub init()
     else
         ' "Who's watching?" first (it goes straight on to Home when there's nobody to switch to).
         show("ProfilesScreen", { atStart: true }, false, true)
+    end if
+end sub
+
+sub onToken()
+    m.global.mediaKey = ""
+    mqDelete("mediaKey")
+    if m.global.token <> "" then mqApi("/api/auth/media-key", "onMediaKey")
+end sub
+
+sub onMediaKey(event as Object)
+    r = event.getData()
+    if r.status = 200 and r.data <> invalid and r.data.key <> invalid then
+        m.global.mediaKey = mqStr(r.data.key)
+        mqWrite("mediaKey", m.global.mediaKey)
     end if
 end sub
 
