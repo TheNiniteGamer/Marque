@@ -8,12 +8,16 @@ A small Android app (Android 8.0+) for watching your Marquee server on a phone o
 - **Videos:** play in **Android's native player**. Files your phone can decode (MP4/MKV/WebM with
   H.264, HEVC, VP9…) play directly, with no work for the server. Anything else is converted by the
   server on the fly, and the app switches automatically if direct playback fails.
-- **Player:** picture-in-picture, subtitles (including Blu-ray / DVD picture subtitles, drawn in by the
-  server), audio-track choice, playback speed, resume, the next
-  episode (offered as soon as the credits start), and **Skip Intro**. Progress syncs with your account.
+- **Player:** the same as the Android TV app's (and the Roku channel's): the title at the top,
+  a red timeline with the time left that you drag with preview pictures, back 10 s / play-pause /
+  ahead 10 s in the middle, and **Episodes**, **Audio & Subtitles** (sound track, subtitles
+  including Blu-ray / DVD picture ones drawn in by the server, quality and speed) and **Next
+  Episode**. Tap the picture to show or hide the controls. Skip Intro / Skip Credits, a Next
+  Episode countdown at the credits, resume, and picture-in-picture (the button at the top right,
+  or leave the app while playing). Progress syncs with your account.
 - **Quality:** Original, Auto (adaptive streaming, the default away from home) or a fixed
-  1080p–360p, from the quality button in the player. The default and automatic intro skipping
-  follow the choices on the web app's *Account* page.
+  1080p–360p, in Audio & Subtitles. The default follows the web app's *Account* page; autoplay,
+  automatic intro skipping and the skip buttons' fade time follow Account → *Player*.
 
 ## Install
 
@@ -46,4 +50,6 @@ The code therefore uses static nested classes and lambdas only. Keep it that way
 | `ServerActivity` | Connect screen: type an address or scan the local /24 network for `GET :32500/api/health` |
 | `MainActivity` | Web view of the server. `window.MarqueeAndroid` lets the page open the native player and switch servers |
 | `PlayerActivity` | Native player (`VideoView`/`MediaPlayer`). Direct stream or server `/transcode`, subtitles drawn from the server's WebVTT, progress reported to `/api/items/:id/progress` |
+| `PlayerControls` | The player's controls (`res/layout/activity_player.xml`), on phones by touch and on TVs by remote; sizes in `values/` and `values-television/dimens.xml` |
+| `Updater` | Updates the app from the server's `/downloads/apps.json` |
 | `PlaybackPlan` | Decides direct play vs. convert, using the phone's real decoders (`MediaCodecList`) |

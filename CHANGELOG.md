@@ -4,6 +4,19 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.8.3
+
+**One player design on every device.**
+- **Phone app (1.7.0):** the player now looks and works like the Android TV and Roku ones: the
+  title at the top, a red timeline with the time left (drag it to see preview pictures), back
+  10 s / play-pause / ahead 10 s in the middle, **Episodes**, **Audio & Subtitles** (sound track,
+  subtitles, quality and speed in one panel) and **Next Episode**, the Next Episode card at the
+  credits and "You're watching" when paused. Tap the picture to show or hide the controls;
+  picture-in-picture is at the top right.
+- **Android TV (1.3.0):** the Audio & Subtitles panel also has Speed. Check for updates on the TV.
+- **Roku (1.4.0):** highlighted buttons match the Android TV app: a white pill for words, a light
+  circle behind play / skip, lined up with the timeline.
+
 ## 0.8.2
 
 **Tidier TV screens, and lined-up cards.**
