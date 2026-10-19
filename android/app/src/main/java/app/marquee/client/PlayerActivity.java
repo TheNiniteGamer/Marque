@@ -75,7 +75,7 @@ public class PlayerActivity extends Activity {
     String quality = "original";
     private String qualityPref;
     private JSONObject playback;   // signed link + streaming session from /playback
-    private JSONObject intro, credits;
+    private JSONObject intro, credits, recap;
     private boolean autoSkipIntro, autoSkipped, creditsShown;
     // Skip Intro / Skip Credits fade after skipFade seconds (0 = stay); they come back with the controls.
     int skipFade = 10;
@@ -116,6 +116,7 @@ public class PlayerActivity extends Activity {
         skipIntro = findViewById(R.id.skip_intro);
         skipIntro.setOnClickListener(v -> {
             if ("credits".equals(skipPart)) { finish(); return; } // leaving in the credits counts as watched
+            if ("recap".equals(skipPart) && recap != null) { seekTo(recap.optDouble("end")); skipIntro.setVisibility(View.GONE); return; }
             if (intro != null) seekTo(intro.optDouble("end"));
             skipIntro.setVisibility(View.GONE);
         });
@@ -177,6 +178,7 @@ public class PlayerActivity extends Activity {
         playback = pb;
         intro = it.optJSONObject("intro");
         credits = it.optJSONObject("credits");
+        recap = it.optJSONObject("recap");
         autoSkipped = creditsShown = false;
         skipPart = null;
         skipIntro.setVisibility(View.GONE);
@@ -399,11 +401,12 @@ public class PlayerActivity extends Activity {
         JSONObject n = item.optJSONObject("next");
         // A film's end credits get "Skip Credits" instead.
         boolean inCredits = credits != null && n == null && duration > 0 && t >= credits.optDouble("start") && t < duration - 2;
-        String part = in ? "intro" : inCredits ? "credits" : null;
+        boolean inRecap = recap != null && t >= recap.optDouble("start") && t < recap.optDouble("end") - 1;
+        String part = inRecap ? "recap" : in ? "intro" : inCredits ? "credits" : null;
         if (part == null ? skipPart != null : !part.equals(skipPart)) {
             skipPart = part;
             skipSince = SystemClock.elapsedRealtime();
-            if (part != null) skipIntro.setText(in ? R.string.skip_intro : R.string.skip_credits);
+            if (part != null) skipIntro.setText(inRecap ? R.string.skip_recap : in ? R.string.skip_intro : R.string.skip_credits);
         }
         boolean show = part != null && (skipFade <= 0 || SystemClock.elapsedRealtime() - skipSince < skipFade * 1000L
             || controls.getVisibility() == View.VISIBLE);

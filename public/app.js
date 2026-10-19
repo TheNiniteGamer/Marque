@@ -1498,11 +1498,13 @@ class Player {
       return;
     }
     const inCredits = !!credits && !this.item.next && this.total > 0 && t >= credits.start && t < this.total - 2;
-    const part = inIntro ? 'intro' : inCredits ? 'credits' : null;
+    const recap = this.item.recap;
+    const inRecap = !!recap && t >= recap.start && t < recap.end - 1;
+    const part = inRecap ? 'recap' : inIntro ? 'intro' : inCredits ? 'credits' : null;
     if (part !== this.skipPart) {
       this.skipPart = part;
       this.skipSince = Date.now();
-      if (part) btn.textContent = part === 'intro' ? 'Skip Intro ⏭' : 'Skip Credits ⏭';
+      if (part) btn.textContent = { recap: 'Skip Recap ⏭', intro: 'Skip Intro ⏭', credits: 'Skip Credits ⏭' }[part];
     }
     btn.hidden = !part;
     const fade = playerPref('skipFade');
@@ -1884,6 +1886,7 @@ class Player {
       else if (a === 'cancel-next') { clearInterval(this.upNextTimer); $('.p-upnext', this.root)?.remove(); }
       else if (a === 'pip') this.togglePip();
       else if (a === 'skip-intro' && this.skipPart === 'credits') this.close(); // leaving in the credits counts as watched
+      else if (a === 'skip-intro' && this.skipPart === 'recap') { this.seek(this.item.recap.end); $('[data-a=skip-intro]', this.root).hidden = true; }
       else if (a === 'skip-intro' && this.item.intro) { this.seek(this.item.intro.end); $('[data-a=skip-intro]', this.root).hidden = true; }
       else if (a === 'cast') this.castClicked();
       else if (a === 'party') this.partyClicked();

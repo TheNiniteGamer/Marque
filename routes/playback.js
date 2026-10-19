@@ -97,6 +97,7 @@ module.exports = function register(app) {
       limit: limit ? limit.quality : null,
       qualities: item.media?.video ? hlsLib.qualitiesFor(item, limit?.maxHeight).map(({ id: q, label, height, bitrate }) => ({ id: q, label, height, bitrate })) : [],
       intro: item.intro?.end ? { start: item.intro.start, end: item.intro.end } : null,
+      recap: item.recap?.end ? { start: item.recap.start, end: item.recap.end } : null,
       credits: item.credits?.start ? { start: item.credits.start } : null,
       cast: castAddresses(),
       prefs: playerPrefs(user),

@@ -536,8 +536,10 @@ end sub
 ' card). It fades after the account's skipFade seconds (0 = stays), and comes back with the controls.
 sub updateSkip(at as Float)
     part = ""
+    recap = m.item.recap
+    if recap <> invalid and at >= mqNum(recap.start) and at < mqNum(recap.end) - 1 then part = "recap"
     intro = m.item.intro
-    if intro <> invalid and at >= mqNum(intro.start) and at < mqNum(intro.end) - 1 then part = "intro"
+    if part = "" and intro <> invalid and at >= mqNum(intro.start) and at < mqNum(intro.end) - 1 then part = "intro"
     credits = m.item.credits
     d = duration()
     if part = "" and m.item.next = invalid and credits <> invalid and mqNum(credits.start) > 0 and at >= mqNum(credits.start) and d > 0 and at < d - 2 then part = "credits"
@@ -550,6 +552,7 @@ sub updateSkip(at as Float)
     if part <> m.skipPart then
         m.skipPart = part
         m.skipSince = m.clock.TotalSeconds()
+        if part = "recap" then m.skipText.text = "Skip Recap"
         if part = "intro" then m.skipText.text = "Skip Intro"
         if part = "credits" then m.skipText.text = "Skip Credits"
     end if
@@ -588,7 +591,7 @@ sub skipIntro()
         m.top.navigate = { back: true }
         return
     end if
-    m.video.seek = mqNum(m.item.intro.end)
+    if m.skipPart = "recap" then m.video.seek = mqNum(m.item.recap.end) else m.video.seek = mqNum(m.item.intro.end)
     m.skip.visible = false
 end sub
 

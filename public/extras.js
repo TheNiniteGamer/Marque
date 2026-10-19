@@ -729,11 +729,11 @@ function transcodingSection(t, intro, settings) {
     </div>
     <h2 style="margin:28px 0 12px" id="intro">Skip intro</h2>
     <div class="panel form" style="max-width:none">
-      <label class="check"><input type="checkbox" id="intro-on" ${settings.introDetection ? 'checked' : ''}> Find TV show intros automatically after scans</label>
+      <label class="check"><input type="checkbox" id="intro-on" ${settings.introDetection ? 'checked' : ''}> Find TV show intros, recaps and credits automatically after scans</label>
       <div class="muted" style="font-size:14px">${intro.running && intro.current
         ? `Looking at ${intro.current.show}, season ${intro.current.season} (${intro.current.done}/${intro.current.total})${intro.queued ? ` · ${intro.queued} more season(s) waiting` : ''}…`
-        : `${intro.found} of ${intro.episodes} episodes have a detected intro (${intro.checked} checked).`}
-        Episodes in the same season are compared to find the theme song they share.</div>
+        : `${intro.found} of ${intro.episodes} episodes have a detected intro${intro.recapsFound ? `, ${intro.recapsFound} a recap` : ''} (${intro.checked} checked).`}
+        Episodes in the same season are compared to find the theme song they share, and recaps ("previously on…") made of clips from the episodes before.</div>
       <div class="row"><button class="btn small" id="intro-run">Find intros now</button><button class="btn small" id="intro-redo">Redo all</button></div>
     </div>`;
 }

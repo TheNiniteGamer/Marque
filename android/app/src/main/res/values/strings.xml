@@ -36,6 +36,7 @@
     <string name="back">Back</string>
     <string name="skip_intro">Skip Intro</string>
     <string name="skip_credits">Skip Credits</string>
+    <string name="skip_recap">Skip Recap</string>
     <string name="update_title">Marquee update</string>
     <string name="update_message">Marquee %1$s is ready to install (you have %2$s). It keeps you signed in.</string>
     <string name="update_now">Update</string>
