@@ -67,8 +67,17 @@ public class DownloadsActivity extends Activity {
         list.setPadding(0, 0, 0, dp(16));
         scroll.addView(list);
         root.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
+        // Wi-Fi only (for downloads started from now on: Android can't change ones already going).
+        android.widget.Switch wifi = new android.widget.Switch(this);
+        wifi.setText(R.string.downloads_wifi_only);
+        wifi.setTextColor(getColor(R.color.text));
+        wifi.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        wifi.setChecked(Prefs.offlineWifiOnly(this));
+        wifi.setPadding(dp(16), dp(10), dp(16), dp(4));
+        wifi.setOnCheckedChangeListener((v, on) -> Prefs.setOfflineWifiOnly(this, on));
+        root.addView(wifi, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         footer = text("", 13, R.color.muted, false);
-        footer.setPadding(dp(16), dp(10), dp(16), dp(14));
+        footer.setPadding(dp(16), dp(4), dp(16), dp(14));
         root.addView(footer);
         setContentView(root);
     }
@@ -207,6 +216,7 @@ public class DownloadsActivity extends Activity {
                 if (e.optBoolean("waiting")) return getString(R.string.downloads_waiting);
                 return getString(R.string.downloads_preparing, (int) Math.round(e.optDouble("progress", 0) * 100));
             case "downloading":
+                if (fraction != null && fraction == OfflineStore.WAITING_FOR_WIFI) return getString(R.string.downloads_wifi_wait);
                 return fraction != null && fraction >= 0 ? getString(R.string.downloads_progress, (int) Math.round(fraction * 100)) : getString(R.string.downloads_starting);
             case "failed":
                 return getString(R.string.downloads_failed, e.optString("error", "?"));

@@ -320,6 +320,17 @@ public class MainActivity extends Activity {
             if (id != null && id.matches("[A-Za-z0-9_-]+")) a.runOnUiThread(() -> OfflineStore.choose(a, a.base, id));
         }
 
+        /** "Download season": a JSON list of episode ids. */
+        @JavascriptInterface
+        public void downloadMany(String idsJson) {
+            java.util.List<String> ids = new java.util.ArrayList<>();
+            try {
+                org.json.JSONArray arr = new org.json.JSONArray(idsJson);
+                for (int i = 0; i < arr.length() && ids.size() < 100; i++) if (arr.getString(i).matches("[A-Za-z0-9_-]+")) ids.add(arr.getString(i));
+            } catch (Exception ignored) { }
+            if (!ids.isEmpty()) a.runOnUiThread(() -> OfflineStore.chooseMany(a, a.base, ids));
+        }
+
         /** Downloads in the menu. */
         @JavascriptInterface
         public void openDownloads() {

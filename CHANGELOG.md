@@ -4,6 +4,18 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.9.1
+
+**Faster on big libraries, and better phone downloads.**
+- Pages are much quicker on large libraries. Timed on 9,300 videos with 10 people and a year of
+  history: the home page went from about 240 ms to 25 ms, search from 58 to 4 ms, show and movie
+  pages from 70–90 to about 5 ms, collections from 21 to 3 ms.
+- Copies for phone downloads no longer compete with someone watching: they wait (or pause) while
+  the server is converting a video for playback, and carry on afterwards.
+- **Phone app (1.8.1):** *Download season* on a show's page downloads every episode of the season
+  not on the phone yet, at one size. **Download on Wi-Fi only** (on by default) is on the Downloads
+  screen; downloads waiting for Wi-Fi say so.
+
 ## 0.9.0 — Significant update
 
 **Twelve things the big streaming apps do.**

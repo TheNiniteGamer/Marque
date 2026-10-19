@@ -747,6 +747,7 @@ async function viewShow({ params: [id], query, seq }) {
       await api(`/api/shows/${id}/watched`, { method: 'POST', body: { season: season.season, watched: !allWatched } });
       router();
     };
+    if ($('#season-dl')) $('#season-dl').onclick = () => window.MarqueeAndroid.downloadMany(JSON.stringify(season.episodes.map((e) => e.id)));
   };
 
   const allWatched = show.unwatchedCount === 0;
@@ -784,6 +785,7 @@ async function viewShow({ params: [id], query, seq }) {
           ${show.seasons.length > 1 ? html`<select id="season-pick" aria-label="Season">${show.seasons.map((s) => html`<option value="${seasonKey(s)}" ${seasonKey(s) === current ? 'selected' : ''}>${s.title}</option>`)}</select>`
             : html`<span class="muted">${show.seasons[0].title}</span>`}
           <button class="btn small" id="season-watch"></button>
+          ${phoneDownloads() ? html`<button class="btn small" id="season-dl">Download season</button>` : ''}
         </div></div>
       <div id="season-body"></div>
     </section>` : ''}

@@ -89,6 +89,11 @@
     <string name="downloads_empty">Nothing downloaded yet.\n\nTap the download button on a movie or an episode to watch it without the internet.</string>
     <string name="downloads_preparing">Getting it ready on the server… %1$d%%</string>
     <string name="downloads_waiting">Waiting: the server is busy playing a video. It\'ll carry on after.</string>
+    <string name="downloads_wifi_wait">Waiting for Wi-Fi</string>
+    <string name="downloads_wifi_only">Download on Wi-Fi only</string>
+    <string name="offline_season_title">Download %1$d episodes of %2$s</string>
+    <string name="offline_season_original">Original quality where it plays (else 720p)</string>
+    <string name="offline_season_started">Downloading %1$d episodes. They\'ll be in Downloads.</string>
     <string name="downloads_progress">Downloading… %1$d%%</string>
     <string name="downloads_starting">Downloading…</string>
     <string name="downloads_failed">Didn\'t finish: %1$s. Tap to try again.</string>

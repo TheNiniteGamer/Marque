@@ -31,6 +31,11 @@ final class Prefs {
 
     static void setSkippedUpdate(Context c, long code) { p(c).edit().putLong("skippedUpdate", code).apply(); }
 
+    /** Phone downloads only on Wi-Fi (the default, as on the big streaming apps). */
+    static boolean offlineWifiOnly(Context c) { return p(c).getBoolean("offlineWifiOnly", true); }
+
+    static void setOfflineWifiOnly(Context c, boolean on) { p(c).edit().putBoolean("offlineWifiOnly", on).apply(); }
+
     static void clearServer(Context c) { p(c).edit().remove("server").apply(); }
 
     static List<String> recent(Context c) {

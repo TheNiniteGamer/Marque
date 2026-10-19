@@ -146,7 +146,109 @@ final class OfflineStore {
     }
 
     private static void start(Activity a, String base, String cookie, JSONObject item, String quality) {
-        Context c = a.getApplicationContext();
+        if (begin(a.getApplicationContext(), base, cookie, item, quality)) {
+            Toast.makeText(a, a.getString(R.string.offline_started, display(item)), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // ---------------------------------------------------------------- a whole season
+    /** "Download season": one choice of size for all the episodes not on the phone yet. */
+    static void chooseMany(Activity a, String base, List<String> ids) {
+        List<String> todo = new ArrayList<>();
+        for (String id : ids) {
+            JSONObject e = get(a, id);
+            if (e == null || "failed".equals(e.optString("state"))) todo.add(id);
+        }
+        if (todo.isEmpty()) { Toast.makeText(a, R.string.offline_already, Toast.LENGTH_SHORT).show(); return; }
+        Net.refreshCookie(base);
+        String cookie = CookieManager.getInstance().getCookie(base);
+        new Thread(() -> {
+            try {
+                List<JSONObject[]> eps = new ArrayList<>(); // { item, offer }
+                for (String id : todo) {
+                    JSONObject item = Net.getJson(base + "/api/items/" + id);
+                    if (item.optJSONObject("media") == null) continue;
+                    eps.add(new JSONObject[] { item, Net.getJson(base + "/api/items/" + id + "/offline") });
+                }
+                a.runOnUiThread(() -> askMany(a, base, cookie, eps));
+            } catch (Exception e) {
+                a.runOnUiThread(() -> Toast.makeText(a, a.getString(R.string.offline_failed, e.getMessage()), Toast.LENGTH_LONG).show());
+            }
+        }).start();
+    }
+
+    /**
+     * What an episode is saved as for the choice made for the season: "original" where the phone
+     * plays the file as it is (else a 720p copy), or the size picked (or the nearest it has: a small
+     * video only offers its own size).
+     */
+    private static String[] resolve(JSONObject item, JSONObject offer, String choice) {
+        JSONObject original = offer.optJSONObject("original");
+        JSONArray sizes = offer.optJSONArray("sizes");
+        if ("original".equals(choice) && original != null && original.optBoolean("allowed") && playsAsIs(item)) {
+            return new String[] { "original", String.valueOf(original.optLong("size")) };
+        }
+        String want = "original".equals(choice) ? "720p" : choice;
+        JSONObject best = null;
+        for (int i = 0; sizes != null && i < sizes.length(); i++) {
+            JSONObject s = sizes.optJSONObject(i);
+            if (best == null || want.equals(s.optString("id"))) best = s;
+            if (want.equals(s.optString("id"))) break;
+        }
+        return best == null ? null : new String[] { best.optString("id"), String.valueOf(best.optLong("size")) };
+    }
+
+    private static void askMany(Activity a, String base, String cookie, List<JSONObject[]> eps) {
+        if (a.isFinishing() || eps.isEmpty()) return;
+        List<String> choices = new ArrayList<>();
+        boolean anyOriginal = false;
+        for (JSONObject[] ep : eps) if (ep[1].optJSONObject("original") != null && ep[1].optJSONObject("original").optBoolean("allowed") && playsAsIs(ep[0])) anyOriginal = true;
+        if (anyOriginal) choices.add("original");
+        for (String q : new String[] { "1080p", "720p", "480p" }) {
+            for (JSONObject[] ep : eps) {
+                JSONArray sizes = ep[1].optJSONArray("sizes");
+                boolean has = false;
+                for (int i = 0; sizes != null && i < sizes.length(); i++) if (q.equals(sizes.optJSONObject(i).optString("id"))) has = true;
+                if (has) { choices.add(q); break; }
+            }
+        }
+        if (choices.isEmpty()) { Toast.makeText(a, R.string.offline_none, Toast.LENGTH_LONG).show(); return; }
+        String[] labels = new String[choices.size()];
+        for (int k = 0; k < choices.size(); k++) {
+            long total = 0;
+            for (JSONObject[] ep : eps) { String[] r = resolve(ep[0], ep[1], choices.get(k)); if (r != null) total += Long.parseLong(r[1]); }
+            String q = choices.get(k);
+            String name = "original".equals(q) ? a.getString(R.string.offline_season_original) : sizeLabel(eps, q);
+            labels[k] = name + " · " + a.getString(R.string.offline_about, size(total));
+        }
+        JSONObject first = eps.get(0)[0];
+        new AlertDialog.Builder(a)
+            .setTitle(a.getString(R.string.offline_season_title, eps.size(), first.optString("showTitle")))
+            .setItems(labels, (d, which) -> {
+                String choice = choices.get(which);
+                Context c = a.getApplicationContext();
+                new Thread(() -> {
+                    for (JSONObject[] ep : eps) {
+                        String[] r = resolve(ep[0], ep[1], choice);
+                        if (r != null) begin(c, base, cookie, ep[0], r[0]);
+                    }
+                }).start();
+                Toast.makeText(a, a.getString(R.string.offline_season_started, eps.size()), Toast.LENGTH_LONG).show();
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private static String sizeLabel(List<JSONObject[]> eps, String q) {
+        for (JSONObject[] ep : eps) {
+            JSONArray sizes = ep[1].optJSONArray("sizes");
+            for (int i = 0; sizes != null && i < sizes.length(); i++) if (q.equals(sizes.optJSONObject(i).optString("id"))) return sizes.optJSONObject(i).optString("label", q);
+        }
+        return q;
+    }
+
+    /** Records the download and starts it in the background; false when it couldn't be recorded. */
+    private static boolean begin(Context c, String base, String cookie, JSONObject item, String quality) {
         String id = item.optString("id");
         boolean original = "original".equals(quality);
         int audio = original ? 0 : preferredAudio(item);
@@ -162,14 +264,14 @@ final class OfflineStore {
             all.put(id, e);
             saveAll(c, all);
         } catch (Exception ex) {
-            return;
+            return false;
         }
-        Toast.makeText(a, a.getString(R.string.offline_started, display(item)), Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             saveExtras(c, base, item);
             if (original) enqueue(c, base, cookie, id, base + "/api/items/" + id + "/stream?download=1");
             else prepare(c, base, cookie, id);
         }).start();
+        return true;
     }
 
     /** Whether this phone plays the original file as it is (the same test as the player's). */
@@ -272,6 +374,8 @@ final class OfflineStore {
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setDestinationUri(Uri.fromFile(target));
             if (cookie != null) r.addRequestHeader("Cookie", cookie);
+            boolean wifiOnly = Prefs.offlineWifiOnly(c);
+            r.setAllowedOverMetered(!wifiOnly).setAllowedOverRoaming(!wifiOnly);
             long dm = c.getSystemService(DownloadManager.class).enqueue(r);
             update(c, id, x -> x.put("state", "downloading").put("dm", dm).put("progress", 0));
         } catch (Exception ex) {
@@ -281,9 +385,11 @@ final class OfflineStore {
     }
 
     // ---------------------------------------------------------------- keeping up to date
+    static final double WAITING_FOR_WIFI = -2;
+
     /**
      * Brings the records up to date with the download manager; returns the downloads in progress as
-     * id -> fraction done (0-1, or -1 when the size isn't known yet).
+     * id -> fraction done (0-1, -1 when the size isn't known yet, WAITING_FOR_WIFI).
      */
     static java.util.Map<String, Double> refresh(Context c) {
         java.util.Map<String, Double> running = new java.util.HashMap<>();
@@ -305,6 +411,9 @@ final class OfflineStore {
                 } else if (status == DownloadManager.STATUS_FAILED) {
                     int reason = cur.getInt(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON));
                     update(c, id, x -> x.put("state", "failed").put("error", c.getString(R.string.offline_dm_failed, reason)));
+                } else if (status == DownloadManager.STATUS_PAUSED
+                    && cur.getInt(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)) == DownloadManager.PAUSED_QUEUED_FOR_WIFI) {
+                    running.put(id, WAITING_FOR_WIFI);
                 } else {
                     running.put(id, total > 0 ? (double) done / total : -1);
                 }

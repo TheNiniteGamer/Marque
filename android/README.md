@@ -15,8 +15,9 @@ A small Android app (Android 8.0+) for watching your Marquee server on a phone o
   Episode**. Tap the picture to show or hide the controls. Skip Intro / Skip Credits, a Next
   Episode countdown at the credits, resume, and picture-in-picture (the button at the top right,
   or leave the app while playing). Progress syncs with your account.
-- **Downloads:** ⬇ on a movie or episode saves it to watch without the internet (the original
-  file, or a smaller copy the server makes). **Downloads** in the bottom bar lists them; it opens
+- **Downloads:** ⬇ on a movie or episode (or *Download season* on a show) saves it to watch
+  without the internet (the original file, or a smaller copy the server makes). Downloads use
+  Wi-Fi only unless you turn that off on the Downloads screen. **Downloads** in the bottom bar lists them; it opens
   from the "can't reach the server" page too. Your place is sent to the server once you're online.
 - **Lock screen, headphones and Bluetooth:** play/pause, back/ahead 10 s and next episode.
 - **Night mode:** *Sound* in Audio & Subtitles (Android 9+).
