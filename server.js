@@ -247,7 +247,7 @@ function getUser(id) {
 }
 
 function librarySummary(l, user) {
-  const items = Object.values(store.data.items).filter((i) => i.libraryId === l.id && i.type !== 'extra');
+  const items = lib.memo(store, `libraryItems:${l.id}`, () => Object.values(store.data.items).filter((i) => i.libraryId === l.id && i.type !== 'extra'));
   const admin = user.role === 'admin';
   return {
     id: l.id, name: l.name, type: l.type, createdAt: l.createdAt, scannedAt: l.scannedAt || null,
