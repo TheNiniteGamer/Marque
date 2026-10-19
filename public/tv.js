@@ -100,7 +100,7 @@ function tvStart() {
   const active = document.activeElement;
   if (active && active !== document.body && tvScope().contains(active) && tvVisible(active)) return;
   const scope = tvScope();
-  const first = scope.querySelector('#detail-panel .btn.play, .hero .btn.play, .profile-picker .pp-profile, .card .cover, main .btn.primary') || tvCandidates()[0];
+  const first = scope.querySelector('#detail-panel .btn.play, .hero .btn.play, .profile-picker .pp-profile, .card .cover, main .btn.primary, .tv-settings .btn') || tvCandidates()[0];
   if (first) { tvLockText(first); first.focus({ preventScroll: true }); }
 }
 

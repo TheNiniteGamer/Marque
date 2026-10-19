@@ -2071,7 +2071,8 @@ async function router() {
   const changedPage = path !== lastPath;
   if (!isDetail && changedPage && lastPath && !lastPath.startsWith('/play/')) scrollMemo.set(lastPath, window.scrollY);
   if (!isPlay && !isDetail) lastPath = path;
-  const match = routes.find(([re]) => re.test(path));
+  // On a TV, the pages made for a keyboard point to a phone or computer instead.
+  const match = tv.on && TV_ELSEWHERE.test(path) ? [/^.*$/, viewTvElsewhere] : routes.find(([re]) => re.test(path));
   if (!match) { closeDetailLayer(); return setView(seq, html`<div class="empty"><h2>Page not found</h2><a class="btn" href="#/">Go home</a></div>`); }
   if (isDetail) {
     // Movies, shows and episodes open over the page you were on.

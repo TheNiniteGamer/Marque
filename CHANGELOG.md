@@ -4,6 +4,18 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.8.0
+
+**A simple Settings page on TVs.** In TV mode (the Android TV app and TV browsers):
+- The account menu has just **Settings**, *Switch profile*, *Switch server* (in the app) and
+  *Sign out*.
+- **Settings** has a few big switches: play the next episode automatically, skip intros
+  automatically, subtitles on by default, and how soon Skip Intro / Skip Credits fade; plus who's
+  signed in and the app's *Check for updates*.
+- Passwords, PINs, linking TVs, libraries, users, downloads and activity stay on phones and
+  computers; on a TV those pages say where to find them.
+- The MARQUEE logo gets the same white highlight as the top bar's sections.
+
 ## 0.7.9
 
 - **TV mode:** the highlighted section in the top bar is a clean white pill instead of an outline

@@ -106,11 +106,11 @@ function renderUserMenu() {
     <button class="avatar" id="user-btn" aria-haspopup="true" aria-expanded="false" title="${u.username}" aria-label="${u.username}: account menu" style="background:${avatarColor(u.username)}">${u.username.slice(0, 1).toUpperCase()}</button>
     <div class="user-pop" id="user-pop" hidden>
       <div class="user-pop-head"><b>${u.username}</b><span class="muted">${u.role === 'admin' ? 'Administrator' : 'User'}</span></div>
-      <a href="#/account">Account</a>
+      ${tv.on ? html`<a href="#/account">Settings</a>` : html`<a href="#/account">Account</a>
       ${u.canDownload ? html`<a href="#/downloads">Downloads</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/activity">Activity</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/settings">Settings</a>` : ''}
-      ${u.role === 'admin' ? html`<a href="#/settings?section=updates" class="upd-link">Update available</a>` : ''}
+      ${u.role === 'admin' ? html`<a href="#/settings?section=updates" class="upd-link">Update available</a>` : ''}`}
       <button id="switch-profile">Switch profile</button>
       ${window.MarqueeAndroid ? html`<button id="switch-server">Switch server</button>` : ''}
       <button id="sign-out">Sign out</button>
@@ -126,8 +126,77 @@ function renderUserMenu() {
 }
 document.addEventListener('click', (e) => { const pop = $('#user-pop'); if (pop && !e.target.closest('#user-menu')) pop.hidden = true; });
 
+// ---------- on a TV: a short Settings page ----------
+// A TV gets only what's worth doing with a remote. Passwords, PINs, linking TVs, libraries, users,
+// downloads and the rest are in Marquee on a phone or computer.
+const TV_ELSEWHERE = /^\/(settings|downloads|activity|link)$/;
+function viewTvElsewhere({ seq }) {
+  setView(seq, html`<div class="tv-settings">
+    <h1>On a phone or computer</h1>
+    <p class="muted">This part of Marquee is easier with a keyboard: open <b>${location.host}</b> on your phone or computer.</p>
+    <div class="row"><a class="btn primary" href="#/account">TV settings</a><a class="btn" href="#/">Home</a></div>
+  </div>`);
+}
+
+function tvToggle(attr, key, on, label) {
+  return html`<button class="tv-toggle" type="button" ${attr}="${key}" aria-pressed="${on ? 'true' : 'false'}"><span>${label}</span><b>${on ? 'On' : 'Off'}</b></button>`;
+}
+async function viewTvSettings({ seq }) {
+  const u = state.user;
+  const app = window.MarqueeAndroid;
+  const appVersion = (() => { try { return app?.version?.() || ''; } catch { return ''; } })();
+  const fade = playerPref('skipFade');
+  if (!setView(seq, html`<div class="tv-settings">
+    <h1>Settings</h1>
+    <section class="panel">
+      <h2>Who's watching</h2>
+      <p>Signed in as <b>${u.username}</b></p>
+      <div class="row"><button class="btn" type="button" data-tv="profile">Switch profile</button><button class="btn" type="button" data-tv="signout">Sign out</button></div>
+    </section>
+    <section class="panel">
+      <h2>Playing</h2>
+      ${tvToggle('data-acct', 'autoplayNext', playerPref('autoplayNext'), 'Play the next episode automatically')}
+      ${tvToggle('data-acct', 'autoSkipIntro', playerPref('autoSkipIntro'), 'Skip intros automatically')}
+      ${tvToggle('data-local', 'subsOn', store.get('subsOn', false), 'Turn on subtitles by default')}
+      <div class="tv-choice"><span>Skip Intro / Skip Credits buttons fade after</span>
+        <div class="seg">${[[5, '5 s'], [10, '10 s'], [15, '15 s'], [30, '30 s'], [0, 'Never']].map(([v, l]) => html`<button type="button" data-fade="${v}" class="${fade === v ? 'on' : ''}">${l}</button>`)}</div></div>
+    </section>
+    ${app ? html`<section class="panel">
+      <h2>This app</h2>
+      <p>Marquee for ${/MarqueeTV/.test(navigator.userAgent) ? 'Android TV' : 'Android'} ${appVersion}</p>
+      <div class="row">${typeof app.checkUpdates === 'function' ? html`<button class="btn" type="button" data-tv="update">Check for updates</button>` : ''}
+        ${typeof app.changeServer === 'function' ? html`<button class="btn" type="button" data-tv="server">Switch server</button>` : ''}</div>
+    </section>` : ''}
+    <p class="muted">Passwords, PINs, libraries and everything else are in Marquee on a phone or computer: <b>${location.host}</b></p>
+  </div>`)) return;
+  view.onclick = async (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const act = b.dataset.tv;
+    if (act === 'profile') return showProfilePicker();
+    if (act === 'signout') return signOut();
+    if (act === 'update') { try { app.checkUpdates(); } catch { toast('Update check failed', true); } return; }
+    if (act === 'server') return app.changeServer();
+    const flip = (on) => { b.setAttribute('aria-pressed', String(on)); b.querySelector('b').textContent = on ? 'On' : 'Off'; };
+    if (b.dataset.acct) {
+      const on = b.getAttribute('aria-pressed') !== 'true';
+      try { await savePlayerPrefs({ [b.dataset.acct]: on }); flip(on); } catch (err) { toast(err.message, true); }
+    } else if (b.dataset.local) {
+      const on = b.getAttribute('aria-pressed') !== 'true';
+      store.set(b.dataset.local, on);
+      flip(on);
+    } else if (b.dataset.fade !== undefined) {
+      try {
+        await savePlayerPrefs({ skipFade: Number(b.dataset.fade) });
+        $$('[data-fade]', view).forEach((x) => x.classList.toggle('on', x === b));
+      } catch (err) { toast(err.message, true); }
+    }
+  };
+}
+
 // ---------- account ----------
 async function viewAccount({ query, seq }) {
+  if (tv.on) return viewTvSettings({ seq });
   const u = state.user;
   const devices = await api('/api/devices').catch(() => []);
   const host = location.host;
