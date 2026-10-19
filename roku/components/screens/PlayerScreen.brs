@@ -164,6 +164,17 @@ sub start()
     m.duration = mqNum(x.duration)
     if m.duration <= 0 and x.media <> invalid then m.duration = mqNum(x.media.duration)
     if canPlayDirectly(x) then m.mode = "direct" else m.mode = "hls"
+    ' The sound language last picked for this show (the server converts with that track).
+    pref = x.tracks
+    if pref <> invalid and pref.audio <> invalid and x.audioTracks <> invalid then
+        for i = 0 to x.audioTracks.Count() - 1
+            if mqStr(x.audioTracks[i].lang) = mqStr(pref.audio) then
+                m.audio = i
+                exit for
+            end if
+        end for
+        if m.audio > 0 then m.mode = "hls"
+    end if
 
     startAt = mqNum(m.top.params.start)
     if startAt < 0 then
@@ -189,9 +200,10 @@ sub start()
     buildActions()
     load(startAt)
     m.reportTimer.control = "start"
-    ' The subtitle language picked last time, if this has it.
+    ' The subtitle language picked for this show, else the one picked last time anywhere.
     want = mqRead("subLang")
-    if want <> "" then
+    if pref <> invalid and pref.subs <> invalid then want = mqStr(pref.subs)
+    if want <> "" and want <> "off" then
         for i = 0 to m.subs.Count() - 1
             if m.subs[i].burn = invalid and mqStr(m.subs[i].lang) = want then
                 setSubtitle(i)
@@ -751,6 +763,7 @@ sub onAudioPicked()
     i = m.audioList.checkedItem
     if i = m.audio or m.item.audioTracks = invalid or i >= m.item.audioTracks.Count() then return
     m.audio = i
+    rememberTracks()
     avail = m.video.availableAudioTracks
     if m.mode = "direct" and avail <> invalid and avail.Count() = m.item.audioTracks.Count() then
         m.video.audioTrack = avail[i].Track
@@ -771,6 +784,17 @@ sub onSubtitlePicked()
         setSubtitle(i)
         mqWrite("subLang", mqStr(m.subs[i].lang))
     end if
+    rememberTracks()
+end sub
+
+' Episodes: the show remembers the sound and subtitle languages picked.
+sub rememberTracks()
+    if m.item = invalid or m.item.type <> "episode" then return
+    audio = invalid
+    if m.item.audioTracks <> invalid and m.audio < m.item.audioTracks.Count() then audio = m.item.audioTracks[m.audio].lang
+    subs = "off"
+    if m.subOn <> invalid then subs = m.subs[m.subOn].lang
+    mqApi("/api/items/" + m.item.id + "/tracks", "onReported", "PUT", { audio: audio, subs: subs })
 end sub
 
 ' -1: off. Text subtitles are shown by the Roku; picture ones need the stream reloaded with them drawn in.

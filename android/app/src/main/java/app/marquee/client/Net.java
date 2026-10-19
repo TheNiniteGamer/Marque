@@ -72,11 +72,15 @@ final class Net {
         try { return new JSONObject(getText(url)); } catch (org.json.JSONException e) { throw new IOException("Unexpected answer from the server"); }
     }
 
-    static void postJson(String url, JSONObject body) {
+    static void postJson(String url, JSONObject body) { send("POST", url, body); }
+
+    static void putJson(String url, JSONObject body) { send("PUT", url, body); }
+
+    private static void send(String method, String url, JSONObject body) {
         HttpURLConnection c = null;
         try {
             c = open(url, 10000);
-            c.setRequestMethod("POST");
+            c.setRequestMethod(method);
             c.setDoOutput(true);
             c.setRequestProperty("Content-Type", "application/json");
             byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);

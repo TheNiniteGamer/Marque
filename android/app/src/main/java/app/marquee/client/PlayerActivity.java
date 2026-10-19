@@ -209,7 +209,24 @@ public class PlayerActivity extends Activity {
         cues = new ArrayList<>();
         showSubtitle("");
         JSONArray list = it.optJSONArray("subtitles");
-        if (subsOn && list != null && list.length() > 0) {
+        // The languages last picked for this show win (e.g. Japanese with English subtitles).
+        JSONObject pref = it.optJSONObject("tracks");
+        String prefAudio = pref != null && !pref.isNull("audio") ? pref.optString("audio") : null;
+        String prefSubs = pref != null && !pref.isNull("subs") ? pref.optString("subs") : null;
+        JSONArray tracks = it.optJSONArray("audioTracks");
+        for (int i = 0; prefAudio != null && tracks != null && i < tracks.length(); i++) {
+            if (prefAudio.equals(tracks.optJSONObject(i).optString("lang"))) { audioIndex = i; break; }
+        }
+        if (prefSubs != null && !"off".equals(prefSubs) && list != null) {
+            JSONObject pick = null;
+            for (int pass = 0; pass < 2 && pick == null; pass++) {
+                for (int i = 0; i < list.length() && pick == null; i++) {
+                    JSONObject c = list.optJSONObject(i);
+                    if (c.has("burn") == (pass == 1) && prefSubs.equals(c.optString("lang"))) pick = c;
+                }
+            }
+            if (pick != null) setSubtitles(pick.optString("id"), false);
+        } else if (subsOn && prefSubs == null && list != null && list.length() > 0) {
             // Text subtitles first: picture ones (Blu-ray / DVD) need the video converted.
             String lang = Locale.getDefault().getLanguage();
             JSONObject pick = null;
@@ -458,7 +475,29 @@ public class PlayerActivity extends Activity {
     // ---------------------------------------------------------------- choices
 
     /** From the TV's Audio & Subtitles panel (null = off). */
-    void chooseSubtitle(String id) { setSubtitles(id, true); }
+    void chooseSubtitle(String id) {
+        setSubtitles(id, true);
+        rememberTracks();
+    }
+
+    /** Episodes: the show remembers the sound and subtitle languages picked. */
+    private void rememberTracks() {
+        if (item == null || !"episode".equals(item.optString("type"))) return;
+        JSONArray tracks = item.optJSONArray("audioTracks");
+        JSONObject a = tracks != null ? tracks.optJSONObject(audioIndex) : null;
+        String subs = "off";
+        JSONArray list = item.optJSONArray("subtitles");
+        for (int i = 0; subId != null && list != null && i < list.length(); i++) {
+            if (subId.equals(list.optJSONObject(i).optString("id"))) subs = list.optJSONObject(i).optString("lang", null);
+        }
+        final String url = base + "/api/items/" + item.optString("id") + "/tracks";
+        final JSONObject body = new JSONObject();
+        try {
+            body.put("audio", a != null && !a.isNull("lang") ? a.optString("lang") : JSONObject.NULL);
+            body.put("subs", subs != null ? subs : JSONObject.NULL);
+        } catch (Exception ignored) { }
+        io.execute(() -> Net.putJson(url, body));
+    }
 
     private void setSubtitles(String id, boolean reopen) {
         subId = id;
@@ -509,6 +548,7 @@ public class PlayerActivity extends Activity {
 
     void selectAudio(int which) {
         audioIndex = which;
+        rememberTracks();
         if (direct && !hls) selectDirectAudio(which);
         else open(now());
     }

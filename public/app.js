@@ -1133,6 +1133,14 @@ class Player {
     this.offset = 0;
     this.audio = 0;
     this.subId = store.get('subsOn', false) ? this.pickDefaultSub() : null;
+    // The languages last picked for this show win (e.g. Japanese with English subtitles).
+    const pref = item.tracks;
+    if (pref?.audio) this.audio = Math.max(0, (item.audioTracks || []).findIndex((t) => t.lang === pref.audio));
+    if (pref?.subs === 'off') this.subId = null;
+    else if (pref?.subs) {
+      const subs = [...item.subtitles].sort((a, b) => (a.burn != null) - (b.burn != null));
+      this.subId = subs.find((s) => s.lang === pref.subs)?.id || this.subId;
+    }
     this.lastReported = -1;
     this.dragging = false;
     this.pb = null;          // signed links + streaming session from /playback
@@ -1279,6 +1287,14 @@ class Player {
   subOptions() {
     return html`<option value="">Subtitles off</option>${this.item.subtitles.map((s) => html`<option value="${s.id}" ${s.id === this.subId ? 'selected' : ''}>${s.label}</option>`)}
       ${state.status?.subtitleSearch && ['movie', 'episode'].includes(this.item.type) ? html`<option value="__search">Search online…</option>` : ''}`;
+  }
+
+  // Episodes: the show remembers the sound and subtitle languages picked.
+  rememberTracks() {
+    if (this.item.type !== 'episode') return;
+    const audio = this.item.audioTracks?.[this.audio]?.lang || null;
+    const subs = this.subId ? this.item.subtitles.find((s) => s.id === this.subId)?.lang || null : 'off';
+    api(`/api/items/${this.item.id}/tracks`, { method: 'PUT', body: { audio, subs } }).catch(() => {});
   }
 
   pickDefaultSub() {
@@ -1891,6 +1907,7 @@ class Player {
       if (a === 'subs') {
         const burnBefore = this.burn;
         this.subId = e.target.value || null; store.set('subsOn', !!this.subId);
+        this.rememberTracks();
         if (this.burn !== burnBefore) {
           // Picture subtitles switched on, off or changed: the video itself changes.
           if (this.burn != null) toast('Picture subtitles are drawn into the video, so it is converted');
@@ -1903,6 +1920,7 @@ class Player {
       if (a === 'quality') this.setQuality(e.target.value);
       if (a === 'audio') {
         this.audio = Number(e.target.value);
+        this.rememberTracks();
         this.setModeFromQuality();
         if (this.casting) this.startCasting(this.time); else this.load(this.time);
       }

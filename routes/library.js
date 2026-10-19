@@ -220,6 +220,13 @@ module.exports = function register(app) {
     json(res, 200, lib.itemSummary(store, user, item));
   });
 
+  // --- the sound / subtitle languages a person picked, remembered per show ---
+  route('PUT', '/api/items/:id/tracks', async (req, res, { id }, url, user) => {
+    const it = getItem(id, user);
+    const body = await readBody(req);
+    json(res, 200, { tracks: it.showId ? lib.setTrackPrefs(store, user, it.showId, body || {}) : null });
+  });
+
   // --- my list + continue watching ---
   route('GET', '/api/watchlist', async (req, res, p, url, user) => json(res, 200, lib.watchlist(store, user)));
   route('PUT', '/api/watchlist/:id', async (req, res, { id }, url, user) => { getTarget(id, user); lib.setWatchlist(store, user, id, true); json(res, 200, { ok: true }); });
