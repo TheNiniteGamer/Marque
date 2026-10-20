@@ -19,6 +19,7 @@ const { Auth, publicUser, canSeeLibrary, canDownload } = require('./lib/auth');
 const { canSeeTitle, allowedFor } = require('./lib/ratings');
 const { Downloader } = require('./lib/downloader');
 const media = require('./lib/media');
+const hdr = require('./lib/hdr');
 const subs = require('./lib/subtitles');
 const lib = require('./lib/library');
 const metadata = require('./lib/metadata');
@@ -330,7 +331,7 @@ async function resolveArt(kind, id, user) {
   const frame = async (it) => {
     if (!it) return null;
     const dur = it.media?.duration || 0;
-    return media.thumbnail(it.file, path.join(THUMB_DIR, `${it.id}.jpg`), dur ? Math.min(dur * 0.15, 300) : 5).catch(() => null);
+    return media.thumbnail(it.file, path.join(THUMB_DIR, `${it.id}.jpg`), dur ? Math.min(dur * 0.15, 300) : 5, { video: it.media?.video }).catch(() => null);
   };
   if (canSeeTitle(store, user, item)) {
     if (kind === 'thumb') return exists(item.edits?.thumb) || exists(item.meta?.still) || frame(item);
@@ -641,6 +642,7 @@ async function main() {
     console.error('ffprobe/ffmpeg not found. Install ffmpeg (or set FFMPEG_PATH / FFPROBE_PATH).');
     process.exit(1);
   }
+  await hdr.check();
   if (store.lost) await recoverLostDatabase();
   applyAutoLibraries();
   hwaccel.detect();
@@ -657,6 +659,14 @@ async function main() {
   offline.start();
   health.start();
   previews.start();
+  // Titles from before HDR was noted: their colours are checked once, and pictures made from
+  // HDR ones (washed out) are made again.
+  setTimeout(() => hdr.backfill(store, (it) => {
+    fs.rmSync(path.join(THUMB_DIR, `${it.id}.jpg`), { force: true });
+    fs.rmSync(trickplay.dir(it), { recursive: true, force: true });
+    const owner = it.showId || it.id;
+    for (const f of fs.readdirSync(previews.dir)) if (f.startsWith(`${owner}-`)) fs.rmSync(path.join(previews.dir, f), { force: true });
+  }).catch((err) => console.warn(`[hdr] ${err.message}`)), 90_000).unref();
   // A downloaded update restarts Marquee only once nobody is watching (see updater.tick).
   setInterval(() => { try { updater.tick(activity.watching().length === 0 && transcodes.size === 0 && hls.active === 0); } catch (err) { console.warn(`[updates] ${err.message}`); } }, 10_000).unref();
   // Matching (which gives titles their TMDB / TVmaze ids) finishes after scans, so arrivals are

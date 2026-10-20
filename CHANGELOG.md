@@ -4,6 +4,22 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.15.0
+
+- **HDR films and shows keep their colours when converted.** HDR10 and HLG videos used to come
+  out grey and washed out whenever the server converted them (a lower quality, a TV or browser
+  that can't play the file, playing away from home). They're now tone-mapped to ordinary colours,
+  with any graphics card too. Their thumbnails, seek previews and hover preview clips are
+  tone-mapped as well. Players that show HDR themselves (a browser or TV playing the file as it
+  is) are unchanged.
+- Titles already in the library have their colours checked once in the background, a minute
+  and a half after starting (a quick look at each file); pictures made from HDR ones before are
+  made again.
+- HDR titles show an **HDR10** or **HLG** tag next to their resolution. Settings → Playback says
+  whether this server can tone-map (the Docker version can).
+- Tone mapping takes extra CPU: on a 4-core PC, converting 4K HDR to 1080p ran at about 29 frames
+  a second (a film needs 24). A graphics card still does the encoding, but this step runs on the CPU.
+
 ## 0.14.0
 
 **Better playback of MKV and other formats.**

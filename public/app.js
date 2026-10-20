@@ -906,6 +906,7 @@ async function viewItem({ params: [id], seq }) {
           ${it.duration ? html`<span>${fmtDuration(it.duration)}</span>` : ''}
           ${it.contentRating ? html`<span class="age-badge">${it.contentRating}</span>` : ''}${it.rating ? html`<span>★ ${it.rating}</span>` : ''}
           ${res ? html`<span class="tag">${res}</span>` : ''}
+          ${v?.colorTransfer === 'smpte2084' ? html`<span class="tag" title="High dynamic range">HDR10</span>` : v?.colorTransfer === 'arib-std-b67' ? html`<span class="tag" title="High dynamic range">HLG</span>` : ''}
           ${p?.watched ? html`<span class="tag">✓ Watched</span>` : ''}
         </div>
         ${resumable ? progressLine(it, `Paused at ${fmtClock(p.position)}`) : ''}

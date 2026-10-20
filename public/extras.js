@@ -823,6 +823,9 @@ function transcodingSection(t, intro, settings) {
         <div>A graphics card has to be passed through to Docker first: set <code>GPU=nvidia</code> (or <code>intel</code> / <code>amd</code> on Linux hosts) in the <code>.env</code> file and run <b>start-marquee.bat</b> again. See the README.</div></details>` : ''}
       <div class="row"><button class="btn small" id="tc-test">Test again</button>
         <span class="muted" style="font-size:13px">Videos your browser can already play are never converted.</span></div>
+      <div class="muted" style="font-size:13px">${t.toneMapping
+        ? '✓ HDR films and shows (HDR10, HLG) are converted to normal colours when they need converting, so they don’t look washed out.'
+        : 'This server’s ffmpeg can’t convert HDR colours (it has no zscale filter): HDR films look washed out when converted. The Docker version can.'}</div>
       <label>Maximum quality away from home
         <select id="tc-remote">${[['', 'No limit'], ['1080p', '1080p (about 8 Mbps)'], ['720p', '720p (about 4 Mbps)'], ['480p', '480p (about 1.5 Mbps)'], ['360p', '360p (under 1 Mbps)']]
           .map(([v, l]) => html`<option value="${v}" ${t.remoteMaxQuality === v ? 'selected' : ''}>${l}</option>`)}</select></label>
