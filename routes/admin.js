@@ -241,6 +241,7 @@ module.exports = function register(app) {
   route('GET', '/api/optimize', async (req, res) => json(res, 200, app.optimizer.status()), 'admin');
   route('PATCH', '/api/optimize', async (req, res) => { app.optimizer.update(await readBody(req)); json(res, 200, app.optimizer.status()); }, 'admin');
   route('POST', '/api/optimize/start-now', async (req, res) => { app.optimizer.startNow(); json(res, 200, app.optimizer.status()); }, 'admin');
+  route('POST', '/api/optimize/move', async (req, res) => { app.optimizer.moveAll(); json(res, 202, app.optimizer.status()); }, 'admin');
   route('DELETE', '/api/optimize', async (req, res) => { app.optimizer.removeAll(); json(res, 200, app.optimizer.status()); }, 'admin');
   route('PATCH', '/api/transcoding', async (req, res) => {
     const body = await readBody(req);

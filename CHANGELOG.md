@@ -4,6 +4,18 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.22.1
+
+- **Where converted copies are kept** (Settings → Overnight conversions → *Where copies are kept*):
+  the copies folder (`OPTIMIZED_DIR`), next to the originals (in a `.marquee-converted` folder that
+  the library, Radarr, Sonarr and Plex skip), or any folder you pick, with the free space there.
+  Copies already made can be moved to the new place with one button (also between drives), and
+  keep playing while they wait.
+- Drives shared with `DRIVE_1`…`DRIVE_4` can now be written to where you choose (converted copies,
+  backup copies, subtitle files), so picking a folder on them works; `DRIVES_ACCESS=ro` in `.env`
+  makes them read-only as before.
+- Cleaning up copies only ever removes Marquee's own copy files, never anything else in a folder.
+
 ## 0.22.0
 
 **Overnight conversions, automatic subtitles, screen time, Coming soon and anime numbering.**

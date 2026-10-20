@@ -75,11 +75,12 @@ services:
       # Where the YouTube downloader saves videos.
       - "${YOUTUBE_DIR:-./media/youtube}:/media/youtube"
       # Whole drives you can pick folders from in Settings -> Libraries -> Browse (DRIVE_1 ... DRIVE_4
-      # in .env, e.g. DRIVE_1=E:/). Read-only: Marquee only watches from them.
-      - "${DRIVE_1:-./media/unused/drive1}:/drives/1:ro"
-      - "${DRIVE_2:-./media/unused/drive2}:/drives/2:ro"
-      - "${DRIVE_3:-./media/unused/drive3}:/drives/3:ro"
-      - "${DRIVE_4:-./media/unused/drive4}:/drives/4:ro"
+      # in .env, e.g. DRIVE_1=E:/). Marquee only writes where you tell it to (converted copies, backup
+      # copies, subtitle files); DRIVES_ACCESS=ro in .env makes them read-only.
+      - "${DRIVE_1:-./media/unused/drive1}:/drives/1:${DRIVES_ACCESS:-rw}"
+      - "${DRIVE_2:-./media/unused/drive2}:/drives/2:${DRIVES_ACCESS:-rw}"
+      - "${DRIVE_3:-./media/unused/drive3}:/drives/3:${DRIVES_ACCESS:-rw}"
+      - "${DRIVE_4:-./media/unused/drive4}:/drives/4:${DRIVES_ACCESS:-rw}"
 
   # ---- Watching away from home (optional; switched on by filling in a key in .env) ----
 

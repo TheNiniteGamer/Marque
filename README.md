@@ -74,7 +74,8 @@ DRIVE_2=F:/
 
 Run `start-marquee.bat` again. **Settings → Libraries → Add library → Browse…** then lists *E: drive* and
 *F: drive* on the left, and you can pick any folder on them (or type a path like `E:/Movies`).
-Marquee only reads from these drives. The picker shows how many videos a folder holds, counting
+Marquee only writes to these drives where you tell it to (converted copies, backup copies,
+subtitle files); add `DRIVES_ACCESS=ro` to `.env` to make them read-only. The picker shows how many videos a folder holds, counting
 the folders inside it — a library always includes everything below the folder you pick, so
 `TV/Kids/Bluey/Season 1/…` and `TV/Anime/Naruto/…` are found as the shows *Bluey* and *Naruto*.
 
@@ -196,8 +197,14 @@ originals are never changed.
   is copied, not converted).
 - **When and how much:** the hours it may run (01:00–07:00 by default; *Start now* runs it for six
   hours), and the space the copies may take (200 GB by default).
-- **Where:** `OPTIMIZED_DIR` in `.env` (`./optimized` next to `docker-compose.yml` by default); pick a
-  drive with room. A DVD film's copy is about 1–2 GB, a 4K film's 1080p copy about 4–8 GB.
+- **Where:** *Where copies are kept* in the same page: the copies folder (`OPTIMIZED_DIR` in `.env`,
+  `./optimized` next to `docker-compose.yml` by default), **next to the originals** (in a
+  `.marquee-converted` folder beside each film or episode, which the library, Radarr, Sonarr and
+  Plex all skip; so the copies are spread over the drives the films are on), or **a folder you
+  pick** (in Docker, on a drive shared with `DRIVE_1`… — see *Other drives*). It shows the free space
+  there. After changing it, *Move them here* moves the copies already made, even to another drive;
+  until then they keep playing from where they are. A DVD film's copy is about 1–2 GB, a 4K film's
+  1080p copy about 4–8 GB.
 - Copies keep every sound track (as stereo) and text subtitles; picture subtitles (DVD / Blu-ray)
   stay with the original, which can still be picked from the title's versions.
 

@@ -90,10 +90,58 @@ test('the copy plays as it is, and watching it counts for the original', async (
   assert.equal((await admin('GET', `/api/items/${plain.id}~o`)).status, 404);
 });
 
+test('where copies are kept: a folder you pick, or next to the originals; existing ones can be moved', async () => {
+  const PICKED = path.join(ROOT, 'Picked');
+  fs.mkdirSync(PICKED);
+  fs.writeFileSync(path.join(PICKED, 'notes.txt'), 'mine');
+  let r = await admin('PATCH', '/api/optimize', { place: 'folder', folder: path.join(ROOT, 'Movies') });
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /inside the Movies library/);
+  assert.equal((await admin('PATCH', '/api/optimize', { place: 'folder', folder: path.join(ROOT, 'nowhere') })).status, 400);
+  assert.equal((await admin('PATCH', '/api/optimize', { place: 'sideways' })).status, 400);
+
+  let o = (await admin('PATCH', '/api/optimize', { place: 'folder', folder: PICKED })).data;
+  assert.deepEqual([o.settings.place, o.settings.folder, o.folderLabel], ['folder', PICKED, PICKED]);
+  assert.equal(o.elsewhere.count, 2, 'the two copies made before are still in the old folder');
+  assert.ok(o.free > 0);
+  const moved = async () => {
+    assert.equal((await admin('POST', '/api/optimize/move')).status, 202);
+    await until(async () => !(await admin('GET', '/api/optimize')).data.moving);
+    return (await admin('GET', '/api/optimize')).data;
+  };
+  o = await moved();
+  assert.deepEqual([o.elsewhere.count, o.counts.done, o.moved.failed], [0, 2, 0]);
+  assert.deepEqual(fs.readdirSync(OUT), []);
+  assert.equal(fs.readdirSync(PICKED).filter((f) => f.endsWith('.mp4')).length, 2);
+  const playsFrom = async () => {
+    const pb = (await admin('GET', `/api/items/${dvd.id}~o/playback`)).data;
+    return (await fetch(`${srv.base}/api/items/${dvd.id}~o/stream?mt=${pb.token}`, { headers: { range: 'bytes=0-99' } })).status;
+  };
+  assert.equal(await playsFrom(), 206, 'plays from the new folder');
+
+  o = (await admin('PATCH', '/api/optimize', { place: 'beside' })).data;
+  assert.equal(o.elsewhere.count, 2);
+  o = await moved();
+  assert.equal(o.elsewhere.count, 0);
+  const beside = path.join(ROOT, 'Movies', 'Old Film (1999)', '.marquee-converted');
+  assert.equal(fs.readdirSync(beside).length, 1, 'next to the film');
+  assert.equal(fs.readdirSync(path.join(ROOT, 'TV', 'Old Show', 'Season 1', '.marquee-converted')).length, 1, 'next to the episode');
+  assert.deepEqual(fs.readdirSync(PICKED), ['notes.txt'], 'only the copies were moved');
+  assert.equal(await playsFrom(), 206);
+  // The library doesn't count the copies as films.
+  const lib = (await admin('GET', '/api/libraries')).data.find((l) => l.name === 'Movies');
+  await admin('POST', `/api/libraries/${lib.id}/scan`, {});
+  await until(async () => !(await admin('GET', '/api/status')).data.scanning);
+  assert.equal((await admin('GET', '/api/search?q=Old%20Film')).data.movies.length, 1);
+  assert.equal((await admin('GET', `/api/items/${dvd.id}`)).data.versions.length, 2);
+});
+
 test('removing the copies', async () => {
   const o = (await admin('DELETE', '/api/optimize')).data;
   assert.equal(o.counts.done, 0);
   assert.deepEqual(fs.readdirSync(OUT), []);
+  assert.equal(fs.existsSync(path.join(ROOT, 'Movies', 'Old Film (1999)', '.marquee-converted')), false, 'emptied folders next to the originals go too');
+  assert.deepEqual(fs.readdirSync(path.join(ROOT, 'Picked')), ['notes.txt'], 'nothing else in a picked folder is touched');
   assert.equal((await admin('GET', `/api/items/${dvd.id}`)).data.versions, null);
   await admin('PATCH', '/api/optimize', { enabled: false });
   assert.equal((await srv.client()('GET', '/api/optimize')).status, 401);

@@ -231,13 +231,15 @@ const SETTINGS_PAGES = [
     render: (o) => {
       const s = o.settings;
       const times = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
-      const word = { off: 'Off', done: 'Everything chosen has a copy', full: 'Paused: the space allowed is used up', waiting: `Waiting for ${s.start}`, paused: 'Paused while someone watches', starting: 'Starting…', converting: 'Converting' };
+      const gbs = (g) => (g >= 1000 ? `${g / 1000} TB` : `${g} GB`);
+      const placeNote = { default: `Marquee’s copies folder: ${o.defaultFolder}`, beside: 'In a “.marquee-converted” folder beside each film or episode (Radarr, Sonarr and Plex skip folders starting with a dot). Where that drive is read-only, the copies folder is used.', folder: '' }[s.place];
+      const word = { off: 'Off', moving: 'Moving the copies', done: 'Everything chosen has a copy', full: 'Paused: the space allowed is used up', waiting: `Waiting for ${s.start}`, paused: 'Paused while someone watches', starting: 'Starting…', converting: 'Converting' };
       return html`
         <p class="muted st-intro">Files most of your TVs can't play as they are (DVD rips, 4K, HEVC) get a 1080p copy made at night on the graphics card.
           Each TV then plays whichever copy it can play as it is: a 4K TV still gets the original, the others the copy, so the server isn't converting while you watch.
           The originals are never changed.</p>
         <div class="st-card">
-          ${stToggle('Make copies overnight', `${o.counts.done} made so far · ${fmtSize(o.used)} of ${s.maxGb >= 1000 ? `${s.maxGb / 1000} TB` : `${s.maxGb} GB`} used, in ${o.folder}`, 'id="opt-on"', s.enabled)}
+          ${stToggle('Make copies overnight', `${o.counts.done} made so far · ${fmtSize(o.used)} of ${gbs(s.maxGb)} used`, 'id="opt-on"', s.enabled)}
           ${s.enabled ? html`<div class="st-row ${['full'].includes(o.state) ? 'warn' : ''}"><span class="st-row-label">${word[o.state]}${o.running ? html`: ${o.running.title} · ${Math.round(o.running.progress * 100)}%` : ''}
               <span class="st-row-note">${o.queue ? `${o.queue} to go` : 'Nothing waiting'}${o.runUntil ? ` · running until ${fmtDate(o.runUntil)}` : ''}${o.last ? ` · last: ${o.last.title} ${o.last.ok ? `(${Math.round(o.last.seconds / 60)} min)` : `failed: ${o.last.error}`}` : ''}</span></span>
             ${o.queue && !o.running ? html`<button class="btn small" id="opt-now" title="Don't wait for the night: run for the next 6 hours">Start now</button>` : ''}</div>` : ''}
@@ -249,27 +251,52 @@ const SETTINGS_PAGES = [
           ${stSelect('From', 'Conversions start at this time…', 'data-opt="start"', html`${times.map((t) => html`<option ${t === s.start ? 'selected' : ''}>${t}</option>`)}`)}
           ${stSelect('Until', '…and none start after this one (one under way finishes).', 'data-opt="end"', html`${times.map((t) => html`<option ${t === s.end ? 'selected' : ''}>${t}</option>`)}`)}
           ${stSelect('Space for copies', 'When the copies reach this, no more are made.', 'data-opt="maxGb"',
-            html`${[50, 100, 200, 500, 1000, 2000, 4000].map((g) => html`<option value="${g}" ${g === s.maxGb ? 'selected' : ''}>${g >= 1000 ? `${g / 1000} TB` : `${g} GB`}</option>`)}`)}
+            html`${[50, 100, 200, 500, 1000, 2000, 4000].map((g) => html`<option value="${g}" ${g === s.maxGb ? 'selected' : ''}>${gbs(g)}</option>`)}`)}
+        </div>
+        <h2 class="st-sub">Where copies are kept</h2>
+        <div class="st-card">
+          ${stSelect('Keep copies', [placeNote, o.free != null ? `${fmtSize(o.free)} free there` : ''].filter(Boolean).join(' · '), 'id="opt-place"', html`
+            <option value="default" ${s.place === 'default' ? 'selected' : ''}>In the copies folder</option>
+            <option value="beside" ${s.place === 'beside' ? 'selected' : ''}>Next to the originals</option>
+            <option value="folder" ${s.place === 'folder' ? 'selected' : ''}>In a folder you pick…</option>`)}
+          ${s.place === 'folder' ? html`<div class="st-row"><span class="st-row-label">📁 ${o.folderLabel}</span><button class="btn small" id="opt-folder">Change…</button></div>` : ''}
+          ${o.moving ? html`<div class="st-row"><span class="st-row-label">Moving the copies: ${o.moving.done} of ${o.moving.total}
+              <span class="st-row-note">Conversions wait until it’s finished.</span></span></div>`
+            : o.elsewhere.count ? html`<div class="st-row warn"><span class="st-row-label">${o.elsewhere.count} ${o.elsewhere.count === 1 ? 'copy is' : 'copies are'} still where ${o.elsewhere.count === 1 ? 'it was' : 'they were'} (${fmtSize(o.elsewhere.size)})
+              <span class="st-row-note">They still play from there. New copies go to the new place.</span></span>
+              <button class="btn small" id="opt-move">Move them here</button></div>` : ''}
+          ${!o.moving && o.moved?.failed ? html`<div class="st-row warn"><span class="st-row-label">${o.moved.failed} couldn’t be moved (${o.moved.error})</span></div>` : ''}
         </div>
         ${helpText(html`A DVD film's copy is about 1–2 GB and takes a few minutes on an NVIDIA card; a 4K film's 1080p copy is about 4–8 GB.
           Copies keep every sound track (as stereo) and text subtitles; picture subtitles (DVD / Blu-ray) stay with the original, which is still there to pick.
-          In Docker, copies go to the <code>OPTIMIZED_DIR</code> folder in <code>.env</code> (pick a drive with room).`, 'How big, and where?')}
+          In Docker, the copies folder is <code>OPTIMIZED_DIR</code> in <code>.env</code>, and a folder you pick must be on a drive shared with Marquee (<code>DRIVE_1</code>… in <code>.env</code>).`, 'How big, and where?')}
         ${o.counts.done ? html`<p><button class="btn small danger" id="opt-clear">Remove all copies</button></p>` : ''}`;
     },
     bind: (o) => {
       const patch = async (body, msg) => { try { await api('/api/optimize', { method: 'PATCH', body }); toast(msg); router(); } catch (err) { toast(err.message, true); } };
+      const pickPlace = async () => {
+        const dir = await pickFolder(o.settings.folder || undefined);
+        if (!dir) return router();
+        patch({ place: 'folder', folder: dir }, 'New copies go there');
+      };
       view.onchange = (e) => {
         const el = e.target;
+        if (el.id === 'opt-place') return el.value === 'folder' ? pickPlace() : patch({ place: el.value }, 'New copies go there');
         if (el.id === 'opt-on') return patch({ enabled: el.checked }, el.checked ? 'Overnight conversions on' : 'Overnight conversions off');
         if (el.dataset.kind) return patch({ kinds: { [el.dataset.kind]: el.checked } }, 'Saved');
         if (el.dataset.opt) return patch({ [el.dataset.opt]: el.dataset.opt === 'maxGb' ? Number(el.value) : el.value }, 'Saved');
+      };
+      if ($('#opt-folder')) $('#opt-folder').onclick = pickPlace;
+      if ($('#opt-move')) $('#opt-move').onclick = async () => {
+        try { await api('/api/optimize/move', { method: 'POST' }); toast('Moving the copies'); } catch (err) { toast(err.message, true); }
+        router();
       };
       if ($('#opt-now')) $('#opt-now').onclick = async () => { await api('/api/optimize/start-now', { method: 'POST' }); toast('Converting for the next 6 hours'); router(); };
       if ($('#opt-clear')) $('#opt-clear').onclick = async () => {
         if (!confirm(`Remove all ${o.counts.done} copies (${fmtSize(o.used)})? The originals stay; copies are made again if conversions are on.`)) return;
         await api('/api/optimize', { method: 'DELETE' }); toast('Copies removed'); router();
       };
-      if (o.running) setTimeout(() => { if (location.hash === '#/settings/convert') router(); }, 15000);
+      if (o.running || o.moving) setTimeout(() => { if (location.hash === '#/settings/convert') router(); }, 15000);
     },
   },
   {
