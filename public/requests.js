@@ -1,6 +1,6 @@
 'use strict';
 /* Marquee web client — requests ("can we get …?") and the bell (each person's notifications).
-   Loaded before app.js; helpers from app.js and extras.js are used only when called. */
+   Loaded before app.js; helpers from the other files are used only when called. */
 
 // ---------- asking for something ----------
 function openRequestDialog(initial = '', kind = 'movie') {

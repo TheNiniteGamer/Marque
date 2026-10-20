@@ -2,7 +2,8 @@
 /* Marquee web client — Settings (admins). A calm, Netflix-style account area: a menu of pages on the
    left (a row of tabs on phones), each page made of cards. Every page lives in SETTINGS_PAGES:
    to add one, add an entry with what it loads, how it looks and what its buttons do.
-   Loaded before app.js; helpers from app.js, extras.js and manage.js are used only when called. */
+   The panels for some pages are in settings-libraries.js, settings-media.js and settings-server.js;
+   helpers from the other files are used only when called. */
 
 const ST_ICON = {
   overview: '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/>',

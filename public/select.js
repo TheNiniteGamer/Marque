@@ -1,7 +1,7 @@
 'use strict';
 /* Marquee web client — picking several titles (or collections) at once and acting on them all:
-   add to a collection, mark watched, My List, genres, refresh. Loaded before app.js; helpers from
-   app.js and extras.js are used only when called. */
+   add to a collection, mark watched, My List, genres, refresh. Helpers from the other files are
+   used only when called. */
 
 const SECTION_LABEL = { franchises: 'Franchises', movies: 'Movies', shows: 'TV', videos: 'YouTube' };
 // "(from TMDB)" / "(franchise)" after a collection's name in lists.

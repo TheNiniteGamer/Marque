@@ -471,10 +471,14 @@ lib/metadata.js     metadata providers (TMDB, TVmaze), image downloads
 lib/matcher.js      matching, refresh/unmatch, user edits and custom artwork (edits > metadata > file name)
 lib/subtitles.js    SRT→VTT, cue time-shifting
 lib/store.js        JSON-file database with atomic writes
-public/             single-page web client (vanilla JS): app.js (browse/play), manage.js (accounts, downloads),
+public/             single-page web client (vanilla JS, no build step; index.html loads the files in order and
+                    they share one scope): core.js (templates, api, helpers), app.js (state, pages, router),
+                    cards.js (cards, rows, hover previews), detail.js ("More info" pop-up), player.js,
+                    menus.js (item menus, edit / fix-match / subtitle dialogs, shortcuts), collections.js,
+                    manage.js (accounts, users, downloads), requests.js, select.js (☑ Select and bulk actions),
+                    settings.js (the Settings pages) with settings-libraries.js, settings-media.js and
+                    settings-server.js (their panels), cast.js (Google Cast), tv.js (TV mode: moving with a remote),
                     fonts/ (Archivo and Figtree, SIL Open Font License),
-                    extras.js (menus, edit/match dialogs, My List, settings panels, shortcuts), select.js (☑ Select and
-                    bulk actions), cast.js (Google Cast), tv.js (TV mode: moving with a remote),
                     vendor/hls.js (Apache-2.0, for adaptive streaming in browsers without native HLS)
 android/            the Android app (WebView + native player), built without Gradle
 androidtv/          the Android TV app: android/'s code with a TV manifest and banner
