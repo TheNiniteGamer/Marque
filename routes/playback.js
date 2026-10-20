@@ -4,6 +4,7 @@
 
 const { playerPrefs } = require('../lib/auth');
 const { saveDownloaded } = require('../lib/autosubs');
+const screenTime = require('../lib/screentime');
 
 module.exports = function register(app) {
   const {
@@ -21,6 +22,12 @@ module.exports = function register(app) {
     const sub = item.media?.subtitles?.find((s) => s.index === n);
     if (!sub || !media.IMAGE_SUB_CODECS.has(sub.codec)) throw new HttpError(400, 'Not a picture subtitle track');
     return n;
+  }
+
+  // Kids' bedtime and daily limit (screentime.js): nothing plays outside them, whatever the device.
+  function checkScreenTime(user) {
+    const b = screenTime.blocked(store, user);
+    if (b) throw new HttpError(403, b.message);
   }
 
   function checkOriginalAllowed(req, item) {
@@ -73,6 +80,7 @@ module.exports = function register(app) {
 
   route('GET', '/api/items/:id/stream', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);
+    checkScreenTime(user);
     checkOriginalAllowed(req, item);
     const headers = url.searchParams.has('download')
       ? { 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(item.file))}` } : {};
@@ -89,6 +97,7 @@ module.exports = function register(app) {
 
   route('GET', '/api/items/:id/transcode', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);
+    checkScreenTime(user);
     if (!fs.existsSync(item.file)) throw new HttpError(404, 'File not found on disk');
     checkOriginalAllowed(req, item);
     const start = Math.max(0, Number(url.searchParams.get('start')) || 0);
@@ -135,6 +144,7 @@ module.exports = function register(app) {
   // fresh adaptive-streaming session id, the qualities on offer, and where cast devices can reach us.
   route('GET', '/api/items/:id/playback', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);
+    checkScreenTime(user);
     const limit = remoteLimit(req, item);
     // The original picture without converting it ("source", see lib/hls.js), for an MKV's H.264 say.
     // Its keyframes are found once first: a first play waits a few seconds for that, and plays
@@ -173,6 +183,7 @@ module.exports = function register(app) {
   };
   const hlsItem = (id, user) => {
     const item = getItem(id, user);
+    checkScreenTime(user);
     if (!item.media?.video || !item.media.duration) throw new HttpError(400, 'This file cannot be streamed');
     if (!fs.existsSync(item.file)) throw new HttpError(404, 'File not found on disk');
     return item;

@@ -1174,10 +1174,19 @@ function chooseVersion(list) {
   return [...list].sort((a, b) => (a.height || 0) - (b.height || 0))[0];
 }
 
+// Bedtime or the day's screen time (set by an admin for a profile): a message instead of the video.
+function screenTimeNotice(b) {
+  const m = openModal({ title: b.reason === 'bedtime' ? 'Bedtime' : 'That’s enough for today', body: html`<p style="margin:0;font-size:18px">${b.message}</p>`.s,
+    footer: html`<button class="btn primary" data-close>OK</button>`.s });
+  $('[data-close]', m.el).onclick = m.close;
+  $('[data-close]', m.el).focus();
+}
+
 async function viewPlay({ params: [id], query }) {
   closePlayer();
   let item = await api(`/api/items/${id}`);
   if (!item.media) { toast('This file cannot be played', true); return history.back(); }
+  if (item.watchBlock) { screenTimeNotice(item.watchBlock); return history.back(); } // bedtime, or today's time used up
   let start = query.has('t') ? Number(query.get('t')) || 0 : 0;
   if (!query.has('t') && item.progress && !item.progress.watched && item.progress.position > 15) start = item.progress.position;
   // Watch together: start where the party is.
@@ -1730,6 +1739,9 @@ class Player {
     fetch(`/api/items/${this.item.id}/progress`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
       body: JSON.stringify({ position: t, paused: this.paused, mode: this.casting ? 'cast' : this.mode, quality: this.mode === 'hls' ? (this.remux ? 'source' : this.quality) : null, client: PAGE_ID, stopped }),
+    }).then((r) => r.json()).then((d) => {
+      // Bedtime has started, or today's screen time is used up (lib/screentime.js).
+      if (d?.stop && !stopped && this.root.isConnected) { this.v.pause(); screenTimeNotice(d.stop); this.close(); }
     }).catch(() => {});
   }
 
@@ -1845,8 +1857,11 @@ class Player {
     else location.hash = `#/item/${this.item.id}`;
   }
 
-  playNext() {
+  playNext(auto = false) {
     if (!this.item.next) return;
+    // Three episodes in a row started by themselves, with nobody touching anything: ask first
+    // (as the TV apps do), so a forgotten TV doesn't play all night.
+    if (auto && (Number(new URLSearchParams(location.hash.split('?')[1] || '').get('chain')) || 0) >= 3) return this.askStillWatching();
     // Leaving during the credits counts as having watched the episode.
     if (this.item.credits && this.time >= this.item.credits.start - 1) {
       this.markedWatched = true; // (and no position report afterwards, which would undo it)
@@ -1854,7 +1869,21 @@ class Player {
     }
     // In a watch party, everyone moves on to the next episode together.
     if (this.partyId) this.partyPost({ itemId: this.item.next.id, playing: true, position: 0 });
-    location.replace(`#/play/${this.item.next.id}?t=0${this.partyId ? `&party=${this.partyId}` : ''}`);
+    const chain = auto && !this.touched ? (Number(new URLSearchParams(location.hash.split('?')[1] || '').get('chain')) || 0) + 1 : 0;
+    location.replace(`#/play/${this.item.next.id}?t=0${this.partyId ? `&party=${this.partyId}` : ''}${chain ? `&chain=${chain}` : ''}`);
+  }
+
+  askStillWatching() {
+    $('.p-upnext', this.root)?.remove();
+    const box = document.createElement('div');
+    box.className = 'p-upnext';
+    box.innerHTML = html`<div><b>Are you still watching?</b></div><div class="muted">${this.item.showTitle || this.item.title}</div>
+      <div class="row"><button class="btn primary small" data-a="still-yes">Continue watching</button><button class="btn small" data-a="still-no">Back to browsing</button></div>`.s;
+    this.root.append(box);
+    this.root.classList.remove('idle');
+    $('[data-a=still-yes]', box).onclick = () => { this.touched = true; this.playNext(); };
+    $('[data-a=still-no]', box).onclick = () => this.close();
+    $('[data-a=still-yes]', box).focus();
   }
 
   // ---- watch together ----
@@ -1997,7 +2026,7 @@ class Player {
       if (atCredits && this.paused) return; // the countdown waits while paused
       left--;
       const c = $('#un-count', box); if (c) c.textContent = left;
-      if (left <= 0) { clearInterval(this.upNextTimer); this.playNext(); }
+      if (left <= 0) { clearInterval(this.upNextTimer); this.playNext(true); }
     }, 1000);
   }
 
@@ -2169,7 +2198,10 @@ class Player {
     this.onMove = () => this.showControls();
     this.root.addEventListener('mousemove', this.onMove);
     this.root.addEventListener('touchstart', this.onMove, { passive: true });
+    // Any key, tap or click counts as someone being there ("Are you still watching?").
+    this.root.addEventListener('pointerdown', () => { this.touched = true; });
     this.onKey = (e) => {
+      this.touched = true;
       if (['SELECT', 'INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key;
       const handled = {

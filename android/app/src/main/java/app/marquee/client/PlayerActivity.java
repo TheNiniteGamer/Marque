@@ -198,6 +198,9 @@ public class PlayerActivity extends Activity {
         io.execute(() -> {
             try {
                 JSONObject first = Net.getJson(base + "/api/items/" + id);
+                // Bedtime, or today's screen time used up (set by an admin for this profile).
+                JSONObject block = first.optJSONObject("watchBlock");
+                if (block != null) { runOnUiThread(() -> screenTimeStop(block)); return; }
                 // A film with several versions: the one asked for, else the best this device plays.
                 String vid = pickVersion(first);
                 final JSONObject it = vid != null && !vid.equals(first.optString("id")) ? Net.getJson(base + "/api/items/" + vid) : first;
@@ -662,10 +665,25 @@ public class PlayerActivity extends Activity {
         final String q = hls ? quality : null;
         io.execute(() -> {
             try {
-                Net.postJson(url, new JSONObject().put("position", pos).put("paused", paused).put("mode", mode)
+                JSONObject r = Net.postForJson(url, new JSONObject().put("position", pos).put("paused", paused).put("mode", mode)
                     .put("quality", q).put("client", clientId).put("stopped", stopped));
+                // Bedtime has started, or today's screen time is used up: stop with a message.
+                JSONObject stop = stopped ? null : r.optJSONObject("stop");
+                if (stop != null) runOnUiThread(() -> screenTimeStop(stop));
             } catch (Exception ignored) { }
         });
+    }
+
+    private boolean screenTimeShown;
+    private void screenTimeStop(JSONObject b) {
+        if (screenTimeShown || isFinishing()) return;
+        screenTimeShown = true;
+        spinner.setVisibility(View.GONE);
+        try { video.pause(); } catch (Exception ignored) { }
+        new AlertDialog.Builder(this)
+            .setTitle("bedtime".equals(b.optString("reason")) ? R.string.bedtime : R.string.enough_today)
+            .setMessage(b.optString("message"))
+            .setPositiveButton(android.R.string.ok, (d, w) -> finish()).setOnCancelListener(d -> finish()).show();
     }
 
     private void onEnded() {

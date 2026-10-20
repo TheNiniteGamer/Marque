@@ -134,7 +134,8 @@ test('after updating, the old "update available" result is not shown and a new c
   const a2 = second.client();
   await a2('POST', '/api/auth/login', { username: 'admin', password: 'password1' });
   assert.equal((await a2('GET', '/api/status')).data.updateAvailable, false, 'stale result ignored');
-  for (let i = 0; i < 40 && !(await a2('GET', '/api/updates')).data.check; i++) await new Promise((r) => setTimeout(r, 200));
+  // (It checks 3 s after starting; on a busy machine that can take a while.)
+  for (let i = 0; i < 150 && !(await a2('GET', '/api/updates')).data.check; i++) await new Promise((r) => setTimeout(r, 200));
   assert.equal((await a2('GET', '/api/updates')).data.check.status, 'current', 'checked again on its own after starting');
 });
 

@@ -116,6 +116,11 @@ sub onItem(event as Object)
         fail("Can't play this: " + r.error)
         return
     end if
+    ' Bedtime, or today's screen time used up (set by an admin for this profile).
+    if r.data.watchBlock <> invalid then
+        screenTimeStop(r.data.watchBlock)
+        return
+    end if
     if not m.versionPicked then
         m.versionPicked = true
         v = pickVersion(r.data)
@@ -155,6 +160,11 @@ end function
 sub onPlayback(event as Object)
     r = event.getData()
     if mqStr(r.tag) <> m.playId then return
+    if m.blocked = true then return
+    if r.status = 403 then
+        screenTimeStop({ message: r.error })
+        return
+    end if
     if r.status <> 200 or r.data = invalid then
         fail("Can't play this: " + r.error)
         return
@@ -1065,7 +1075,26 @@ sub report(stopped as Boolean, position = -1 as Float)
     mqApi("/api/items/" + m.item.id + "/progress", "onReported", "POST", { position: at, paused: m.video.state = "paused", stopped: stopped, client: "Roku", mode: m.mode })
 end sub
 
-sub onReported()
+' The server says to stop: bedtime has started, or today's screen time is used up.
+sub onReported(event as Object)
+    r = event.getData()
+    if r = invalid or r.data = invalid or type(r.data) <> "roAssociativeArray" then return
+    if r.data.stop <> invalid then screenTimeStop(r.data.stop)
+end sub
+
+sub screenTimeStop(b as Object)
+    if m.blocked = true then return
+    m.blocked = true
+    for each t in [m.reportTimer, m.hideTimer, m.holdTimer, m.commitTimer, m.idleTimer, m.countTimer]
+        t.control = "stop"
+    end for
+    m.video.control = "stop"
+    m.overlay.visible = false
+    m.upNext.visible = false
+    m.skip.visible = false
+    m.spin.control = "stop"
+    m.spinner.visible = false
+    m.message.text = mqStr(b.message) + Chr(10) + Chr(10) + "Press Back to return."
 end sub
 
 ' Stop everything before leaving the player.

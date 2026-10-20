@@ -2,6 +2,8 @@
 // Libraries, browsing, watch state, collections, My List and the folder picker.
 // Registered by server.js, which passes the shared helpers and services in `app`.
 
+const screenTime = require('../lib/screentime');
+
 module.exports = function register(app) {
   const {
     fs, os, path, randomId, canSeeLibrary, canDownload, lib, metadata, collections,
@@ -87,6 +89,9 @@ module.exports = function register(app) {
     json(res, 200, h);
   });
 
+  // This person's bedtime and daily limit, and how much is left today (the Account page).
+  route('GET', '/api/screen-time', async (req, res, p, url, user) => json(res, 200, screenTime.summary(store, user)));
+
   route('GET', '/api/search', async (req, res, p, url, user) => json(res, 200, lib.search(store, user, url.searchParams.get('q') || '')));
 
   route('GET', '/api/shows/:id', async (req, res, { id }, url, user) => {
@@ -105,7 +110,7 @@ module.exports = function register(app) {
 
   route('GET', '/api/items/:id', async (req, res, { id }, url, user) => {
     const it = getItem(id, user);
-    json(res, 200, { ...lib.itemDetail(store, user, it), collections: collections.of(store, user, id),
+    json(res, 200, { ...lib.itemDetail(store, user, it), watchBlock: screenTime.blocked(store, user), collections: collections.of(store, user, id),
       franchise: it.type === 'movie' ? collections.franchiseRow(store, user, lib.primaryId(store, id)) : null, similar: it.type === 'movie' ? lib.similar(store, user, it) : [] });
   });
 
@@ -215,10 +220,15 @@ module.exports = function register(app) {
     const prev = store.data.progress[user.id]?.[item.id];
     if (body.paused && prev && !body.stopped && Math.abs((prev.position || 0) - position) < 1) {
       if (store.timer) store.save(); // a position still waiting to be written goes now
-      return json(res, 200, lib.progressOf(store, user, item.id));
+      const stop = screenTime.blocked(store, user);
+      return json(res, 200, { ...lib.progressOf(store, user, item.id), ...(stop ? { stop } : {}) });
     }
+    // Watching time for a daily limit; and when bedtime starts or the limit is reached, the player
+    // is told to stop (`stop`: { reason, message }).
+    if (!body.paused && !body.stopped) screenTime.tick(store, user);
+    const stop = body.stopped ? null : screenTime.blocked(store, user);
     // Stopping or pausing is saved straight away; the reports in between can wait a little.
-    json(res, 200, lib.setProgress(store, user, item, position, { lazy: !body.stopped && !body.paused }));
+    json(res, 200, { ...lib.setProgress(store, user, item, position, { lazy: !body.stopped && !body.paused }), ...(stop ? { stop } : {}) });
   });
 
   route('POST', '/api/items/:id/watched', async (req, res, { id }, url, user) => {

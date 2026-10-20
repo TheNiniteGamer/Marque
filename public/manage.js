@@ -216,10 +216,13 @@ const stSelect = (label, note, attrs, options) => html`<label class="st-row"><sp
   <select class="st-select" ${raw(attrs)}>${options}</select></label>`;
 const stButton = (label, value, id) => html`<button class="st-row st-btn" type="button" id="${id}"><span class="st-row-label">${label}</span><span class="st-row-value">${value}</span>${chevron()}</button>`;
 
+// "20:30" -> "8:30 pm"
+const clock12 = (t) => { const h = Number(t.slice(0, 2)); return `${h % 12 || 12}:${t.slice(3)} ${h < 12 ? 'am' : 'pm'}`; };
+
 async function viewAccount({ query, seq }) {
   if (tv.on) return viewTvSettings({ seq });
   const u = state.user;
-  const [devices, sessions] = await Promise.all([api('/api/devices').catch(() => []), api('/api/auth/sessions').catch(() => null)]);
+  const [devices, sessions, time] = await Promise.all([api('/api/devices').catch(() => []), api('/api/auth/sessions').catch(() => null), api('/api/screen-time').catch(() => null)]);
   const inApp = !!window.MarqueeAndroid;
   const appVersion = inApp ? (() => { try { return window.MarqueeAndroid.version(); } catch { return ''; } })() : '';
   const langs = (none) => [['', none], ...LANG_CHOICES];
@@ -231,6 +234,14 @@ async function viewAccount({ query, seq }) {
           <span class="muted">${u.role === 'admin' ? 'Administrator' : u.maxAge != null ? 'Kids profile' : 'Member'}${u.libraries ? ` · ${u.libraries.length} librar${u.libraries.length === 1 ? 'y' : 'ies'}` : ''}</span></div>
         <div class="row acct-actions"><button class="btn small" id="acct-switch">Switch profile</button><button class="btn small" id="acct-signout">Sign out</button></div>
       </div>
+
+      ${time && (time.bedtime || time.dailyMinutes) ? html`<h2 class="st-sub">Screen time <span class="acct-scope">· set by ${u.role === 'admin' ? 'you' : 'a grown-up'}</span></h2>
+      <div class="st-card">
+        ${time.bedtime ? html`<div class="st-row"><span class="st-row-label">Bedtime<span class="st-row-note">${time.bedtime.schoolNights ? 'School nights (Sunday to Thursday)' : 'Every night'}</span></span>
+          <span class="st-row-value">${clock12(time.bedtime.start)} – ${clock12(time.bedtime.end)}</span></div>` : ''}
+        ${time.dailyMinutes ? html`<div class="st-row ${time.minutesLeft === 0 ? 'warn' : ''}"><span class="st-row-label">Today<span class="st-row-note">${time.dailyMinutes} minutes a day</span></span>
+          <span class="st-row-value">${time.minutesLeft ? `${time.minutesLeft} min left` : 'All used up; more tomorrow'}</span></div>` : ''}
+      </div>` : ''}
 
       <h2 class="st-sub">Playback <span class="acct-scope">· on every device you use</span></h2>
       <div class="st-card" id="player-prefs">
@@ -609,6 +620,17 @@ function showUserForm(user = null) {
         <label class="check"><input type="checkbox" name="allowUnrated" ${user?.allowUnrated !== false ? 'checked' : ''}> Also titles without a rating (YouTube, home videos, titles not matched online)</label>
         <p class="muted" style="margin:0;font-size:13px">Titles rated above this are hidden for this person everywhere: home, libraries, search and the TV apps. Ratings come from TMDB (G, PG, TV-Y7…); set one by hand in a title's ⋯ → Edit.</p>
       </fieldset>
+      <fieldset class="access" id="time-fields">
+        <legend>Screen time</legend>
+        <label class="check"><input type="checkbox" name="bedOn" ${user?.bedtime ? 'checked' : ''}> Bedtime: nothing plays from
+          <input class="input" type="time" name="bedStart" value="${user?.bedtime?.start || '20:30'}" style="width:120px"> until
+          <input class="input" type="time" name="bedEnd" value="${user?.bedtime?.end || '07:00'}" style="width:120px"></label>
+        <label class="check" style="margin-left:26px"><input type="checkbox" name="bedSchool" ${user?.bedtime?.schoolNights ? 'checked' : ''}> Only on school nights (Sunday to Thursday)</label>
+        <label>A day, at most
+          <select name="dailyMinutes">${[[null, 'No limit'], [30, '30 minutes'], [45, '45 minutes'], [60, '1 hour'], [90, '1½ hours'], [120, '2 hours'], [180, '3 hours'], [240, '4 hours']]
+    .map(([v, l]) => html`<option value="${v ?? ''}" ${(user?.dailyMinutes ?? null) === v ? 'selected' : ''}>${l}</option>`)}</select></label>
+        <p class="muted" style="margin:0;font-size:13px">On every TV, phone and browser: what's playing stops when bedtime starts or the time's used up, with a message. Counts reset at midnight.</p>
+      </fieldset>
       <p class="muted" id="admin-note" style="margin:0;font-size:13px" hidden>Administrators can see every library and use all features.</p>
       <div class="form-error" id="user-error"></div>
       <div class="row"><button class="btn primary" type="submit">${user ? 'Save' : 'Create user'}</button><button class="btn" type="button" id="user-cancel">Cancel</button></div>
@@ -619,6 +641,7 @@ function showUserForm(user = null) {
     const admin = f.role.value === 'admin';
     $('#access-fields').disabled = admin;
     $('#age-fields').disabled = admin;
+    $('#time-fields').disabled = admin;
     $('#admin-note').hidden = !admin;
     $$('input[name=lib]', form).forEach((c) => { c.disabled = admin || f.access.value !== 'some'; });
   };
@@ -634,6 +657,8 @@ function showUserForm(user = null) {
       noPin: f.noPin.checked,
       maxAge: f.maxAge.value === '' ? null : Number(f.maxAge.value),
       allowUnrated: f.allowUnrated.checked,
+      bedtime: f.bedOn.checked ? { start: f.bedStart.value, end: f.bedEnd.value, schoolNights: f.bedSchool.checked } : null,
+      dailyMinutes: f.dailyMinutes.value === '' ? null : Number(f.dailyMinutes.value),
     };
     if (!self) body.role = f.role.value;
     if (f.password.value) body.password = f.password.value;
