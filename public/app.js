@@ -967,7 +967,7 @@ async function viewSearch({ query, seq }) {
 // ---------- settings ----------
 function cacheSummary(m) {
   const labels = { database: 'Database', artwork: 'Artwork', thumbs: 'Thumbnails', trickplay: 'Seek previews', fingerprints: 'Intro detection',
-    subtitles: 'Subtitle copies', downloadedSubtitles: 'Downloaded subtitles', conversions: 'Converting now', offline: 'Copies for phone downloads', previews: 'Preview clips' };
+    subtitles: 'Subtitle copies', downloadedSubtitles: 'Downloaded subtitles', conversions: 'Converting now', offline: 'Copies for phone downloads', previews: 'Preview clips', keyframes: 'Keyframe lists' };
   const parts = Object.entries(labels).filter(([k]) => m.sizes[k] > 0).map(([k, l]) => `${l} ${fmtSize(m.sizes[k])}`);
   return parts.length ? parts.join(' · ') : 'Nothing yet';
 }
@@ -1327,10 +1327,33 @@ class Player {
 
   nativeHls() { return !!this.v.canPlayType('application/vnd.apple.mpegurl') && !/Android/.test(navigator.userAgent); }
 
+  // Original quality: the file as it is if the browser can play it; else, for an MKV's H.264 (say),
+  // its picture unconverted in adaptive streaming ("source"); else converted by the server.
   setModeFromQuality() {
+    this.remux = false;
     if (this.quality !== 'original' && this.canHls) this.mode = 'hls';
-    else this.mode = this.item.directPlay && this.audio === 0 && this.burn == null && !this.directFailed ? 'direct' : 'transcode';
+    else if ((this.item.directPlay || this.hevcFile()) && this.audio === 0 && this.burn == null && !this.directFailed) this.mode = 'direct';
+    else if (this.pb?.remux && this.canHls && this.burn == null && !this.remuxFailed) { this.mode = 'hls'; this.remux = true; }
+    else this.mode = 'transcode';
   }
+
+  // HEVC (x265) this browser decodes itself (Safari; Chrome and Edge with a graphics card that can).
+  hevcOk() {
+    const v = this.item.media?.video;
+    if (v?.codec !== 'hevc' || this.hevcFailed) return false;
+    const ten = /10/.test(v.profile || '') || /10/.test(v.pixFmt || '');
+    const type = `video/mp4; codecs="${ten ? 'hvc1.2.4.L153.B0' : 'hvc1.1.6.L153.B0'}"`;
+    return !!window.MediaSource?.isTypeSupported?.(type) || this.v.canPlayType(type) === 'probably';
+  }
+  // …in an MP4 with sound the browser plays too: played as it is.
+  hevcFile() {
+    const ext = (this.item.fileName || '').toLowerCase().split('.').pop();
+    const a = this.item.media?.audio?.[0]?.codec;
+    return ['mp4', 'm4v', 'mov'].includes(ext) && (!a || ['aac', 'mp3', 'opus', 'flac'].includes(a)) && this.hevcOk();
+  }
+  // …in anything else (an MKV): the server sends the picture as it is, converting only the sound.
+  // (Not in Safari, which can't play the server's one-piece stream.)
+  hevcQuery() { return this.hevcOk() && !this.nativeHls() && this.burn == null ? '&hevc=1' : ''; }
 
   // Picture subtitles (Blu-ray / DVD) are drawn into the video by the server: index of that track, or null.
   get burn() { return this.item.subtitles.find((s) => s.id === this.subId)?.burn ?? null; }
@@ -1386,7 +1409,7 @@ class Player {
   // Signed links work without the login cookie, which AirPlay and cast devices don't have.
   tok(sep = '?') { return this.pb?.token ? `${sep}mt=${encodeURIComponent(this.pb.token)}` : ''; }
 
-  hlsUrl({ sid = this.pb.sid, quality = this.quality } = {}) {
+  hlsUrl({ sid = this.pb.sid, quality = this.remux ? 'source' : this.quality } = {}) {
     return `/api/items/${this.item.id}/hls/master.m3u8?sid=${sid}&audio=${this.audio}${quality !== 'auto' ? `&q=${quality}` : ''}${this.burnQuery()}${this.tok('&')}`;
   }
 
@@ -1425,10 +1448,10 @@ class Player {
       this.offset = t;
       this.updateTime();
       const req = t.toFixed(3);
-      api(`/api/items/${this.item.id}/seekpoint?t=${req}${this.burnQuery()}`).catch(() => ({ start: t })).then(({ start }) => {
+      api(`/api/items/${this.item.id}/seekpoint?t=${req}${this.burnQuery()}${this.hevcQuery()}`).catch(() => ({ start: t })).then(({ start }) => {
         if (seq !== this.loadSeq || !this.root.isConnected) return;
         this.offset = start;
-        this.v.src = `/api/items/${this.item.id}/transcode?start=${req}&audio=${this.audio}${this.burnQuery()}${this.tok('&')}`;
+        this.v.src = `/api/items/${this.item.id}/transcode?start=${req}&audio=${this.audio}${this.burnQuery()}${this.hevcQuery()}${this.tok('&')}`;
         this.applySubs();
         this.v.play().catch(() => this.spinner(false));
       });
@@ -1469,6 +1492,15 @@ class Player {
     if (!(await serverUp())) return this.reconnect();
     if (!this.root.isConnected || this.reconnecting) return;
     console.warn('Adaptive streaming failed:', why);
+    if (this.remux) {
+      // The unconverted picture didn't play: the server converts it instead.
+      const t = this.time;
+      this.destroyHls();
+      this.remuxFailed = true;
+      this.setModeFromQuality();
+      this.load(t);
+      return;
+    }
     const t = this.time;
     this.destroyHls();
     toast('Adaptive streaming failed — switching to Original quality');
@@ -1493,7 +1525,8 @@ class Player {
   updateBadge() {
     const el = $('#p-mode', this.root);
     if (!el) return;
-    if (this.mode === 'hls') {
+    if (this.mode === 'hls' && this.remux) el.textContent = 'Original · not converted';
+    else if (this.mode === 'hls') {
       const lvl = this.hls?.levels?.[this.hls.currentLevel];
       const name = lvl ? `${lvl.height}p` : this.quality === 'auto' ? '' : this.quality;
       el.textContent = this.quality === 'auto' ? `Auto${name ? ` · ${name}` : ''}` : `Converting · ${name}`;
@@ -1623,7 +1656,7 @@ class Player {
     this.lastReported = t;
     fetch(`/api/items/${this.item.id}/progress`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
-      body: JSON.stringify({ position: t, paused: this.paused, mode: this.casting ? 'cast' : this.mode, quality: this.mode === 'hls' ? this.quality : null, client: PAGE_ID, stopped }),
+      body: JSON.stringify({ position: t, paused: this.paused, mode: this.casting ? 'cast' : this.mode, quality: this.mode === 'hls' ? (this.remux ? 'source' : this.quality) : null, client: PAGE_ID, stopped }),
     }).catch(() => {});
   }
 
@@ -1958,10 +1991,16 @@ class Player {
         toast('Direct play failed — switching to transcoding');
         const t = this.time;
         this.directFailed = true;
-        this.mode = 'transcode';
+        if (this.item.media?.video?.codec === 'hevc') this.hevcFailed = true;
+        this.setModeFromQuality();
         this.load(t);
       } else if (this.mode === 'hls') {
         this.hlsFailed(v.error.message || `media error ${v.error.code}`);
+      } else if (this.hevcQuery()) {
+        // The browser couldn't play the HEVC picture after all: convert it.
+        const t = this.time;
+        this.hevcFailed = true;
+        this.load(t);
       } else {
         this.spinner(false);
         const msg = document.createElement('div');

@@ -1,12 +1,12 @@
 {
   "android": {
-    "versionCode": 18,
-    "versionName": "1.10.2",
+    "versionCode": 19,
+    "versionName": "1.11.0",
     "file": "Marquee.apk"
   },
   "androidtv": {
-    "versionCode": 12,
-    "versionName": "1.5.2",
+    "versionCode": 13,
+    "versionName": "1.6.0",
     "file": "Marquee-TV.apk"
   }
 }

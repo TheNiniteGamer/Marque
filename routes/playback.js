@@ -7,7 +7,7 @@ const { playerPrefs } = require('../lib/auth');
 module.exports = function register(app) {
   const {
     fs, crypto, path, pipeline, media, subs, lib, hlsLib,
-    SUB_DOWNLOADS, store, hwaccel, hls, offline, offlineLib, previews, tokens, opensubs, parties, trickplay,
+    SUB_DOWNLOADS, store, hwaccel, hls, keyframes, offline, offlineLib, previews, tokens, opensubs, parties, trickplay,
     transcodes, HttpError, json, readBody, sendFile, getItem, getShow, resolveArt,
     subtitleVtt, castAddresses, remoteLimit, route,
   } = app;
@@ -83,7 +83,7 @@ module.exports = function register(app) {
     const t = Math.max(0, Number(url.searchParams.get('t')) || 0);
     // Request the transcode with `t`; the stream's first frame will be at `start` (<= t).
     // (With subtitles drawn in, the video is re-encoded and starts exactly at t.)
-    json(res, 200, { t, start: burnParam(item, url) != null ? t : await media.seekPoint(item, t) });
+    json(res, 200, { t, start: burnParam(item, url) != null ? t : await media.seekPoint(item, t, { hevc: url.searchParams.get('hevc') === '1' }) });
   }, 'media');
 
   route('GET', '/api/items/:id/transcode', async (req, res, { id }, url, user) => {
@@ -95,8 +95,9 @@ module.exports = function register(app) {
     const burn = burnParam(item, url);
     let finished = false;
     const run = (encoder) => {
-      const proc = media.transcode(item, { start, audioIndex, encoder, burn, night: url.searchParams.get('night') === '1' });
-      proc.meta = { itemId: item.id, userId: user.id, encoder: media.canCopyVideo(item.media?.video) && burn == null ? null : encoder };
+      const hevc = url.searchParams.get('hevc') === '1';
+      const proc = media.transcode(item, { start, audioIndex, encoder, burn, night: url.searchParams.get('night') === '1', hevc });
+      proc.meta = { itemId: item.id, userId: user.id, encoder: media.copiesVideo(item.media?.video, hevc) && burn == null ? null : encoder };
       transcodes.add(proc);
       let stderr = '';
       let sent = false;
@@ -132,7 +133,20 @@ module.exports = function register(app) {
   route('GET', '/api/items/:id/playback', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);
     const limit = remoteLimit(req, item);
+    // The original picture without converting it ("source", see lib/hls.js), for an MKV's H.264 say.
+    // Its keyframes are found once first: a first play waits a few seconds for that, and plays
+    // converted if it takes longer (the next play has them). The next episode's are found meanwhile.
+    let remux = false;
+    if (media.canRemux(item) && (!limit || limit.originalAllowed) && fs.existsSync(item.file)) {
+      remux = !!(await Promise.race([keyframes.ensure(item), new Promise((r) => setTimeout(r, 4000, null))]));
+      if (item.type === 'episode' && item.showId) {
+        const eps = lib.episodesOf(store, item.showId);
+        const next = eps[eps.findIndex((e) => e.id === item.id) + 1];
+        if (next && media.canRemux(next)) keyframes.ensure(next).catch(() => {});
+      }
+    }
     json(res, 200, {
+      remux,
       token: tokens.create(item.id, user.id),
       sid: crypto.randomBytes(12).toString('base64url'),
       directPlay: media.canDirectPlay(item),
@@ -161,14 +175,24 @@ module.exports = function register(app) {
     return item;
   };
   const M3U8 = { 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-cache' };
+  // "source" (the original picture): only once its keyframes are known, and only where the
+  // original is allowed (the admin may limit the quality away from home).
+  const sourceKeyframes = (req, item, quality) => {
+    if (quality !== 'source') return null;
+    checkOriginalAllowed(req, item);
+    const k = media.canCopyVideo(item.media?.video) ? keyframes.get(item) : null;
+    if (!k) throw new HttpError(404, 'This video can’t be streamed without converting it yet');
+    return k;
+  };
   route('GET', '/api/items/:id/hls/master.m3u8', async (req, res, { id }, url, user) => {
     const item = hlsItem(id, user);
+    sourceKeyframes(req, item, url.searchParams.get('q'));
     const body = hlsLib.masterPlaylist(item, { only: url.searchParams.get('q') || null, query: hlsQuery(url), maxHeight: remoteLimit(req, item)?.maxHeight });
     res.writeHead(200, M3U8); res.end(body);
   }, 'media');
   route('GET', '/api/items/:id/hls/:quality/index.m3u8', async (req, res, { id, quality }, url, user) => {
     const item = hlsItem(id, user);
-    const body = hlsLib.mediaPlaylist(item, quality, { query: hlsQuery(url), maxHeight: remoteLimit(req, item)?.maxHeight });
+    const body = hlsLib.mediaPlaylist(item, quality, { query: hlsQuery(url), maxHeight: remoteLimit(req, item)?.maxHeight, keyframes: sourceKeyframes(req, item, quality) });
     res.writeHead(200, M3U8); res.end(body);
   }, 'media');
   route('GET', '/api/items/:id/hls/:quality/:segment', async (req, res, { id, quality, segment }, url, user) => {
@@ -178,6 +202,7 @@ module.exports = function register(app) {
     const file = await hls.segment(item, {
       quality, sid: url.searchParams.get('sid'), audio: Math.max(0, Number(url.searchParams.get('audio')) || 0),
       burn: burnParam(item, url), night: url.searchParams.get('night') === '1', maxHeight: remoteLimit(req, item)?.maxHeight, userId: user.id,
+      keyframes: sourceKeyframes(req, item, quality),
     }, Number(m[1]));
     sendFile(req, res, file, { type: 'video/mp2t', headers: { 'Cache-Control': 'no-cache' } });
   }, 'media');

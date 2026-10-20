@@ -35,6 +35,7 @@ const collections = require('./lib/collections');
 const { OpenSubtitles } = require('./lib/opensubtitles');
 const { Parties } = require('./lib/party');
 const { Trickplay } = require('./lib/trickplay');
+const { Keyframes } = require('./lib/keyframes');
 const { Activity } = require('./lib/activity');
 const { Maintenance } = require('./lib/maintenance');
 const offlineLib = require('./lib/offline');
@@ -119,6 +120,7 @@ const tokens = new MediaTokens(store);
 const opensubs = new OpenSubtitles(() => store.data.settings);
 const parties = new Parties();
 const trickplay = new Trickplay(DATA_DIR);
+const keyframes = new Keyframes(path.join(DATA_DIR, 'keyframes'));
 const activity = new Activity();
 const maintenance = new Maintenance(store, DATA_DIR, { transcodeDir: TRANSCODE_DIR });
 const offline = new offlineLib.Offline(path.join(DATA_DIR, 'offline'), hwaccel, { isBusy: () => transcodes.size > 0 || hls.active > 0 });
@@ -464,7 +466,7 @@ const app = {
   Activity, Maintenance, ENCODER_NAMES, PORT, HOST, DATA_DIR, MEDIA_ROOT, SCAN_INTERVAL_MIN,
   MEDIA_LABELS, hostLabel, fromHostPath, folderPlaces, PUBLIC_DIR, THUMB_DIR, SUB_CACHE, SUB_DOWNLOADS, store, matcher,
   scanner, updater, hwaccel, TRANSCODE_DIR, hls, offline, offlineLib, health, previews, tokens, opensubs, parties,
-  trickplay, activity, maintenance, intro, watcher, backups, auth, downloader,
+  trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader,
   transcodes, HttpError, json, readBody, readRaw, MIME, sendFile, getItem,
   getShow, getLibrary, getUser, librarySummary, validateLibraryInput, removeLibraryData, resolveArt, subtitleVtt,
   isPrivateIp, TRUST_PROXY, clientIp, viaHttpsProxy, noteRemoteOrigin, mediaTokenUser, castAddresses, isRemote,

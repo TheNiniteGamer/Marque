@@ -103,7 +103,7 @@ public class PlayerActivity extends Activity {
     private long lastReport;
     private boolean pipUsed;
     // Riding out a server restart (an update): where it was, and whether it was playing.
-    private boolean reconnecting, resumePaused, lastPlaying, stallChecked;
+    private boolean reconnecting, resumePaused, lastPlaying, stallChecked, sourceFailed;
     private double lastGood = -1;
     private long reconnectStarted, bufferingSince;
     private TextView reconnectMsg;
@@ -209,6 +209,7 @@ public class PlayerActivity extends Activity {
         autoSkipped = creditsShown = false;
         lastGood = -1;
         bufferingSince = 0;
+        sourceFailed = false;
         skipPart = null;
         skipIntro.setVisibility(View.GONE);
         duration = it.optDouble("duration", 0);
@@ -335,7 +336,9 @@ public class PlayerActivity extends Activity {
         // streaming still send that one.)
         if (!hls && !direct && qualities().length() > 0) {
             hls = true;
-            quality = qualities().optJSONObject(0).optString("id");
+            // The original picture unconverted when the server can (only the sound is converted:
+            // an MKV with DTS sound, say), else the best quality.
+            quality = playback != null && playback.optBoolean("remux") && burn < 0 && !sourceFailed ? "source" : qualities().optJSONObject(0).optString("id");
         }
         if (hls) {
             offset = 0;
@@ -439,6 +442,13 @@ public class PlayerActivity extends Activity {
     private boolean playbackFailed() {
         if (item == null) { fail(getString(R.string.playback_error)); return true; }
         double at = now();
+        if (hls && "source".equals(quality)) {
+            // The unconverted picture didn't play: the server converts it.
+            sourceFailed = true;
+            hls = false;
+            open(at);
+            return true;
+        }
         if (hls && directCapable && burn < 0 && originalAllowed()) {
             // The adaptive stream didn't play: try the file as it is.
             Toast.makeText(this, R.string.adaptive_failed, Toast.LENGTH_SHORT).show();

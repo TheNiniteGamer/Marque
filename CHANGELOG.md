@@ -4,6 +4,27 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.14.0
+
+**Better playback of MKV and other formats.**
+- **Web player: MKVs keep their original picture.** An MKV with H.264 video (the usual kind)
+  now plays at Original quality without its picture being converted, in segments cut at the
+  file's keyframes, so skipping around works like any other video and the server only converts
+  the sound. The keyframes are found the first time a file is played (a few seconds; the next
+  episode's are found meanwhile) and kept. Files with several sound tracks get the same treatment
+  when you pick another track.
+- **HEVC (x265) without converting**, in browsers that decode it themselves (Safari; Chrome and
+  Edge on PCs whose graphics card can): MP4s play as they are, and an MKV's picture is sent as it
+  is. If the browser can't manage it after all, the server converts it as before.
+- **Roku channel 1.8: plays MKV files as they are** (H.264, and HEVC including 10-bit on models
+  that support it), with AAC, Dolby Digital (Plus), MP3 or FLAC sound. When the Roku can't play
+  the sound (DTS, say), it keeps the original picture and only the sound is converted. If a file
+  doesn't play as it is, it switches to the converted stream instead of showing an error.
+- **Android apps (phone 1.11.0, TV 1.6.0):** when a file's sound can't be played on the device,
+  the picture is kept as it is too, instead of the whole video being converted.
+- Activity shows "Original picture (not converted)" for these streams; Settings → Server lists
+  the space the keyframe lists take (a few KB per title).
+
 ## 0.13.2
 
 - **Android TV app 1.5.2 / phone app 1.10.2: MKV files that the TV can't play as they are now

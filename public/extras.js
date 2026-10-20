@@ -1344,6 +1344,7 @@ async function viewActivity({ seq }) {
     const by = c?.encoderName ? ` on ${c.encoderName}` : '';
     if (s.mode === 'cast') return 'Casting to a TV';
     if (s.mode === 'direct') return 'Direct Play';
+    if (s.quality === 'source' || c?.quality === 'source') return 'Original picture (not converted) · sound converted';
     if (s.mode === 'hls' || c?.kind === 'hls') return `Adaptive · ${s.quality === 'auto' || !s.quality ? (c?.quality ? `Auto (${c.quality})` : 'Auto') : s.quality}${c ? ` · converting${by}` : ''}`;
     if (c) return c.encoder ? `Converting${by}` : 'Converting audio only (video copied)';
     return s.mode === 'transcode' ? 'Converting' : 'Playing';

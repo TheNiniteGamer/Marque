@@ -85,6 +85,10 @@ test.before(async () => {
   ff(['-f', 'lavfi', '-i', 'testsrc2=size=720x480:rate=24:d=10', '-f', 'lavfi', '-i', 'sine=d=10', '-i', path.join(ROOT, 'box.sup'),
     '-map', '0', '-map', '1', '-map', '2', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-c:s', 'copy',
     '-metadata:s:s:0', 'language=eng', path.join(ROOT, 'Movies', 'Boxed (2019).mkv')]);
+  // An MKV with H.264 video (browsers can't open MKV files) and Dolby Digital sound, a keyframe every 2.5 s.
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=24:d=41', '-f', 'lavfi', '-i', 'sine=d=41:sample_rate=48000',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-g', '60', '-sc_threshold', '0', '-c:a', 'ac3', '-ac', '6',
+    path.join(ROOT, 'Movies', 'Remux (2021).mkv')]);
   server = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', DATA_DIR: path.join(ROOT, 'data'), SCAN_INTERVAL: '0', TVMAZE_DISABLED: '1',
       TMDB_API_KEY: '', TMDB_TOKEN: '', HWACCEL: 'auto', TRANSCODE_DIR: path.join(ROOT, 'transcode'),
@@ -371,4 +375,48 @@ test('Blu-ray / DVD picture subtitles are drawn into the converted video', async
   fs.writeFileSync(segFile, Buffer.from(await seg.arrayBuffer()));
   assert.ok(boxBrightness(segFile, 2) > 240, 'box drawn in the HLS segment');
   await call('DELETE', '/api/hls/burn-test-1');
+});
+
+test('an MKV streams with its original picture, cut at its keyframes', async () => {
+  const film = (await call('GET', '/api/search?q=Remux')).data.movies[0];
+  const src = path.join(ROOT, 'Movies', 'Remux (2021).mkv');
+  const pb = (await call('GET', `/api/items/${film.id}/playback`)).data;
+  assert.equal(pb.directPlay, false);
+  assert.equal(pb.remux, true, 'its keyframes were found');
+  const q = `sid=${pb.sid}&mt=${pb.token}`;
+  assert.match(await (await anonGet(`/api/items/${film.id}/hls/master.m3u8?q=source&${q}`)).text(), /source\/index\.m3u8/);
+
+  // Segments start on keyframes (every 2.5 s here), at least 4 s apart, and cover the whole film.
+  const list = await (await anonGet(`/api/items/${film.id}/hls/source/index.m3u8?${q}`)).text();
+  const lens = [...list.matchAll(/#EXTINF:([\d.]+)/g)].map((m) => Number(m[1]));
+  assert.ok(lens.length >= 8 && lens.slice(0, -1).every((l) => Math.abs(l - 5) < 0.01), `5 s segments: ${lens}`);
+  assert.ok(Math.abs(lens.reduce((a, b) => a + b, 0) - 41) < 0.1);
+
+  // Jump ahead first (as a seek would), then from the start: each segment starts where the
+  // playlist says, whichever job made it.
+  const probe = (f, what) => execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', what, '-of', 'csv=p=0', f]).toString().trim().split('\n')[0]; // (MPEG-TS lists streams twice)
+  for (const n of [5, 0, 1, 2]) {
+    const seg = await anonGet(`/api/items/${film.id}/hls/source/seg-${n}.ts?${q}`);
+    assert.equal(seg.status, 200);
+    const f = path.join(ROOT, `src-${n}.ts`);
+    fs.writeFileSync(f, Buffer.from(await seg.arrayBuffer()));
+    assert.ok(Math.abs(Number(probe(f, 'stream=start_time')) - n * 5) < 0.1, `segment ${n} starts at ${n * 5} s`);
+    assert.equal(probe(f, 'stream=codec_name'), 'h264');
+  }
+  // The picture isn't converted: the very same frames as in the file (5–10 s: frames 120–239).
+  const md5s = (f, extra = []) => execFileSync('ffmpeg', ['-v', 'error', '-i', f, '-map', '0:v:0', ...extra, '-f', 'framemd5', '-']).toString()
+    .split('\n').filter((l) => /^0,/.test(l)).map((l) => l.split(',').pop().trim());
+  const seg = md5s(path.join(ROOT, 'src-1.ts'));
+  assert.equal(seg.length, 120);
+  assert.deepEqual(seg, md5s(src, ['-vf', 'select=between(n\\,120\\,239)', '-vsync', '0']));
+  const out = path.join(ROOT, 'src-all.mp4');
+  await promisify(execFile)('ffmpeg', ['-v', 'error', '-y', '-i', `${BASE}/api/items/${film.id}/hls/source/index.m3u8?${q}`, '-c', 'copy', out]);
+  assert.ok(Math.abs(Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', out]).toString()) - 41) < 1);
+  assert.equal(probe(out, 'stream=nb_frames') || '984', '984', 'every frame');
+  assert.equal((await call('DELETE', `/api/hls/${pb.sid}`)).status, 200);
+
+  // Not for a file browsers play as it is.
+  const other = (await call('GET', `/api/items/${ep.id}/playback`)).data;
+  assert.equal(other.remux, false);
+  assert.equal((await anonGet(`/api/items/${ep.id}/hls/source/index.m3u8?sid=${other.sid}&mt=${other.token}`)).status, 404);
 });

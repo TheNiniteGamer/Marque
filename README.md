@@ -220,7 +220,7 @@ never gets access to Docker itself.
 | **Artwork** | Local `poster.jpg` / `fanart.jpg` / `<name>-poster.jpg`, online artwork, your own uploads, or a frame grabbed from the video. |
 | **Browsing** | Home screen with Continue Watching, My List and Recently Added. Library grids with sort, genre filter, title filter, an Unwatched filter, adjustable poster size, an A–Z jump bar and **Shuffle**. Show pages with seasons, cast lists, clickable genres, and live search (press `/`). The scroll position is kept when you go back. |
 | **My List & menus** | A **⋯** menu on every poster: play, mark watched/unwatched, add to **My List** (a per-user watchlist), remove from Continue Watching, and, for admins, edit / fix match / refresh. |
-| **Streaming** | **Direct Play** with instant seeking when the browser supports the file. Otherwise ffmpeg converts it **on the fly**, copying the video when possible so only the audio is converted. Falls back automatically if direct play fails. |
+| **Streaming** | **Direct Play** with instant seeking when the browser supports the file. MKVs with H.264 video (the usual kind) stream with their **original picture, not converted**: cut into segments at the file's keyframes (found once per file, the first time it's played), so seeking works as with any video and only the sound is converted. HEVC (x265) plays without converting in browsers that decode it (Safari; Chrome and Edge on PCs whose graphics card can). Everything else ffmpeg converts **on the fly**. Falls back automatically if a way of playing fails. The Android apps and the Roku play MP4 and MKV files as they are when the device can, and the Roku keeps the original picture when only the sound needs converting. |
 | **Quality / adaptive streaming** | Pick **Original**, **Auto** or a fixed 1080p / 720p / 480p / 360p in the player. *Auto* uses HLS adaptive streaming, which switches quality to suit the connection. It is the default when you're away from home. Segments are made on demand, so seeking anywhere starts within seconds. |
 | **Graphics card conversion** | NVIDIA (NVENC), Intel Quick Sync and Intel/AMD VAAPI, detected automatically, with fallback to the CPU. |
 | **Skip intro, Up Next at the credits** | Theme songs and end credits are found automatically by comparing the audio of episodes in a season. A **Skip Intro** button appears during the intro (`S`), or turn on automatic skipping under *Account*. When the credits start, **Up Next** offers the next episode (with *Watch credits* to stay). Admins can fix either by hand: *⋯ → Edit intro & credits…*, or ✂ in the player. |
@@ -366,6 +366,7 @@ lib/downloader.js   yt-dlp job queue (progress parsing, cancel/retry, self-updat
 lib/parse.js        filename → title/year/show/season/episode, sidecar subs, local art
 lib/scanner.js      folder walking, ffprobe, show grouping, TMDB enrichment
 lib/media.js        ffprobe/ffmpeg: probe, thumbnails, direct-play check, live transcode, seek points
+lib/keyframes.js    where each file's keyframes are (for streaming the original picture in segments)
 lib/hwaccel.js      encoder choice (NVENC / QSV / VAAPI / x264), start-up tests, fallback
 lib/hls.js          adaptive streaming: VOD playlists, on-demand segment conversion per session
 lib/requests.js     requests ("can we get …?"): asking, the admin's list, noticing when a title arrives

@@ -79,6 +79,7 @@ sub init()
     m.spin.control = "start"
     ' Riding out a server restart (an update): checks every 2 s for up to 90 s, then carries on.
     m.lastGood = -1
+    m.sourceFailed = false
     m.reconnecting = false
     m.reconnectTimer = CreateObject("roSGNode", "Timer")
     m.reconnectTimer.duration = 2
@@ -140,26 +141,42 @@ sub fail(text as String)
     m.message.text = text + Chr(10) + Chr(10) + "Press Back to return."
 end sub
 
-' MP4 files with video and sound the Roku decodes play as they are; everything else is converted.
+' MP4 and MKV files with video and sound the Roku decodes play as they are; everything else is converted.
 function canPlayDirectly(x as Object) as Boolean
     md = x.media
     if md = invalid then return false
-    container = LCase(mqStr(md.container))
-    if Instr(1, container, "mp4") = 0 and Instr(1, container, "mov") = 0 then return false
+    if containerFormat(x) = "" then return false
     v = md.video
     if v = invalid then return false
     vc = LCase(mqStr(v.codec))
+    tenBit = Instr(1, mqStr(v.profile), "10") > 0 or Instr(1, mqStr(v.pixFmt), "10") > 0
     if vc = "hevc" then
-        info = CreateObject("roDeviceInfo").CanDecodeVideo({ Codec: "hevc" })
+        want = { Codec: "hevc" }
+        if tenBit then want.Profile = "main 10"
+        info = CreateObject("roDeviceInfo").CanDecodeVideo(want)
         if info = invalid or not mqIsTrue(info.Result) then return false
-    else if vc <> "h264" then
+    else if vc <> "h264" or tenBit then
         return false
     end if
     if md.audio <> invalid and md.audio.Count() > 0 then
         ac = LCase(mqStr(md.audio[0].codec))
-        if ac <> "aac" and ac <> "ac3" and ac <> "eac3" and ac <> "mp3" then return false
+        if ac <> "aac" and ac <> "ac3" and ac <> "eac3" and ac <> "mp3" and ac <> "flac" then return false
     end if
     return true
+end function
+
+' "mp4" or "mkv" for files the Roku opens itself, else "".
+function containerFormat(x as Object) as String
+    container = LCase(mqStr(x.media.container))
+    if Instr(1, container, "mp4") > 0 or Instr(1, container, "mov") > 0 then return "mp4"
+    if Instr(1, container, "matroska") > 0 then return "mkv"
+    return ""
+end function
+
+' The original picture without converting it (only the sound is): for files the Roku can't open
+' as they are but whose H.264 it can play, e.g. an MKV with DTS sound. The server says when it can.
+function useSource() as Boolean
+    return m.pb <> invalid and mqIsTrue(m.pb.remux) and m.burn = invalid and not m.sourceFailed
 end function
 
 sub start()
@@ -235,9 +252,10 @@ sub load(at as Float)
     c.title = m.heading.text
     if m.mode = "direct" then
         c.url = mqMediaUrl("/api/items/" + x.id + "/stream")
-        c.streamFormat = "mp4"
+        c.streamFormat = containerFormat(x)
     else
         q = "?sid=" + mqStr(m.pb.sid) + "&audio=" + m.audio.ToStr()
+        if useSource() then q = q + "&q=source"
         if m.burn <> invalid then q = q + "&burn=" + mqStr(m.burn)
         if m.prefs.nightMode then q = q + "&night=1"
         c.url = mqMediaUrl("/api/items/" + x.id + "/hls/master.m3u8" + q)
@@ -309,7 +327,14 @@ sub onServerCheck(event as Object)
         if not m.reconnectSeenDown then
             ' It's up: whatever went wrong wasn't a restart.
             m.reconnecting = false
-            if m.reconnectWhy = "error" then
+            if m.reconnectWhy = "error" and m.mode = "direct" then
+                ' The Roku couldn't play the file as it is after all: let the server convert it.
+                m.mode = "hls"
+                load(m.lastGood)
+            else if m.reconnectWhy = "error" and useSource() then
+                m.sourceFailed = true
+                load(m.lastGood)
+            else if m.reconnectWhy = "error" then
                 fail("This video can't be played: " + mqStr(m.video.errorMsg))
                 report(true, m.lastGood)
             else if m.reconnectWhy = "finished" then
