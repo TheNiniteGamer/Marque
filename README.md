@@ -183,6 +183,24 @@ On Windows, NVIDIA needs Docker Desktop's WSL 2 backend (the default) and a curr
 driver; nothing needs to be installed inside WSL. Without Docker, ffmpeg needs to be built with
 NVENC / VAAPI / QSV support. Set `HWACCEL=nvdec|nvenc|vaapi|qsv|software` to force a choice.
 
+### Overnight conversions
+
+DVD rips (MPEG-2), 4K and HEVC files make the server convert them every time a 1080p TV, a Roku
+or a browser plays them. *Settings → Overnight conversions* makes a 1080p H.264 copy of each at
+night instead, on the graphics card, paused whenever someone is watching something being converted.
+The copy is another version of the title: each TV plays whichever copy it can play as it is (a 4K
+TV still gets the original), and watch progress, intro skipping and subtitle files are shared. The
+originals are never changed.
+- **Which files:** DVD rips and older formats, 4K files, HEVC/AV1 up to 1080p, or anything else the
+  1080p TVs can't play as it is (where only the sound or the file type was the trouble, the picture
+  is copied, not converted).
+- **When and how much:** the hours it may run (01:00–07:00 by default; *Start now* runs it for six
+  hours), and the space the copies may take (200 GB by default).
+- **Where:** `OPTIMIZED_DIR` in `.env` (`./optimized` next to `docker-compose.yml` by default); pick a
+  drive with room. A DVD film's copy is about 1–2 GB, a 4K film's 1080p copy about 4–8 GB.
+- Copies keep every sound track (as stereo) and text subtitles; picture subtitles (DVD / Blu-ray)
+  stay with the original, which can still be picked from the title's versions.
+
 ### Casting to a TV
 
 - **Chromecast / Google TV:** the cast button appears in the player in **Chrome or Edge**, when
@@ -270,6 +288,7 @@ never gets access to Docker itself.
 | **Skip intro, Up Next at the credits** | Theme songs and end credits are found automatically by comparing the audio of episodes in a season. A **Skip Intro** button appears during the intro (`S`), or turn on automatic skipping under *Account*. When the credits start, **Up Next** offers the next episode (with *Watch credits* to stay). Admins can fix either by hand: *⋯ → Edit intro & credits…*, or ✂ in the player. |
 | **Seek preview thumbnails** | Pictures above the seek bar while you hover or drag. They're made the first time a video is opened (a few seconds to a minute or two for a film). |
 | **Kids profiles & ratings** | Titles carry their maturity rating (PG-13, TV-14, 12A…, from TMDB for your country, or set by hand with *⋯ → Edit*), shown as a badge. Give a profile a limit in *Settings → Users* (and choose whether unrated titles show): anything above it disappears everywhere for that profile. |
+| **Screen time** | For each profile (*Settings → Users*): a **bedtime** (every night or only on school nights, Sunday to Thursday) and a **daily limit**. Enforced by the server on every TV, phone and browser: nothing starts outside them, and what's playing stops with a message when bedtime starts or the time's used up. The profile's Account page shows what's left today. Every player also asks **“Are you still watching?”** after three episodes have played by themselves. |
 | **Downloads on the phone** | The Android app saves movies and episodes to watch offline: the original file when the phone plays it, or a 1080p / 720p / 480p copy the server makes first. *Downloads* lists them; progress goes back to the server when you're online again. |
 | **Personal touches** | Sound and subtitle languages are remembered per show; 👍 / 👎 on titles steers suggestions ("Because you liked …"); a **Top 10 in your house this week** row; cast photos and **actor pages**; who's in it shows when you pause. |
 | **Requests** | Anyone can ask for a film or show (looked up on TMDB / TVmaze, or typed in) with a note, or for **more seasons** of a show that's here; admins approve, decline or mark it added on the Requests page. It's marked as here by itself when it turns up, and whoever asked gets a notification. With **Radarr / Sonarr** connected, approved requests are sent to them (with a chosen quality profile and, for shows, seasons), chosen people's requests skip approval (films and shows separately, within free-space and weekly limits), each request shows its download progress, and anything not found after a few days is flagged. |
@@ -281,7 +300,9 @@ never gets access to Docker itself.
 | **Activity** | *Activity* (admins) shows who's watching what right now, on which device, whether at home or away, direct or converted (and on the graphics card or CPU), plus the server's CPU and memory use. |
 | **Casting** | Chromecast / Google TV from Chrome and Edge, AirPlay from Safari. Includes subtitles, resume position and next episode. |
 | **Watch together** | 👥 in the player makes a watch party and gives you a link. Everyone with an account who opens it stays in sync: play, pause, skipping and the next episode. |
-| **Subtitles** | Sidecar `.srt`/`.vtt`, embedded text subtitles, and Blu-ray / DVD picture subtitles (PGS, VobSub), which the server draws into the video. Missing ones can be found on **OpenSubtitles.com** from the player (*Subtitles → Search online…*) once an admin adds a free API key in *Settings → Metadata & subtitles*. |
+| **Subtitles** | Sidecar `.srt`/`.vtt`, embedded text subtitles, and Blu-ray / DVD picture subtitles (PGS, VobSub), which the server draws into the video. Missing ones can be found on **OpenSubtitles.com** from the player (*Subtitles → Search online…*) once an admin adds a free API key in *Settings → Metadata & subtitles*, or **fetched automatically** in the languages your family picked on their Account pages (newest titles first, within OpenSubtitles' daily allowance; a subtitle made for the same file is preferred, machine-translated ones never used). |
+| **Coming soon** | A home-page row of new episodes of shows in your libraries (from Sonarr's calendar, or TMDB / TVmaze for shows people have been watching) and films on their way in Radarr, with when they arrive. On the web and the Roku; *Settings → Home screen* can turn it off. |
+| **Anime numbering** | Episodes numbered straight through (“[Group] Frieren - 30”, “One Piece - 1071”) are placed in the season TMDB / TVmaze has them in, when the number doesn't exist in its own season; the running number shows next to the episode. A show's *⋯ → Episode numbering…* sets it by hand (counted straight through, or by season). |
 | **Quality limit away from home** | *Settings → Playback*: cap the quality for people watching through Tailscale, Cloudflare or from outside, so one viewer can't use up your upload. |
 | **Collections** | Film series from TMDB (e.g. “The Matrix Collection”) are grouped automatically, and admins can make their own with *⋯ → Add to collection…* or by selecting titles (**☑ Select**). Collections are listed in separate **Movies, TV and YouTube** sections (worked out from their titles, or chosen with *Show under*). Each collection has an **order**: release date, **episode number in the title** (“Ep 12”, “S2E5”, “Part 3”…), title, date added, reversed, or **arranged by hand**. **⌕ Find series** turns videos like “Hardcore Survival Ep 1, Ep 2…” into collections. Movies in a collection show as the collection on the home page and in libraries; switch a library to *All titles* (or untick it under *Account*) to see every movie on its own. Admins can override anything: rename (TMDB ones too), add or remove titles, pick the cover (*⋯ → Use as the collection's cover*), hide TMDB collections, *Reset to TMDB*, and **⇅ Arrange** each section. |
 | **Franchises** | Film worlds that span several series, films and TV shows are found automatically from TMDB's keywords and studios: the **Marvel Cinematic Universe**, **Star Wars**, **DC**, **X-Men**, **Spider-Man**, the **Wizarding World**, **Middle-earth**, **Star Trek**, the **MonsterVerse**, **The Conjuring Universe**, **Planet of the Apes**, **Rocky & Creed**, and the studios **Pixar**, **Walt Disney Animation**, **DreamWorks Animation**, **Illumination** and **Studio Ghibli**. They have their own section in Collections and a row on the home page. A franchise's page shows **how many you've seen** and a button to **start, continue or watch the next one**, with its titles in rows by series. Admins can arrange a **story order**, which the next-up button follows. A title's page shows the franchise it's part of and **More from …**. Franchises can be renamed, added to, hidden or reset like TMDB collections, and any collection can be shown under *Franchises*. |
@@ -419,6 +440,10 @@ lib/hwaccel.js      encoder choice (NVDEC+NVENC / NVENC / QSV / VAAPI / x264), s
 lib/hls.js          adaptive streaming: VOD playlists, on-demand segment conversion per session
 lib/requests.js     requests ("can we get …?"): asking, the admin's list, sending to Radarr / Sonarr, noticing when a title arrives
 lib/arr.js          Radarr and Sonarr: connecting, quality profiles (and their size cap), adding films and shows, download progress
+lib/optimize.js     overnight conversions: 1080p copies of DVD rips / 4K / HEVC, offered as versions ("<id>~o")
+lib/autosubs.js     automatic subtitles from OpenSubtitles in the family's languages
+lib/screentime.js   kids' bedtime and daily limit
+lib/upcoming.js     "Coming soon": Sonarr / Radarr calendars, next episodes from TMDB / TVmaze
 lib/notifications.js  each person's notifications (new episodes, requests, health)
 lib/health.js       the health check (disk space, folders, backups, updates, errors)
 lib/previews.js     preview clips for hovering over titles (made on first use, in the background)

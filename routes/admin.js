@@ -183,6 +183,14 @@ module.exports = function register(app) {
     json(res, 200, afterMetaChange(id, user));
   }, 'admin');
 
+  // How a show's episodes are numbered: { numbering: "auto" | "absolute" | "season" } (anime).
+  route('PUT', '/api/meta/:id/numbering', async (req, res, { id }, url, user) => {
+    const { target, kind } = getTarget(id, user);
+    if (kind !== 'show') throw new HttpError(400, 'Only shows have episode numbering');
+    const numbering = await matcher.setNumbering(target, String((await readBody(req)).numbering || ''));
+    json(res, 200, { numbering, ...afterMetaChange(id, user) });
+  }, 'admin');
+
   // Fix episode: the show's episodes to pick from, and setting which one a file really is.
   const getEpisode = (id, user) => {
     const { target, kind } = getTarget(id, user);

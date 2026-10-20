@@ -59,7 +59,7 @@ function epLabel(x) {
   if (x.season == null && x.episode == null) return '';
   const s = x.season != null ? `S${x.season}` : '';
   const e = x.episode != null ? `E${x.episode}${x.episodeEnd ? `–E${x.episodeEnd}` : ''}` : '';
-  return [s, e].filter(Boolean).join(' · ');
+  return [s, e].filter(Boolean).join(' · ') + (x.absoluteNumber ? ` (#${x.absoluteNumber})` : '');
 }
 const sortTitle = (t) => String(t || '').toLowerCase().replace(/^(the|a|an)\s+/, '');
 // "1 hr 14 min left" / "9 min left"

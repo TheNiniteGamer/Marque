@@ -85,6 +85,7 @@ function itemMenu(anchor, x, { ctx } = {}) {
     { label: '⏭  Edit intro & credits…', hidden: !admin || x.type !== 'episode', onClick: () => openIntroEditor(x.id) },
     { label: '⌕  Fix match…', hidden: !admin || x.type === 'episode' || x.type === 'extra', onClick: () => openMatcher(x.id) },
     { label: '⌕  Fix episode…', hidden: !admin || x.type !== 'episode', onClick: () => openEpisodeFixer(x.id) },
+    { label: '#  Episode numbering…', hidden: !admin || x.type !== 'show', onClick: () => openNumbering(x) },
     { label: '⌕  Fix show match…', hidden: !admin || x.type !== 'episode' || !x.showId, onClick: () => openMatcher(x.showId) },
     { label: '↻  Refresh metadata', hidden: !admin || x.type === 'extra', onClick: () => refreshMetadata(x.type === 'episode' ? x.showId : x.id) },
   ]);
@@ -311,6 +312,33 @@ async function openMatcher(id) {
     }
   };
   search();
+}
+
+// ---------- episode numbering (anime) ----------
+// Shows numbered straight through ("One Piece - 1071") are placed in their seasons automatically;
+// this sets it for one show when the automatic choice is wrong.
+async function openNumbering(show) {
+  const d = await api(`/api/shows/${show.id}`);
+  const now = d.numbering || 'auto';
+  const opts = [
+    ['auto', 'Automatic', 'Episode numbers without a season (“Show - 1071”) are counted through the whole show when they don’t exist in their season.'],
+    ['absolute', 'Counted straight through', 'For anime and other shows whose files are numbered 1, 2, 3… across every season.'],
+    ['season', 'By season', 'Each season starts again at episode 1, as in “Season 2/Episode 05”.'],
+  ];
+  const m = openModal({
+    title: `Episode numbering — ${show.title}`,
+    body: html`<div class="form">${opts.map(([k, l, note]) => html`<label class="check" style="align-items:flex-start"><input type="radio" name="num" value="${k}" ${k === now ? 'checked' : ''}>
+      <span><b>${l}</b><br><span class="muted" style="font-size:13px">${note}</span></span></label>`)}</div>`.s,
+    footer: html`<button class="btn" data-close>Cancel</button><button class="btn primary" id="num-save">Save</button>`.s,
+  });
+  $$('[data-close]', m.el).forEach((b) => { b.onclick = m.close; });
+  $('#num-save', m.el).onclick = async (e) => {
+    e.target.disabled = true;
+    try {
+      await api(`/api/meta/${show.id}/numbering`, { method: 'PUT', body: { numbering: $('input[name=num]:checked', m.el).value } });
+      toast('Episodes renumbered'); m.close(); router();
+    } catch (err) { toast(err.message, true); e.target.disabled = false; }
+  };
 }
 
 // ---------- fix episode ----------

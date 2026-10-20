@@ -4,6 +4,32 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.22.0
+
+**Overnight conversions, automatic subtitles, screen time, Coming soon and anime numbering.**
+- **Overnight conversions** (Settings → Overnight conversions): DVD rips, 4K and HEVC files get a
+  1080p H.264 copy made at night on the graphics card (paused while someone watches something being
+  converted). The copy is offered as another version of the film or episode, so the 1080p TVs, the
+  Roku and browsers play it as it is instead of the server converting the original every time; a
+  4K TV still plays the original. Copies go to `OPTIMIZED_DIR` (new in `.env`; `./optimized` by
+  default), within the space you allow. Choose which kinds of files, the hours, *Start now*, or
+  remove all copies.
+- **Automatic subtitles** (Settings → Metadata & subtitles): missing subtitles in the languages your
+  family picked on their Account pages (or ones you set) are fetched from OpenSubtitles by
+  themselves, newest titles first, within its daily allowance. One made for the same video file is
+  preferred; machine-translated ones are never used.
+- **Screen time** for kids' profiles (Settings → Users): a bedtime (every night or school nights)
+  and a daily limit. Nothing starts outside them on any device, and what's playing stops with a
+  message when bedtime starts or the time is used up. Their Account page shows what's left today.
+- **"Are you still watching?"** now in the web player too, after three episodes in a row played by
+  themselves (the TV apps already asked).
+- **Coming soon** row on the home page: new episodes of your shows (from Sonarr's calendar, or TMDB /
+  TVmaze) and films on their way in Radarr, with when they arrive. On the web and the Roku.
+- **Anime numbering:** episodes numbered straight through ("[Group] Frieren - 30", "One Piece -
+  1071") are placed in the right season automatically; *⋯ → Episode numbering…* on a show sets it
+  by hand.
+- Android app 1.14.0, Android TV 1.9.0, Roku 1.12 (bedtime messages; Coming soon on the Roku).
+
 ## 0.21.1
 
 - **Roku: a top bar like the other apps.** The side menu is replaced by the bar the web and Android TV
