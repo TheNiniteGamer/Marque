@@ -686,6 +686,10 @@ async function main() {
   // Matching (which gives titles their TMDB / TVmaze ids) finishes after scans, so arrivals are
   // also checked every minute.
   setInterval(() => { try { requests.checkArrivals(store); } catch { /* next time */ } }, 60_000).unref();
+  // Requests sent to Radarr / Sonarr: shows finished, and searches that are getting nowhere.
+  const followUp = () => requests.followUp(store, arr).catch((err) => console.warn(`[requests] ${err.message}`));
+  setTimeout(followUp, 30_000).unref();
+  setInterval(followUp, Number(process.env.REQUEST_FOLLOWUP_MS) || 180_000).unref();
   downloader.startAutoUpdate();
   setTimeout(() => matcher.backfillCollections().then(() => matcher.backfillRatings()).then(() => matcher.backfillFranchiseFacts()).catch((err) => console.warn('[meta]', err.message)), 60_000).unref();
   backups.startSchedule();

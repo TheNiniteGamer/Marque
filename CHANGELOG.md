@@ -4,6 +4,24 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.21.0
+
+**Requests with Radarr and Sonarr, continued.**
+- **Shows are "here" when they're all here.** With Sonarr getting a show, whoever asked hears when
+  the first episodes arrive ("more on the way", with a Watch button on the request), and that it's
+  here only when Sonarr has every episode it was asked for. Before, the first episode was enough.
+- **＋ More seasons** on a show's page: its seasons as TMDB / TVmaze list them, with how many episodes
+  of each are here, to ask for the rest. Sonarr is told to get just those seasons (the show is added
+  if it isn't there yet) and looks for them; progress counts only those seasons. The same approval
+  rules apply as for any request.
+- **Limits for requests that skip approval** (Settings → Radarr & Sonarr → Limits): when the folder
+  downloads go to has less free space than you set (100 GB by default), or someone has had their
+  week's worth of films or shows, their requests wait for you instead, with the reason shown. The
+  approve window shows how much space is free.
+- **Things that aren't found:** after 7 days (or the number you pick) of Radarr / Sonarr not finding
+  something, you get a notification, and the request offers **Look again** and **Try another
+  quality** (it's switched to another profile and searched for again).
+
 ## 0.20.0
 
 **Radarr and Sonarr.**

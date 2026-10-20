@@ -226,14 +226,14 @@ const SETTINGS_PAGES = [
     // Radarr / Sonarr: approved requests are sent to them (lib/arr.js).
     id: 'arr', label: 'Radarr & Sonarr',
     load: async () => {
-      const [cfg, users] = await Promise.all([api('/api/arr'), api('/api/users')]);
+      const [cfg, users, rules] = await Promise.all([api('/api/arr'), api('/api/users'), api('/api/request-rules')]);
       const opts = {};
       await Promise.all(['radarr', 'sonarr'].filter((a) => cfg[a].keySet).map(async (a) => {
         try { opts[a] = await api(`/api/arr/${a}/options`); } catch (err) { opts[a] = { error: err.message }; }
       }));
-      return { cfg, users, opts };
+      return { cfg, users, opts, rules };
     },
-    render: ({ cfg, users, opts }) => html`
+    render: ({ cfg, users, opts, rules }) => html`
       <p class="muted st-intro">Approved requests are added to Radarr (films) or Sonarr (shows), which find and download them into a folder Marquee watches.
         When the file arrives, the request is marked as here and whoever asked gets a notification.</p>
       ${['radarr', 'sonarr'].map((a) => arrCard(a, cfg[a], opts[a], cfg.monitorOptions))}
@@ -243,7 +243,18 @@ const SETTINGS_PAGES = [
         <span class="st-row-label">${u.username}${u.role === 'admin' ? html`<span class="st-row-note">Admin: always</span>` : ''}</span>
         <label class="arr-auto">Films <input type="checkbox" class="switch" data-auto="movie" ${u.autoApprove?.movie ? 'checked' : ''} ${u.role === 'admin' ? 'disabled' : ''}></label>
         <label class="arr-auto">Shows <input type="checkbox" class="switch" data-auto="show" ${u.autoApprove?.show ? 'checked' : ''} ${u.role === 'admin' ? 'disabled' : ''}></label>
-      </div>`)}</div>`,
+      </div>`)}</div>
+      <h2 class="st-sub">Limits</h2>
+      <div class="st-card">
+        ${stSelect('Keep free space', 'When the folder downloads go to has less than this, requests that would skip approval wait for you instead.', 'data-rule="minFreeGb"',
+          html`${[[0, 'No limit'], [50, '50 GB'], [100, '100 GB'], [200, '200 GB'], [500, '500 GB'], [1000, '1 TB'], [2000, '2 TB']].map(([v, l]) => html`<option value="${v}" ${rules.minFreeGb === v ? 'selected' : ''}>${l}</option>`)}`)}
+        ${stSelect('Films per person each week', 'Beyond this, someone’s film requests wait for you (for the rest of the week).', 'data-rule="weekly.movie"',
+          html`${[0, 1, 2, 3, 5, 7, 10, 20].map((v) => html`<option value="${v}" ${rules.weekly.movie === v ? 'selected' : ''}>${v ? v : 'No limit'}</option>`)}`)}
+        ${stSelect('Shows per person each week', 'The same for shows (or more seasons of one).', 'data-rule="weekly.show"',
+          html`${[0, 1, 2, 3, 5, 10].map((v) => html`<option value="${v}" ${rules.weekly.show === v ? 'selected' : ''}>${v ? v : 'No limit'}</option>`)}`)}
+        ${stSelect('Tell me when something isn’t found after', 'Radarr / Sonarr keep looking; you get a notification, and the request shows Look again and Try another quality.', 'data-rule="stuckDays"',
+          html`${[[0, 'Never'], [3, '3 days'], [7, '7 days'], [14, '2 weeks'], [30, 'a month']].map(([v, l]) => html`<option value="${v}" ${rules.stuckDays === v ? 'selected' : ''}>${l}</option>`)}`)}
+      </div>`,
     bind: ({ cfg, users }) => {
       const save = async (a, body, msg) => {
         try { await api(`/api/arr/${a}`, { method: 'PUT', body }); toast(msg); router(); } catch (err) { toast(err.message, true); }
@@ -273,6 +284,11 @@ const SETTINGS_PAGES = [
         if (a && el.dataset.set) {
           const v = el.type === 'checkbox' ? el.checked : el.dataset.set === 'profileId' ? Number(el.value) : el.value;
           return save(a, { [el.dataset.set]: v }, 'Saved');
+        }
+        if (el.dataset.rule) {
+          const [k, sub] = el.dataset.rule.split('.');
+          try { await api('/api/request-rules', { method: 'PUT', body: sub ? { [k]: { [sub]: Number(el.value) } } : { [k]: Number(el.value) } }); toast('Saved'); } catch (err) { toast(err.message, true); }
+          return;
         }
         const row = el.closest('.arr-user');
         if (row && el.dataset.auto) {

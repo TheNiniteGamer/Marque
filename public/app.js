@@ -875,6 +875,7 @@ async function viewShow({ params: [id], query, seq }) {
             : html`<span class="muted">${show.seasons[0].title}</span>`}
           <button class="btn small" id="season-watch"></button>
           ${phoneDownloads() ? html`<button class="btn small" id="season-dl">Download season</button>` : ''}
+          <button class="btn small" id="more-seasons" title="Ask for seasons that aren't here yet">＋ More seasons</button>
         </div></div>
       <div id="season-body"></div>
     </section>` : ''}
@@ -892,6 +893,7 @@ async function viewShow({ params: [id], query, seq }) {
     renderSeason();
   };
   $('#show-watch').onclick = async () => { await api(`/api/shows/${id}/watched`, { method: 'POST', body: { watched: !allWatched } }); router(); };
+  if ($('#more-seasons')) $('#more-seasons').onclick = () => openMoreSeasons(show);
   viewEl.onclick = async (e) => {
     const b = e.target.closest('[data-watch]'); if (!b) return;
     await api(`/api/items/${b.dataset.watch}/watched`, { method: 'POST', body: { watched: !b.classList.contains('on') } });

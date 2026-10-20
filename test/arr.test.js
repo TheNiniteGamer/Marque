@@ -11,60 +11,13 @@ const os = require('node:os');
 const path = require('node:path');
 const { clip, startServer, until } = require('./helpers');
 const { profileView, describe } = require('../lib/arr');
+const { fakeArr, PROFILES } = require('./fake-arr');
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'marquee-arr-'));
 const MOVIES = path.join(ROOT, 'Movies'), TV = path.join(ROOT, 'TV');
 const KEY = { radarr: 'r'.repeat(32), sonarr: 's'.repeat(32) };
 
-// Quality profiles as Radarr / Sonarr send them: qualities, some in groups, each allowed or not.
-const PROFILES = [
-  { id: 1, name: 'Any', items: [{ quality: { id: 4, name: 'HDTV-1080p', resolution: 1080 }, allowed: true }, { quality: { id: 19, name: 'Bluray-2160p', resolution: 2160 }, allowed: true }] },
-  { id: 4, name: 'HD-1080p', items: [
-    { quality: { id: 19, name: 'Bluray-2160p', resolution: 2160 }, allowed: false },
-    { name: 'WEB 1080p', allowed: true, items: [{ quality: { id: 3, name: 'WEBDL-1080p', resolution: 1080 }, allowed: true }, { quality: { id: 15, name: 'WEBRip-1080p', resolution: 1080 }, allowed: true }] },
-    { quality: { id: 7, name: 'Bluray-1080p', resolution: 1080 }, allowed: true },
-  ] },
-];
-
-// One fake per app. Everything Marquee sends is kept in `sent`.
-function fakeArr(app) {
-  const st = { sent: [], items: {}, queue: [], down: false, nextId: app === 'radarr' ? 11 : 21 };
-  st.server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, 'http://x');
-    const p = url.pathname.replace(/^\/api\/v3/, '');
-    let body = '';
-    for await (const c of req) body += c;
-    const send = (code, data) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(data)); };
-    if (st.down) return send(503, { message: 'Database is locked' });
-    if (req.headers['x-api-key'] !== KEY[app]) return send(401, { error: 'Unauthorized' });
-    if (req.method !== 'GET') st.sent.push({ method: req.method, path: p, body: JSON.parse(body || 'null') });
-    if (p === '/system/status') return send(200, { appName: app === 'radarr' ? 'Radarr' : 'Sonarr', version: app === 'radarr' ? '5.14.0.9383' : '4.0.20.3014' });
-    if (p === '/qualityprofile') return send(200, PROFILES);
-    if (p === '/rootfolder') return send(200, [{ id: 1, path: app === 'radarr' ? MOVIES : TV, freeSpace: 500e9, accessible: true }, { id: 2, path: 'E:\\Elsewhere', freeSpace: 1e12, accessible: true }]);
-    if (p === '/queue') return send(200, { page: 1, totalRecords: st.queue.length, records: st.queue });
-    // Radarr
-    if (p === '/movie' && req.method === 'GET') return send(200, Object.values(st.items).filter((m) => m.tmdbId === Number(url.searchParams.get('tmdbId'))));
-    if (p === '/movie/lookup/tmdb') {
-      const id = Number(url.searchParams.get('tmdbId'));
-      const have = Object.values(st.items).find((m) => m.tmdbId === id);
-      return send(200, have || { title: id === 603 ? 'The Matrix' : 'Something', tmdbId: id, year: 1999, images: [] });
-    }
-    if (p === '/movie' && req.method === 'POST') { const m = { ...JSON.parse(body), id: st.nextId++, hasFile: false, isAvailable: true }; st.items[m.id] = m; return send(201, m); }
-    // Sonarr
-    if (p === '/series' && req.method === 'GET') return send(200, Object.values(st.items).filter((s) => s.tvdbId === Number(url.searchParams.get('tvdbId'))));
-    if (p === '/series/lookup') return send(200, url.searchParams.get('term') === 'tvdb:81189' ? [{ title: 'Breaking Bad', tvdbId: 81189, year: 2008, seasons: [] }] : []);
-    if (p === '/series' && req.method === 'POST') {
-      const s = { ...JSON.parse(body), id: st.nextId++, status: 'ended', statistics: { episodeFileCount: 0, episodeCount: 62, percentOfEpisodes: 0 } };
-      st.items[s.id] = s;
-      return send(201, s);
-    }
-    const one = /^\/(movie|series)\/(\d+)$/.exec(p);
-    if (one) return st.items[one[2]] ? send(200, st.items[one[2]]) : send(404, { message: 'NotFound' });
-    send(404, { message: 'NotFound' });
-  });
-  return st;
-}
-const radarr = fakeArr('radarr'), sonarr = fakeArr('sonarr');
+const radarr = fakeArr('radarr', { key: KEY.radarr, rootFolder: MOVIES }), sonarr = fakeArr('sonarr', { key: KEY.sonarr, rootFolder: TV });
 const tmdb = http.createServer((req, res) => {
   const p = new URL(req.url, 'http://x').pathname.replace(/^\/3/, '');
   res.writeHead(p === '/tv/1396/external_ids' ? 200 : 404, { 'content-type': 'application/json' });

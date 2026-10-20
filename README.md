@@ -134,6 +134,16 @@ The Requests page then shows how each is getting on: *Looking for a copy*, *Down
 can't be reached, the request waits with the reason and a **Try again** button, admins get a
 notification, and the health check says so. Works with Radarr 3–5 and Sonarr 3 and 4.
 
+- **Shows:** whoever asked hears when the first episodes arrive ("more on the way"), and that it's
+  here only once Sonarr has every episode it was asked for.
+- **More seasons:** *＋ More seasons* on a show's page lists its seasons (with how many episodes of
+  each are here) to ask for the rest. Sonarr then gets just those seasons; it follows the same
+  approval rules as any request.
+- **Limits** (same settings page): keep some free space (requests that would skip approval wait for
+  you when the download folder has less, 100 GB by default), how many films and shows each person
+  may get each week without approval, and after how many days something not found is flagged to
+  you (7 by default), with **Look again** and **Try another quality** on the request.
+
 ### Backups
 
 Marquee backs itself up every night at 03:00 into the `backups` folder next to
@@ -262,7 +272,7 @@ never gets access to Docker itself.
 | **Kids profiles & ratings** | Titles carry their maturity rating (PG-13, TV-14, 12A…, from TMDB for your country, or set by hand with *⋯ → Edit*), shown as a badge. Give a profile a limit in *Settings → Users* (and choose whether unrated titles show): anything above it disappears everywhere for that profile. |
 | **Downloads on the phone** | The Android app saves movies and episodes to watch offline: the original file when the phone plays it, or a 1080p / 720p / 480p copy the server makes first. *Downloads* lists them; progress goes back to the server when you're online again. |
 | **Personal touches** | Sound and subtitle languages are remembered per show; 👍 / 👎 on titles steers suggestions ("Because you liked …"); a **Top 10 in your house this week** row; cast photos and **actor pages**; who's in it shows when you pause. |
-| **Requests** | Anyone can ask for a film or show (looked up on TMDB / TVmaze, or typed in) with a note; admins approve, decline or mark it added on the Requests page. It's marked as here by itself when it turns up, and whoever asked gets a notification. With **Radarr / Sonarr** connected, approved requests are sent to them (with a chosen quality profile and, for shows, seasons), chosen people's requests skip approval (films and shows separately), and each request shows its download progress. |
+| **Requests** | Anyone can ask for a film or show (looked up on TMDB / TVmaze, or typed in) with a note, or for **more seasons** of a show that's here; admins approve, decline or mark it added on the Requests page. It's marked as here by itself when it turns up, and whoever asked gets a notification. With **Radarr / Sonarr** connected, approved requests are sent to them (with a chosen quality profile and, for shows, seasons), chosen people's requests skip approval (films and shows separately, within free-space and weekly limits), each request shows its download progress, and anything not found after a few days is flagged. |
 | **Notifications** | A bell with new episodes of shows you watch (or have on My List) and news about your requests; the phone app shows them as phone notifications. |
 | **Health check** | Settings shows disk space, offline folders, backups (and whether they're copied off the PC), update and graphics-card problems at a glance; admins are notified when something turns bad. |
 | **Skip Recap** | "Previously on…" recaps are found automatically and get a Skip Recap button. |
