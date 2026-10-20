@@ -689,7 +689,8 @@ function sideInfo(x) {
   return html`<div class="dlg-side">
     ${x.cast?.length ? html`<div>Cast: <span class="v">${x.cast.slice(0, 5).map((c) => c.name).join(', ')}</span></div>` : ''}
     ${x.genres?.length ? html`<div>Genres: ${list(x.genres.map((g) => html`<a href="#/library/${x.libraryId}?genre=${encodeURIComponent(g)}">${g}</a>`))}</div>` : ''}
-    ${x.collections?.length ? html`<div>Collections: ${list(x.collections.map((c) => html`<a href="#/collection/${c.id}">${c.name}</a>`))}</div>` : ''}
+    ${x.collections?.some((c) => c.franchise) ? html`<div>Part of: ${list(x.collections.filter((c) => c.franchise).map((c) => html`<a href="#/collection/${c.id}">${c.name}</a>`))}</div>` : ''}
+    ${x.collections?.some((c) => !c.franchise) ? html`<div>Collections: ${list(x.collections.filter((c) => !c.franchise).map((c) => html`<a href="#/collection/${c.id}">${c.name}</a>`))}</div>` : ''}
     ${lib ? html`<div>Library: <a href="#/library/${lib.id}">${lib.name}</a></div>` : ''}
   </div>`;
 }
@@ -745,10 +746,20 @@ async function viewPerson({ params: [name], seq }) {
     <div class="grid sized">${p.titles.map((t) => posterCard(t))}</div>`);
 }
 
+// The franchise a title is part of ("◆ Marvel Cinematic Universe"), above its name.
+function sagaChip(x) {
+  return x.franchise ? html`<a class="saga-chip" href="#/collection/${x.franchise.id}">◆ ${x.franchise.name}</a>` : '';
+}
+// "More from the Marvel Cinematic Universe": the franchise's other titles, in its order.
+function franchiseSection(f) {
+  if (!f?.items.length) return '';
+  return similarSection(f.items.slice(0, 9), html`More from ${f.name} <a class="see-all" href="#/collection/${f.id}">All ${f.count} ›</a>`);
+}
+
 // "More like this": other titles sharing genres.
-function similarSection(list) {
+function similarSection(list, heading = 'More like this') {
   if (!list?.length) return '';
-  return html`<section class="dlg-section"><h2 style="margin-bottom:14px">More like this</h2><div class="similar-grid">${list.map((x) => {
+  return html`<section class="dlg-section"><h2 class="similar-head" style="margin-bottom:14px">${heading}</h2><div class="similar-grid">${list.map((x) => {
     knownItems.set(x.id, x);
     const m = [x.year, x.type === 'show' ? `${x.seasonCount} season${x.seasonCount === 1 ? '' : 's'}` : fmtDuration(x.duration)].filter(Boolean).join(' · ');
     return html`<a class="similar-card" href="${hrefFor(x)}">
@@ -830,6 +841,7 @@ async function viewShow({ params: [id], query, seq }) {
       <img src="${artUrl('backdrop', show)}" alt="">
       ${dlgTop(show)}
       <div class="dlg-head">
+        ${sagaChip(show)}
         <h1 class="dlg-title">${show.title}</h1>
         <div class="dlg-actions">
           ${up ? html`<button class="btn play" data-play="${up.id}">${icon('play')}${upLabel}</button>` : ''}
@@ -865,6 +877,7 @@ async function viewShow({ params: [id], query, seq }) {
     </section>` : ''}
     ${extrasSection(show.extras)}
     ${castSection(show.cast)}
+    ${franchiseSection(show.franchise)}
     ${similarSection(show.similar)}
     ${show.files ? showFilesBox(show.files) : ''}`)) return;
 
@@ -900,6 +913,7 @@ async function viewItem({ params: [id], seq }) {
       <div class="dlg-head">
         ${isEp ? html`<div class="dlg-eyebrow"><a href="#/show/${it.showId}?season=${it.season}">${it.showTitle}</a> · ${epLabel(it).replace(' · ', ':')}</div>` : ''}
         ${isExtra ? html`<div class="dlg-eyebrow">${it.extraLabel}${it.parent ? html` · <a href="#/${it.parent.type === 'show' ? 'show' : 'item'}/${it.parent.id}">${it.parent.title}</a>` : ''}</div>` : ''}
+        ${isEp || isExtra ? '' : sagaChip(it)}
         <h1 class="dlg-title">${it.title}</h1>
         <div class="dlg-actions">
           ${it.media ? html`
@@ -940,6 +954,7 @@ async function viewItem({ params: [id], seq }) {
     </div>
     ${extrasSection(it.extras)}
     ${it.type !== 'episode' ? castSection(it.cast) : ''}
+    ${franchiseSection(it.franchise)}
     ${similarSection(it.similar)}
     <details class="tech-box" ${it.file ? raw('open') : ''}><summary>${it.file ? 'File' : 'File and playback details'}</summary>
       <dl class="tech">

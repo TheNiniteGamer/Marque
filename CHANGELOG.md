@@ -4,6 +4,32 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.19.0
+
+**Franchises.**
+- Big film worlds are found automatically: the **Marvel Cinematic Universe**, **Star Wars**,
+  **DC**, **X-Men**, **Spider-Man**, the **Wizarding World**, **Middle-earth**, **Star Trek**, the
+  **MonsterVerse**, **The Conjuring Universe**, **Planet of the Apes** and **Rocky & Creed**, plus
+  the studios **Pixar**, **Walt Disney Animation**, **DreamWorks Animation**, **Illumination** and
+  **Studio Ghibli**. They're worked out from TMDB's keywords, studios and film series, films and
+  TV series together, once two of their titles are in your libraries. Titles matched before this
+  update are looked up again in the background, a minute after Marquee starts.
+- **Collections** has a **Franchises** section at the top, and the home page a **Franchises** row
+  (it can be turned off in Settings → Home screen).
+- **A franchise's page:** a banner with what's in it and the years it spans, **how many you've
+  seen**, and a button to **start, continue or watch the next one**. Titles are in rows by series
+  ("Iron Man", "The Avengers", more films, TV series), or all in one grid.
+- **Story order:** admins can arrange a franchise in the order its story happens in (*Arrange story
+  order*); the next-up button follows it.
+- A film's or show's page shows the franchise it's part of above its name, and **More from …** with
+  the titles that come after it.
+- Franchises are automatic collections: admins can rename them, add titles they missed, take titles
+  out, pick the cover, hide them or reset them. Any collection can be moved into the Franchises
+  section (*Show under → Franchises*) to get the franchise page, for your own film worlds.
+- Libraries grouped into collections still group by film series ("Iron Man Collection"), not by
+  franchise.
+- Films from the same year are ordered by their release date in collections.
+
 ## 0.18.0
 
 **A new Account page.**

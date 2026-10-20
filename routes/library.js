@@ -72,9 +72,16 @@ module.exports = function register(app) {
   // --- browsing + watch state ---
   route('GET', '/api/home', async (req, res, p, url, user) => {
     const h = lib.home(store, user);
-    // Collections as rows of their own (the first few, in the order an admin arranged them), after "New in …".
-    const rows = collections.list(store, user).filter((c) => !c.hidden && c.count >= 3).slice(0, lib.homeSettings(store).collections)
+    // Collections as rows of their own (the first few, in the order an admin arranged them), after "New in …",
+    // with a row of the franchises in the library before them.
+    const all = collections.list(store, user).filter((c) => !c.hidden);
+    const sagas = all.filter((c) => c.section === 'franchises' && c.count >= 2);
+    const rows = all.filter((c) => c.section !== 'franchises' && c.count >= 3).slice(0, lib.homeSettings(store).collections)
       .map((c) => { const d = collections.detail(store, user, c.id); return { key: `col-${c.id}`, title: c.name, note: `Collection · ${c.count} titles`, link: `#/collection/${c.id}`, style: 'poster', items: d.items }; });
+    if (lib.homeSettings(store).franchises && sagas.length >= 2) {
+      rows.unshift({ key: 'franchises', title: 'Franchises', note: 'Film worlds and studios in your libraries', link: '#/collections', style: 'poster',
+        items: sagas.map((c) => ({ ...c, type: 'collection' })) });
+    }
     const at = h.hubs.findLastIndex((x) => x.key.startsWith('recent-')) + 1 || h.hubs.length;
     h.hubs.splice(at, 0, ...rows);
     json(res, 200, h);
@@ -84,7 +91,7 @@ module.exports = function register(app) {
 
   route('GET', '/api/shows/:id', async (req, res, { id }, url, user) => {
     const show = getShow(id, user);
-    json(res, 200, { ...lib.showDetail(store, user, show), collections: collections.of(store, user, id), similar: lib.similar(store, user, show) });
+    json(res, 200, { ...lib.showDetail(store, user, show), collections: collections.of(store, user, id), franchise: collections.franchiseRow(store, user, id), similar: lib.similar(store, user, show) });
   });
 
   route('POST', '/api/shows/:id/watched', async (req, res, { id }, url, user) => {
@@ -98,7 +105,8 @@ module.exports = function register(app) {
 
   route('GET', '/api/items/:id', async (req, res, { id }, url, user) => {
     const it = getItem(id, user);
-    json(res, 200, { ...lib.itemDetail(store, user, it), collections: collections.of(store, user, id), similar: it.type === 'movie' ? lib.similar(store, user, it) : [] });
+    json(res, 200, { ...lib.itemDetail(store, user, it), collections: collections.of(store, user, id),
+      franchise: it.type === 'movie' ? collections.franchiseRow(store, user, lib.primaryId(store, id)) : null, similar: it.type === 'movie' ? lib.similar(store, user, it) : [] });
   });
 
   // --- collections ---

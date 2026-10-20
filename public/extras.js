@@ -1033,9 +1033,10 @@ document.addEventListener('click', async (e) => {
 // ---------- collections ----------
 // "Group into collections": titles that belong to a collection are shown as that collection's card
 // (in the first collection they're in). Each group keeps what the library view sorts and filters by.
+// Franchises are too big for that (a library would be one MCU card): their film series group instead.
 function groupByCollection(items, cols) {
   const owner = new Map();
-  for (const c of cols) if (!c.hidden) for (const id of c.memberIds || []) if (!owner.has(id)) owner.set(id, c);
+  for (const c of cols) if (!c.hidden && c.section !== 'franchises') for (const id of c.memberIds || []) if (!owner.has(id)) owner.set(id, c);
   const out = [];
   const groups = new Map();
   for (const x of items) {
@@ -1065,8 +1066,9 @@ const groupingOn = () => store.get('groupCollections', true);
 
 function collectionCard(c) {
   knownItems.set(c.id, c);
-  const sub = c.hidden ? 'Hidden' : `Collection · ${c.count} title${c.count === 1 ? '' : 's'}`;
-  return html`<div class="card ${c.hidden ? 'is-hidden' : ''}" data-sel="${c.id}">
+  const what = c.section === 'franchises' ? (c.studio ? 'Studio' : 'Franchise') : 'Collection';
+  const sub = c.hidden ? 'Hidden' : `${what} · ${c.count} title${c.count === 1 ? '' : 's'}`;
+  return html`<div class="card ${c.hidden ? 'is-hidden' : ''} ${c.section === 'franchises' ? 'franchise-card' : ''}" data-sel="${c.id}">
     <div class="art"><a class="cover" href="#/collection/${c.id}" aria-label="${c.name}">
       ${c.cover ? html`<img loading="lazy" src="${artUrl('backdrop', c.cover)}" alt="">` : html`<div class="collection-empty">▦</div>`}</a>
       <i class="scrim"></i><span class="art-title">${c.name}</span>
@@ -1075,9 +1077,9 @@ function collectionCard(c) {
   </div>`;
 }
 
-// Collections are listed in sections: Movies, TV and YouTube (each collection's section is worked out
-// from its titles, or picked by an admin).
-const SECTION_HEAD = { movies: 'Movie collections', shows: 'TV collections', videos: 'YouTube collections' };
+// Collections are listed in sections: Franchises, Movies, TV and YouTube (each collection's section is
+// worked out from its titles, or picked by an admin).
+const SECTION_HEAD = { franchises: 'Franchises', movies: 'Movie collections', shows: 'TV collections', videos: 'YouTube collections' };
 async function viewCollections({ query, seq }) {
   const libraryId = query.get('library');
   const admin = state.user.role === 'admin';
@@ -1102,7 +1104,7 @@ async function viewCollections({ query, seq }) {
           ${admin && l.length > 1 ? html`<button class="btn small" data-arrange="${k}">⇅ Arrange</button>` : ''}</div>
         <div class="grid" data-grid="${k}">${l.map(collectionCard)}</div>
       </section>`) : html`<div class="empty"><h2>No collections yet</h2>
-      <p>Film series like “The Matrix Collection” appear here automatically once two of their movies are matched with TMDB.${admin ? ' You can also make your own with ＋ New collection, by selecting titles in a library (☑ Select), or with ⌕ Find series for YouTube series.' : ''}</p></div>`}</div>`)) return;
+      <p>Film series like “The Matrix Collection”, and franchises like the Marvel Cinematic Universe or Pixar, appear here automatically once two of their titles are matched with TMDB.${admin ? ' You can also make your own with ＋ New collection, by selecting titles in a library (☑ Select), or with ⌕ Find series for YouTube series.' : ''}</p></div>`}</div>`)) return;
   if ($('#cols-jump')) $('#cols-jump').onclick = (e) => { const k = e.target.dataset.jump; if (k) $(`#sec-${k}`)?.scrollIntoView({ behavior: 'smooth' }); };
   if (!admin) return;
   bindSelect({ root: () => $('#cols-body'), kind: 'collections' });
@@ -1118,7 +1120,7 @@ async function viewCollections({ query, seq }) {
     const mine = list.filter((c) => c.section === k);
     const section = $(`#sec-${k} .grid`);
     reorderList(section, {
-      items: mine.map((c) => ({ id: c.id, title: c.name, sub: c.kind === 'auto' ? 'From TMDB' : `${c.count} titles`, img: c.cover ? artUrl('poster', c.cover) : null })),
+      items: mine.map((c) => ({ id: c.id, title: c.name, sub: c.kind === 'auto' ? 'From TMDB' : c.kind === 'franchise' ? `${c.studio ? 'Studio' : 'Franchise'} · ${c.count} titles` : `${c.count} titles`, img: c.cover ? artUrl('poster', c.cover) : null })),
       note: `Drag ${SECTION_HEAD[k].toLowerCase()} into the order you want them listed (for everyone), or use the arrows.`,
       // The other sections (and collections not shown here) keep their places.
       save: (order) => {
@@ -1163,50 +1165,89 @@ async function openSeriesFinder() {
   };
 }
 
+// The banner at the top of a franchise: its cover's artwork, what it is, how much of it you've seen,
+// and a button to carry on with it (in the order shown, which an admin can make the story order).
+function sagaHero(c) {
+  const films = c.items.filter((x) => x.type !== 'show').length, series = c.items.length - films;
+  const years = c.items.map((x) => x.year).filter(Boolean);
+  const span = years.length ? (Math.min(...years) === Math.max(...years) ? Math.min(...years) : `${Math.min(...years)}–${Math.max(...years)}`) : '';
+  const n = c.next;
+  const label = !n ? '' : n.started ? `Continue ${n.title}` : n.first && !c.watched ? `Start with ${n.title}` : `Up next: ${n.title}`;
+  return html`<section class="saga-hero">
+    <div class="saga-art">${c.cover ? html`<img src="${artUrl('backdrop', c.cover)}" alt="">` : ''}</div>
+    <div class="saga-body">
+      <span class="hero-kind">${c.studio ? 'STUDIO' : 'FRANCHISE'}</span>
+      <h1 class="saga-title">${c.name}</h1>
+      <div class="hero-meta">${[films && `${films} film${films === 1 ? '' : 's'}`, series && `${series} series`, span].filter(Boolean).join(' · ')}</div>
+      ${c.about ? html`<p class="saga-about">${c.about}</p>` : ''}
+      ${c.items.length ? html`<div class="saga-progress"><div class="bar"><i style="width:${((100 * c.watched) / c.items.length).toFixed(1)}%"></i></div>
+        <span>${c.watched === c.items.length ? `You’ve seen all ${c.items.length} ✓` : c.watched ? `You’ve seen ${c.watched} of ${c.items.length}` : `${c.items.length} titles to watch`}</span></div>` : ''}
+      ${n ? html`<div class="hero-actions"><button class="btn play" data-play="${n.type === 'show' ? `show:${n.id}` : n.id}" ${!n.started && n.type !== 'show' ? raw('data-t="0"') : ''}>${icon('play')}${label}</button>
+        <a class="btn" href="${n.type === 'show' ? `#/show/${n.id}` : `#/item/${n.id}`}">More info</a></div>` : ''}
+    </div>
+  </section>`;
+}
+
 async function viewCollection({ params: [id], seq }) {
   const c = await api(`/api/collections/${id}`);
   const admin = state.user.role === 'admin';
-  const auto = c.kind === 'auto';
+  const auto = c.kind !== 'manual';
+  const saga = c.section === 'franchises';
+  const renamed = c.tmdbName && c.tmdbName !== c.name ? ` (“${c.tmdbName}”)` : '';
+  const source = c.kind === 'auto' ? `From TMDB${renamed}` : c.kind === 'franchise' ? `${c.studio ? 'Studio' : 'Franchise'} found from TMDB’s details${renamed}` : 'Collection';
+  const sorts = saga ? { ...SORT_LABEL, custom: 'Story order (arranged by hand)' } : SORT_LABEL;
+  // Franchises: rows by film series ("Iron Man", "The Avengers"…) or every title in one grid.
+  const rows = saga && c.parts?.length && store.get('sagaView', 'rows') === 'rows';
+  const byId = new Map(c.items.map((x) => [x.id, x]));
+  const ctx = admin ? `collection:${c.id}` : '';
   if (!setView(seq, html`
-    <div class="toolbar"><h1>${c.name}<span class="count">${c.count}</span></h1>
-      <span class="muted">${auto ? `From TMDB${c.tmdbName && c.tmdbName !== c.name ? ` (“${c.tmdbName}”)` : ''}${c.changed ? ' · changed by an admin' : ''}` : 'Collection'} · ${SECTION_LABEL[c.section]}</span>
+    ${saga ? sagaHero(c) : ''}
+    <div class="toolbar">${saga ? '' : html`<h1>${c.name}<span class="count">${c.count}</span></h1>`}
+      <span class="muted">${source}${c.changed ? ' · changed by an admin' : ''}${saga ? '' : ` · ${SECTION_LABEL[c.section]}`}</span>
+      ${saga && c.parts?.length ? html`<div class="seg" id="saga-view"><button data-v="rows" class="${rows ? 'on' : ''}">☰ By series</button><button data-v="all" class="${rows ? '' : 'on'}">▦ All titles</button></div>` : ''}
       ${admin && c.items.length ? selectButton() : ''}
       ${admin ? html`<button class="btn small" id="col-rename">Rename</button>` : ''}
-      ${admin && auto && c.changed ? html`<button class="btn small" id="col-reset" title="Undo every change made to this TMDB collection">Reset to TMDB</button>` : ''}
+      ${admin && auto && c.changed ? html`<button class="btn small" id="col-reset" title="Undo every change made to this collection">${c.kind === 'franchise' ? 'Reset' : 'Reset to TMDB'}</button>` : ''}
       ${admin ? html`<button class="btn small danger" id="col-delete">${auto ? (c.hidden ? 'Show again' : 'Hide') : 'Delete'}</button>` : ''}</div>
     ${c.hidden ? html`<div class="filter-note">This collection is hidden from everyone. Use “Show again” to bring it back.</div>` : ''}
     ${admin ? html`<div class="row col-options">
-      <label>Order <select id="col-sort">${Object.entries(SORT_LABEL).map(([k, l]) => html`<option value="${k}" ${c.sort === k ? 'selected' : ''}>${l}</option>`)}</select></label>
+      <label>Order <select id="col-sort">${Object.entries(sorts).map(([k, l]) => html`<option value="${k}" ${c.sort === k ? 'selected' : ''}>${l}</option>`)}</select></label>
       ${c.sort !== 'custom' ? html`<button class="btn small ${c.reverse ? 'on' : ''}" id="col-reverse" aria-pressed="${c.reverse ? 'true' : 'false'}" title="Show the order the other way round (last first)">⇵ ${c.reverse ? 'Reversed' : 'Reverse'}</button>` : ''}
-      ${c.items.length > 1 ? html`<button class="btn small" id="col-reorder" title="Drag the titles into any order">✋ Arrange by hand</button>` : ''}
+      ${c.items.length > 1 ? html`<button class="btn small" id="col-reorder" title="${saga ? 'Drag the titles into the order the story happens in' : 'Drag the titles into any order'}">✋ ${saga ? 'Arrange story order' : 'Arrange by hand'}</button>` : ''}
       <label>Show under <select id="col-section"><option value="" ${c.sectionSetByHand ? '' : 'selected'}>Automatic</option>
         ${Object.entries(SECTION_LABEL).map(([k, l]) => html`<option value="${k}" ${c.sectionSetByHand && c.section === k ? 'selected' : ''}>${l}</option>`)}</select></label>
       ${c.sort === 'episode' ? html`<span class="muted" style="font-size:13px">Uses numbers in the titles: “Ep 12”, “Episode 12”, “S2E5”, “Part 3”, “#12”, or a number at the end.</span>` : ''}
     </div>` : ''}
-    <div id="col-body">${c.items.length ? html`<div class="grid">${c.items.map((x) => posterCard(x, admin ? `collection:${c.id}` : ''))}</div>`
-      : html`<div class="empty"><p>This collection is empty. Use “Add to collection…” in the ⋯ menu of a movie or show.</p></div>`}</div>
-    ${admin ? html`<p class="muted" style="font-size:13px">Tip: ☑ Select removes several titles at once; each title's ⋯ menu can also make its poster the collection's cover.</p>` : ''}`)) return;
+    <div id="col-body">${!c.items.length ? html`<div class="empty"><p>This collection is empty. Use “Add to collection…” in the ⋯ menu of a movie or show.</p></div>`
+      : rows ? c.parts.map((p) => html`<section class="hub"><div class="hub-head"><h2>${p.name}</h2><span class="hub-note">${p.ids.length}</span></div>
+          ${rail(p.ids.map((i) => byId.get(i)).filter(Boolean), (x) => posterCard(x, ctx))}</section>`)
+      : html`<div class="grid">${c.items.map((x) => posterCard(x, ctx))}</div>`}</div>
+    ${admin ? html`<p class="muted" style="font-size:13px">Tip: ☑ Select removes several titles at once; each title's ⋯ menu can also make its poster the collection's cover.${saga ? ' Franchises are worked out from TMDB’s keywords and studios; add anything it missed with “Add to collection…”.' : ''}</p>` : ''}`)) return;
+  view.classList.toggle('has-hero', saga); // (the banner goes under the top bar, as on the home page)
+  updateRails();
+  if ($('#saga-view')) $('#saga-view').onclick = (e) => { const v = e.target.closest('[data-v]')?.dataset.v; if (v) { store.set('sagaView', v); router(); } };
   if (!admin) return;
   const patch = async (body, msg) => { try { await api(`/api/collections/${id}`, { method: 'PATCH', body }); toast(msg); router(); } catch (err) { toast(err.message, true); } };
   bindSelect({ root: () => $('#col-body'), kind: 'titles', collectionId: id });
-  $('#col-sort').onchange = (e) => patch({ sort: e.target.value }, `Ordered by ${SORT_LABEL[e.target.value].toLowerCase()}`);
+  $('#col-sort').onchange = (e) => patch({ sort: e.target.value }, `Ordered by ${sorts[e.target.value].toLowerCase()}`);
   if ($('#col-reverse')) $('#col-reverse').onclick = () => patch({ reverse: !c.reverse }, 'Order reversed');
   $('#col-section').onchange = (e) => patch({ section: e.target.value || null }, e.target.value ? `Shown under ${SECTION_LABEL[e.target.value]}` : 'Section decided from the titles');
   if ($('#col-reorder')) $('#col-reorder').onclick = () => reorderList($('#col-body'), {
     items: c.items.map((x) => ({ id: x.id, title: x.title, sub: x.year || '', img: artUrl('poster', x) })),
-    note: 'Drag titles into the order you want, or use the arrows. Everyone sees this order; titles added later go at the end.',
+    note: saga ? 'Drag titles into the order the story happens in (or any order you like). Everyone sees this order, and “Continue” follows it; titles added later go at the end.'
+      : 'Drag titles into the order you want, or use the arrows. Everyone sees this order; titles added later go at the end.',
     save: (order) => api(`/api/collections/${id}/order`, { method: 'PUT', body: { order } }),
     reset: c.customOrder ? () => api(`/api/collections/${id}/order`, { method: 'PUT', body: { order: null } }) : null,
     resetLabel: 'Stop arranging by hand (back to release date)',
   });
   $('#col-rename').onclick = () => {
-    const name = prompt(auto ? `New name (leave empty to use TMDB's name, “${c.tmdbName}”)` : 'New name', c.name);
+    const name = prompt(auto ? `New name (leave empty to go back to “${c.tmdbName}”)` : 'New name', c.name);
     if (name === null || name === c.name) return;
     patch({ name }, 'Renamed');
   };
   if ($('#col-reset')) $('#col-reset').onclick = async () => {
-    if (!confirm('Undo every change to this collection (name, titles, order, cover, hidden) and use TMDB’s version again?')) return;
-    try { await api(`/api/collections/${id}/reset`, { method: 'POST' }); toast('Back to TMDB’s version'); router(); } catch (err) { toast(err.message, true); }
+    if (!confirm('Undo every change to this collection (name, titles, order, cover, hidden) and go back to the automatic version?')) return;
+    try { await api(`/api/collections/${id}/reset`, { method: 'POST' }); toast('Back to the automatic version'); router(); } catch (err) { toast(err.message, true); }
   };
   $('#col-delete').onclick = async () => {
     if (auto) return patch({ hidden: !c.hidden }, c.hidden ? 'Shown again' : 'Hidden from everyone');
@@ -1278,7 +1319,7 @@ async function openCollectionPicker(x) {
     title: `Collections — ${x.title}`,
     body: html`<div class="form">
       ${all.length ? all.map((c) => html`<label class="check"><input type="checkbox" data-col="${c.id}" ${inIds.has(c.id) ? 'checked' : ''}> ${c.name}
-          <span class="muted">(${c.count}${c.kind === 'auto' ? ', from TMDB' : ''}${c.hidden ? ', hidden' : ''})</span></label>`)
+          <span class="muted">(${c.count}${colSource(c)}${c.hidden ? ', hidden' : ''})</span></label>`)
         : html`<p class="muted" style="margin:0">There are no collections yet.</p>`}
       <label>New collection <span class="row"><input class="input" id="col-new-name" placeholder="e.g. Christmas movies"><button class="btn small" id="col-new-add">Add</button></span></label>
     </div>`.s,

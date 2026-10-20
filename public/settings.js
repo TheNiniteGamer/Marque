@@ -38,7 +38,7 @@ const SETTINGS_PAGES = [
       const locked = users.filter((u) => u.locks?.signIn || u.locks?.pin).length;
       const last = backups.backups[0];
       const rows = settings.home;
-      const homeOn = ['hero', 'top10', 'watchlist', 'recent', 'because', 'liked'].filter((k) => rows[k]).length + (rows.genres ? 1 : 0) + (rows.collections ? 1 : 0);
+      const homeOn = ['hero', 'top10', 'watchlist', 'recent', 'because', 'liked', 'franchises'].filter((k) => rows[k]).length + (rows.genres ? 1 : 0) + (rows.collections ? 1 : 0);
       const needs = [
         s.requestsPending ? stRow('Requests', `${s.requestsPending} waiting`, '#/requests', { warn: true }) : '',
         s.updateAvailable ? stRow('Update', 'A new version is ready', '#/settings/server', { warn: true }) : '',
@@ -188,6 +188,7 @@ const SETTINGS_PAGES = [
           ${toggle('recent', 'New in each library')}
           ${toggle('because', 'Because you watched …', 'Like the last thing each person watched')}
           ${toggle('liked', 'Because you liked …', 'Like their latest thumbs-up')}
+          ${toggle('franchises', 'Franchises', 'The film worlds and studios in your libraries (Marvel, Star Wars, Pixar…)')}
           ${count('collections', 'Collection rows', 'The first collections, in the order you arranged them')}
           ${count('genres', 'Genre rows', 'The biggest genres in your libraries')}
         </div>`;

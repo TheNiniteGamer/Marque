@@ -3,7 +3,9 @@
    add to a collection, mark watched, My List, genres, refresh. Loaded before app.js; helpers from
    app.js and extras.js are used only when called. */
 
-const SECTION_LABEL = { movies: 'Movies', shows: 'TV', videos: 'YouTube' };
+const SECTION_LABEL = { franchises: 'Franchises', movies: 'Movies', shows: 'TV', videos: 'YouTube' };
+// "(from TMDB)" / "(franchise)" after a collection's name in lists.
+const colSource = (c) => (c.kind === 'auto' ? ', from TMDB' : c.kind === 'franchise' ? `, ${c.studio ? 'studio' : 'franchise'}` : '');
 const SORT_LABEL = { release: 'Release date', episode: 'Episode number in the title', title: 'Title (A–Z)', added: 'Date added', custom: 'Arranged by hand' };
 
 // opts: { root: () => element holding the cards, kind: 'titles' | 'collections', collectionId }
@@ -193,8 +195,8 @@ async function collectionsAction(act, anchor) {
   }
   if (act === 'hide') {
     const cols = ids.map((id) => knownItems.get(id)).filter(Boolean);
-    const own = cols.filter((c) => c.kind === 'manual'), auto = cols.filter((c) => c.kind === 'auto');
-    const parts = [own.length && `delete ${plural(own.length, 'collection')} you made`, auto.length && `hide ${plural(auto.length, 'TMDB collection')}`].filter(Boolean);
+    const own = cols.filter((c) => c.kind === 'manual'), auto = cols.filter((c) => c.kind !== 'manual');
+    const parts = [own.length && `delete ${plural(own.length, 'collection')} you made`, auto.length && `hide ${plural(auto.length, 'automatic collection')}`].filter(Boolean);
     if (!confirm(`This will ${parts.join(' and ')}. The movies and shows in them are not affected. Continue?`)) return;
     for (const c of own) await api(`/api/collections/${c.id}`, { method: 'DELETE' });
     for (const c of auto) await api(`/api/collections/${c.id}`, { method: 'PATCH', body: { hidden: true } });
@@ -218,7 +220,7 @@ async function openBulkCollect(ids) {
       </div>
       ${all.length ? html`<input class="input" id="bc-filter" type="search" placeholder="Find a collection…">
         <div class="bc-list">${sections.map(([k, list]) => html`<h3>${SECTION_LABEL[k]}</h3>${list.map((c) => html`
-          <div class="bc-row" data-name="${c.name.toLowerCase()}"><span>${c.name} <span class="muted">(${c.count}${c.kind === 'auto' ? ', from TMDB' : ''}${c.hidden ? ', hidden' : ''})</span></span>
+          <div class="bc-row" data-name="${c.name.toLowerCase()}"><span>${c.name} <span class="muted">(${c.count}${colSource(c)}${c.hidden ? ', hidden' : ''})</span></span>
             <button class="btn small" data-bc="${c.id}">Add here</button></div>`)}`)}</div>`
         : html`<p class="muted" style="margin:0">There are no collections yet — make the first one above.</p>`}
     </div>`.s,

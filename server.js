@@ -676,7 +676,7 @@ async function main() {
   // also checked every minute.
   setInterval(() => { try { requests.checkArrivals(store); } catch { /* next time */ } }, 60_000).unref();
   downloader.startAutoUpdate();
-  setTimeout(() => matcher.backfillCollections().then(() => matcher.backfillRatings()).catch((err) => console.warn('[meta]', err.message)), 60_000).unref();
+  setTimeout(() => matcher.backfillCollections().then(() => matcher.backfillRatings()).then(() => matcher.backfillFranchiseFacts()).catch((err) => console.warn('[meta]', err.message)), 60_000).unref();
   backups.startSchedule();
   // With new files noticed by the folder watcher, full rescans (which look at every file) are only a
   // safety net, so they run at most every 6 hours.
