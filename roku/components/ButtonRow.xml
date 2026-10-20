@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- A row of buttons side by side, as on the web's title pages: left and right move along it, OK
-     chooses. The highlighted one is white; while the row isn't highlighted the first (Play) is. -->
+     chooses. The highlighted one is white; while the row isn't highlighted the `rest` one is (the first, Play). -->
 <component name="ButtonRow" extends="Group">
   <interface>
     <field id="buttons" type="array" onChange="build" />
     <!-- Set when a button is chosen (its index). -->
     <field id="selected" type="integer" alwaysNotify="true" />
     <field id="index" type="integer" value="0" onChange="paint" />
+    <!-- The one shown white while the row isn't highlighted (-1: none). -->
+    <field id="rest" type="integer" value="0" onChange="paint" />
   </interface>
   <children>
     <LayoutGroup id="row" layoutDirection="horiz" itemSpacings="[16]" />

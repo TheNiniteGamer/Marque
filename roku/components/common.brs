@@ -300,6 +300,17 @@ function mqClock(sec as Dynamic) as String
     return mi.ToStr() + ":" + ss
 end function
 
+' Is this node on screen (it and everything it sits in visible)? Screens under the one you're
+' looking at are hidden, and must never act on keys.
+function mqShown(node as Object) as Boolean
+    n = node
+    while n <> invalid
+        if not n.visible then return false
+        n = n.getParent()
+    end while
+    return true
+end function
+
 ' What choosing something in the top bar (TopBar) opens. fromHome: the bar is on Home; elsewhere a
 ' library replaces the page you're on, and Home goes back to it.
 function mqTopBarNav(c as Object, fromHome as Boolean) as Object

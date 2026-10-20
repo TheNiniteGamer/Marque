@@ -4,6 +4,6 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 rm -rf build && mkdir -p build
-zip -qr -9 build/Marquee-Roku.zip manifest source components images fonts -x '*.DS_Store'
+zip -qr -9 build/Marquee-Roku.zip manifest source components images fonts sounds -x '*.DS_Store'
 cp build/Marquee-Roku.zip ../public/downloads/Marquee-Roku.zip
 echo "build/Marquee-Roku.zip ($(du -h build/Marquee-Roku.zip | cut -f1))"

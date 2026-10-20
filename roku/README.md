@@ -1,7 +1,9 @@
 # Marquee for Roku
 
-A Roku channel for Marquee: the home rows, your libraries, My List and search, the details and
-episode lists, and a player that resumes where you left off, skips intros and goes on to the next
+A Roku channel for Marquee, laid out like the Android TV app: the home rows, your libraries (with
+sorting and filters), Collections and franchises, My List and search, title pages with their
+extras, cast and "more like this", episode lists, requests ("Ask for it"), notifications and a few
+settings, and a player that resumes where you left off, skips intros and goes on to the next
 episode. Built with SceneGraph for 1080p (it scales down on HD Rokus).
 
 It isn't in the Roku Channel Store, so it's added to your Roku in **developer mode** (free, no
@@ -33,15 +35,47 @@ To update, upload the new zip the same way (it replaces the old one).
 or one an admin lets be picked without a PIN), the channel starts by asking who's watching. A profile with a PIN asks for it
 on a number pad. *Switch profile* is under your profile in the top bar.
 
-**The top bar**, as in the web and Android TV apps: Home, each library and My List, with Search and
-your profile on the right. Press **up** from the banner (or a library's top row) to reach it, **left /
-right** to move along it and **OK** to open; the page you're on is in bold. Your profile has *Switch
-profile* and *Sign out*.
-On the home page ✱ opens search; on the code screen it changes the server.
+**The top bar**, as in the web and Android TV apps: Home, each library, Collections and My List,
+with the bell, Search and your profile on the right. Press **up** from the banner (or a page's top
+row) to reach it, **left / right** to move along it and **OK** to open; the page you're on is in
+bold. **Down** or **Back** returns to the page.
+
+- **The bell** shows how many notifications you haven't seen (new episodes of your shows, requests
+  that are here). Opening it lists them, newest first; choosing one opens the title it's about.
+- **Your profile** opens a small menu: *Switch profile*, *My requests*, *Settings* and *Sign out*.
+  Back or left closes it. The Roku only signs out when you choose *Sign out* there (or in Settings).
+- **Collections**: franchises, then movie, TV and YouTube collections; choosing one lists its titles
+  (a franchise also says how far through it you are and what's next).
+- **Settings**: who's watching (Switch profile), playing the next episode automatically, skipping
+  intros automatically, night mode, how long the Skip Intro / Skip Credits buttons stay up (all
+  saved with your account, so your other devices follow them), turning subtitles on by default (for
+  this Roku), the server (Switch server) and Sign out.
+
+**A title's page**: a row of buttons (Play or Resume and From the start, Episodes, the version to
+play when there's more than one, My List, Rate, Mark watched, More seasons for a show, Previous /
+Next and All episodes for an episode), then rows of trailers & extras, the cast (choosing someone
+lists their titles), the rest of its franchise and more like it. **More seasons** lists the show's
+seasons that aren't all here yet: tick them with **OK**, then choose *Ask for these seasons*.
+
+**Requests**: in Search, *Not here? Ask for "…"* (above the results) looks the name up online
+as a film or a TV show; choosing one asks for it (or opens it, if it's here already), and the last
+line asks for it by name. *My requests* (under your profile) shows how each is getting on; one
+that's here opens, and ✱ withdraws one still waiting (or stops following one you joined; whoever
+runs the server sees everyone's, and ✱ removes them).
+
+On the home page ✱ on the banner opens search; on the code screen it changes the server.
 
 ## Remote
 
-- **Arrows** move, **OK** opens, **Back** goes back.
+- **Arrows** move, **OK** opens, **Back** goes back. When the channel starts, a short intro plays
+  over the first screen; any key skips it.
+- **✱** on a title in the rows and grids: *Details*, *Go to* the show (an episode), *Remove from
+  Continue Watching*, *Add to / Remove from My List* and *Mark watched / unwatched*. On an episode
+  in a show's list: *Details*, *Play from the start*, *Mark watched* and *Mark* the whole season
+  watched (on the season names, just the season).
+- **In a library**, up from the top row reaches its sorting and filters: *Sort* (title, date added,
+  year, rating, length), *All titles / Unwatched* and a genre. Sorting and Unwatched are kept for
+  each library on this Roku.
 - **In the player** (laid out like the big streaming apps):
   - **OK** or **▶‖** pauses and plays. Any key shows the controls; they hide again after a few
     seconds.
@@ -51,8 +85,8 @@ On the home page ✱ opens search; on the code screen it changes the server.
     the middle, **Audio & Subtitles** and **Next Episode** on the right.
   - **Skip Intro** appears during the intro, and **Skip Credits** in a film's end credits:
     **OK** (or **Up**) presses it. It fades after 10 seconds and comes back when you bring up the
-    controls; the time (5–30 s, or "stay") is under Account → **Player** on the web, along with
-    playing the next episode automatically and skipping intros automatically.
+    controls; the time (5–30 s, or "stay") is in **Settings** (and under Account → **Player** on
+    the web), along with playing the next episode automatically and skipping intros automatically.
   - At the credits a **Next Episode** card counts down from 10 and starts it (or choose *Watch
     Credits*). With autoplay off, the card has no countdown and fades like the skip buttons. After
     three episodes in a row without touching the remote it asks whether you're still watching.
@@ -69,12 +103,16 @@ On the home page ✱ opens search; on the code screen it changes the server.
 - **Night mode** (Account → Player on the web) is done by the server, so with it on everything
   plays through the server's conversion.
 - `fonts/Archivo-Black.ttf` is under the SIL Open Font License (`fonts/Archivo-OFL.txt`).
+- The intro's sound is `sounds/intro.mp3`, the same as the web app's.
 
 ## Developing
 
 The code is BrightScript + SceneGraph XML: `source/main.brs` starts `components/MainScene`, which
 keeps a stack of screens (`components/screens/`). Screens ask to open another one by setting their
-`navigate` field. Requests to the server run in `components/tasks/ApiTask` (with the device token
+`navigate` field; only the screen on top may have the focus (MainScene gives it back if a hidden
+one takes it). `IntroScreen` plays over the first screen at start. Shared pieces: `TopBar`,
+`ButtonRow` (a row of buttons), `OptionsMenu` (the ✱ menus and other choices) and the helpers in
+`components/common.brs`. Requests to the server run in `components/tasks/ApiTask` (with the device token
 as `Authorization: Bearer`); pictures and video use `?at=<token>` in the address instead.
 [BrighterScript](https://github.com/rokucommunity/brighterscript) checks it:
 `npx bsc --rootDir . --createPackage false`.

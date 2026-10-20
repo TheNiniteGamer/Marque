@@ -5,7 +5,7 @@
   <interface>
     <field id="params" type="assocarray" />
     <field id="navigate" type="assocarray" />
-    <field id="refresh" type="boolean" onChange="onRefresh" />
+    <field id="refresh" type="boolean" alwaysNotify="true" onChange="onRefresh" />
   </interface>
   <children>
     <Poster id="backdrop" width="1920" height="1080" loadWidth="1920" loadHeight="1080" loadDisplayMode="scaleToZoom" />

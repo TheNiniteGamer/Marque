@@ -46,11 +46,16 @@ sub onLoaded(event as Object)
         if m.season = invalid and m.top.params.season <> invalid and s.season = m.top.params.season then pick = i
         i = i + 1
     end for
+    ' (After a change in the same season, the highlight stays on the same episode.)
+    keep = -1
+    if m.episodes.content <> invalid and m.season <> invalid then keep = m.episodes.itemFocused
     m.seasons.content = root
     m.seasons.jumpToItem = pick
     m.episodes.content = invalid ' rebuilt with the latest progress
     showSeason(pick)
-    if m.top.isInFocusChain() then m.focus.setFocus(true)
+    if keep >= 0 and keep < m.episodes.content.getChildCount() then m.episodes.jumpToItem = keep
+    ' (Not while a menu is open: it keeps the highlight.)
+    if m.top.isInFocusChain() and not m.menu.visible then m.focus.setFocus(true)
 end sub
 
 sub onSeasonFocused()

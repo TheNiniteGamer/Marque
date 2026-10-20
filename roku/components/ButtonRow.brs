@@ -29,7 +29,7 @@ sub paint()
     focused = m.top.hasFocus()
     for i = 0 to m.row.getChildCount() - 1
         g = m.row.getChild(i)
-        on = (focused and i = m.top.index) or (not focused and i = 0)
+        on = (focused and i = m.top.index) or (not focused and i = m.top.rest)
         if on then
             g.getChild(0).color = "0xFFFFFFFF"
             g.getChild(1).color = "0x000000FF"

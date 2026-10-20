@@ -23,6 +23,8 @@ end sub
 
 sub onKind()
     if m.kinds.selected = 1 then m.kind = "show" else m.kind = "movie"
+    ' (The kind being shown stays white while you're in the results.)
+    m.kinds.rest = m.kinds.selected
     search()
 end sub
 

@@ -34,6 +34,8 @@ sub onSelected()
 end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
+    ' (The OK that chose something may still come up here after the menu has closed: it's used up.)
+    if not m.top.isInFocusChain() then return true
     if not press then return false
     if key = "back" or key = "options" then
         m.top.visible = false

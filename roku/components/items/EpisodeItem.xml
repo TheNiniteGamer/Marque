@@ -7,6 +7,8 @@
   </interface>
   <children>
     <Rectangle id="bg" width="1300" height="200" color="0x262626FF" opacity="0" />
+    <!-- (Behind the picture, so a row without one, or one still loading, isn't an empty gap.) -->
+    <Rectangle id="thumbBg" translation="[16,16]" width="300" height="168" color="0x1F1F1FFF" />
     <Poster id="thumb" translation="[16,16]" width="300" height="168" loadWidth="300" loadHeight="168" loadDisplayMode="scaleToZoom" />
     <Rectangle id="track" translation="[16,178]" width="300" height="6" color="0x787878C0" visible="false" />
     <Rectangle id="bar" translation="[16,178]" height="6" color="0xE31B23FF" visible="false" />

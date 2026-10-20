@@ -10,14 +10,21 @@ sub init()
 end sub
 
 sub onFocusChange()
-    if m.top.hasFocus() then
-        if m.seasons.Count() > 0 then m.list.setFocus(true) else m.ask.setFocus(true)
-    end if
+    if m.top.hasFocus() then focusList()
+end sub
+
+' The highlight goes on the seasons once they're listed (until then the screen keeps it).
+sub focusList()
+    if m.seasons.Count() > 0 and not m.list.hasFocus() and not m.ask.hasFocus() then m.list.setFocus(true)
 end sub
 
 sub onParams()
     m.title.text = "More seasons of " + mqStr(m.top.params.title)
     m.status.text = "Loading…"
+    load()
+end sub
+
+sub load()
     mqApi("/api/shows/" + m.top.params.id + "/seasons", "onLoaded")
 end sub
 
@@ -51,22 +58,26 @@ sub onLoaded(event as Object)
         end if
     end for
     m.list.content = root
+    m.ask.visible = m.seasons.Count() > 0
     if m.seasons.Count() = 0 then
         m.status.text = "Every season is here already."
-        m.ask.visible = false
     else
         text = "Tick the seasons you'd like (OK), then Ask."
         if here.Count() > 0 then text = text + " Here already: season " + here.Join(", ") + "."
         m.status.text = text
     end if
-    if m.top.isInFocusChain() then onFocusChange()
+    if m.notice <> invalid then m.status.text = m.notice
+    m.notice = invalid
+    if m.top.isInFocusChain() then focusList()
 end sub
 
 sub onAsk()
     picked = []
     states = m.list.checkedState
     for i = 0 to m.seasons.Count() - 1
-        if states <> invalid and i < states.Count() and states[i] then picked.Push(m.seasons[i].season)
+        if states <> invalid and i < states.Count() then
+            if mqIsTrue(states[i]) then picked.Push(m.seasons[i].season)
+        end if
     end for
     if picked.Count() = 0 then
         m.status.text = "Tick a season first (OK on it), then Ask."
@@ -83,8 +94,10 @@ sub onAsked(event as Object)
         m.status.text = r.error
         return
     end if
-    if mqIsTrue(r.data.sent) then m.status.text = "They're on their way. You'll get a notification when they're here." else m.status.text = "Asked. You'll get a notification when they're here."
-    m.ask.visible = false
+    if mqIsTrue(r.data.sent) then m.notice = "They're on their way. You'll get a notification when they're here." else m.notice = "Asked. You'll get a notification when they're here."
+    ' (Listed again, now showing them as asked for.)
+    m.top.setFocus(true)
+    load()
 end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean

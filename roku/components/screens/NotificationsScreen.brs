@@ -34,7 +34,7 @@ sub onLoaded(event as Object)
         ' The title it's about: its picture.
         target = linkTarget(mqStr(n.link))
         if target <> invalid and target.kind = "show" then c.HDPosterUrl = mqArt("backdrop", { id: target.id, artV: "" })
-        if target <> invalid and target.kind <> "show" then c.HDPosterUrl = mqArt("thumb", { id: target.id, artV: "" })
+        if target <> invalid and target.kind = "item" then c.HDPosterUrl = mqArt("thumb", { id: target.id, artV: "" })
         sub_ = ""
         if not mqIsTrue(n.read) then sub_ = "New"
         c.addFields({ progress: 0.0, sub: sub_ })
@@ -42,7 +42,7 @@ sub onLoaded(event as Object)
     m.list.content = root
     if m.items.Count() = 0 then m.status.text = "Nothing new." else m.status.text = ""
     ' Seen now (as when the web's bell is opened).
-    if r.data.unread > 0 then mqApi("/api/notifications/read", "onRead", "POST", {})
+    if mqNum(r.data.unread) > 0 then mqApi("/api/notifications/read", "onRead", "POST", {})
 end sub
 
 sub onRead()

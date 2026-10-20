@@ -36,7 +36,7 @@
     </Group>
     <Group id="account" visible="false" translation="[1452,112]">
       <Rectangle width="360" height="312" color="0x181818FA" />
-      <LabelList id="accountList" translation="[16,12]" itemSize="[328,72]" color="0xE6E6E6FF" focusedColor="0x000000FF"
+      <LabelList id="accountList" translation="[16,12]" itemSize="[328,72]" numRows="4" vertFocusAnimationStyle="floatingFocus" color="0xE6E6E6FF" focusedColor="0x000000FF"
         focusBitmapUri="pkg:/images/pill.9.png" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" />
     </Group>
   </children>

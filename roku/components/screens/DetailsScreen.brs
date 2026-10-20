@@ -94,7 +94,8 @@ sub onLoaded(event as Object)
     for each l in [m.eyebrow, m.progress, m.side, m.overview]
         l.visible = l.text <> ""
     end for
-    if m.top.isInFocusChain() then m.focus.setFocus(true)
+    ' (Not while a menu is open: it keeps the highlight.)
+    if m.top.isInFocusChain() and not m.menu.visible then m.focus.setFocus(true)
 end sub
 
 function plural(n as Float, word as String) as String

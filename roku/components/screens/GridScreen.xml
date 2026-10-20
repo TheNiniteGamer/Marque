@@ -6,13 +6,13 @@
   <interface>
     <field id="params" type="assocarray" onChange="onParams" />
     <field id="navigate" type="assocarray" />
-    <field id="refresh" type="boolean" onChange="onRefresh" />
+    <field id="refresh" type="boolean" alwaysNotify="true" onChange="onRefresh" />
   </interface>
   <children>
     <TopBar id="topBar" />
     <Label id="title" translation="[96,130]" width="1300" color="0xFFFFFFFF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="56" /></Label>
     <Label id="count" translation="[96,212]" width="1700" wrap="true" maxLines="2" color="0xA8A8A8FF" font="font:SmallSystemFont" />
-    <ButtonRow id="filters" translation="[96,196]" visible="false" />
+    <ButtonRow id="filters" translation="[96,196]" visible="false" rest="-1" />
     <MarkupGrid id="grid" translation="[96,300]" itemComponentName="CardItem" numColumns="4" numRows="3" itemSize="[420,236]" itemSpacing="[16,28]"
       vertFocusAnimationStyle="floatingFocus" drawFocusFeedback="true" />
     <OptionsMenu id="menu" />

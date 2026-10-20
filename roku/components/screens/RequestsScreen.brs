@@ -33,6 +33,8 @@ sub onLoaded(event as Object)
         return
     end if
     names = { pending: "Waiting for approval", approved: "On its way", declined: "Declined", available: "Here" }
+    ' (Whoever runs the server sees everyone's requests: the count of ones waiting comes only to them.)
+    m.admin = r.data.pending <> invalid
     m.items = []
     root = CreateObject("roSGNode", "ContentNode")
     for each q in r.data.requests
@@ -53,10 +55,13 @@ sub onLoaded(event as Object)
         if q.progress <> invalid and mqStr(q.progress.label) <> "" then state = mqStr(q.progress.label)
         c.HDPosterUrl = mqStr(q.thumb)
         notes = []
+        if m.admin and mqStr(q.requestedBy) <> mqStr(m.global.username) then notes.Push("Asked for by " + mqStr(q.requestedBy) + ".")
         if mqIsTrue(q.firstHere) and q.status = "approved" then notes.Push("The first episodes are here; more on the way.")
-        if mqStr(q.adminNote) <> "" then notes.Push("From the server: " + mqStr(q.adminNote))
-        if mqStr(q.note) <> "" then notes.Push("Your note: " + mqStr(q.note))
-        if notes.Count() = 0 then notes.Push(mqStr(q.overview))
+        if mqStr(q.note) <> "" then notes.Push("“" + mqStr(q.note) + "”")
+        if mqStr(q.adminNote) <> "" then
+            if m.admin then notes.Push("Your note: " + mqStr(q.adminNote)) else notes.Push("From the server: " + mqStr(q.adminNote))
+        end if
+        if mqStr(q.note) = "" and mqStr(q.overview) <> "" then notes.Push(mqStr(q.overview))
         c.description = notes.Join(" ")
         c.addFields({ progress: 0.0, sub: state })
     end for
@@ -82,8 +87,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     q = m.items[m.list.itemFocused]
     if q = invalid or (q.status <> "pending" and q.status <> "approved") then return true
     m.menuReq = q
+    ' As on the web: your own one still waiting is withdrawn, one you joined is left; for whoever
+    ' runs the server it's removed for everyone.
+    mine = mqStr(q.requestedBy) = mqStr(m.global.username)
     label = "Stop following"
-    if q.status = "pending" and mqStr(q.requestedBy) = mqStr(m.global.username) then label = "Withdraw"
+    if q.status = "pending" and mine then label = "Withdraw"
+    if m.admin and not mine then label = "Remove " + mqStr(q.requestedBy) + "'s request"
     m.menu.title = mqStr(q.title)
     m.menu.options = [label, "Keep it"]
     m.menu.current = -1

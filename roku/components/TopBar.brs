@@ -10,6 +10,7 @@ sub init()
     m.items = []
     m.index = 0
     m.wasIn = false
+    m.picked = false
     name = mqStr(m.global.username)
     if name = "" then name = "?"
     m.top.findNode("avatarText").text = UCase(Left(name, 1))
@@ -102,6 +103,7 @@ sub onFocus()
     inBar = m.top.isInFocusChain()
     ' Coming up into the bar: start on the page you're on.
     if inBar and not m.wasIn then
+        m.picked = false
         for i = 0 to m.items.Count() - 1
             if keyOf(m.items[i]) = m.top.current then m.index = i
         end for
@@ -141,6 +143,8 @@ sub choose()
     e = m.items[m.index]
     if e = invalid then return
     if e.key = "avatar" then
+        ' (Only on the screen you're looking at: a hidden screen's menu must never take the keys.)
+        if not mqShown(m.top) then return
         m.account.visible = true
         m.accountList.jumpToItem = 0
         m.accountList.setFocus(true)
@@ -161,11 +165,16 @@ sub closeAccount()
 end sub
 
 sub onAccount()
+    ' (Only a choice made in the open menu counts: signing out needs Sign out to be picked.)
+    if not m.account.visible or not m.accountList.hasFocus() then return
     i = m.accountList.itemSelected
+    ' The OK that picked it may still come up to the bar: it mustn't open the menu again.
+    m.picked = true
     if i < 3 then
         closeAccount()
         m.top.chosen = { key: ["profiles", "requests", "settings"][i] }
     else
+        ' (The menu stays up until the server has signed this Roku out.)
         mqApi("/api/auth/logout", "onLoggedOut", "POST")
     end if
 end sub
@@ -178,13 +187,21 @@ sub onLoggedOut()
 end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
+    ' A key still on its way up from the menu after it opened another screen (the OK that chose
+    ' Settings, say) is used up: acting on it here would open this hidden bar's menu again.
+    if not m.top.isInFocusChain() then return true
     if not press then return false
+    if key = "OK" and m.picked then
+        m.picked = false
+        return true
+    end if
+    m.picked = false
     if m.account.visible then
         if key = "back" or key = "left" or (key = "up" and m.accountList.itemFocused = 0) then
             closeAccount()
             return true
         end if
-        return key = "right" or key = "down" or key = "up"
+        return key = "right" or key = "down" or key = "up" or key = "OK"
     end if
     if key = "left" then
         if m.index > 0 then m.index = m.index - 1

@@ -63,7 +63,9 @@ sub onParams()
 end sub
 
 sub onRefresh()
-    if m.top.refresh then load()
+    if not m.top.refresh then return
+    load()
+    m.topBar.reload = true
 end sub
 
 sub load()

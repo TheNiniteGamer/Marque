@@ -16,7 +16,7 @@
     <Rectangle id="panel" width="760" color="0x1C1C1CFF">
       <Label id="heading" translation="[40,32]" width="680" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" />
       <LabelList id="list" translation="[24,96]" itemSize="[712,72]" color="0xE6E6E6FF" focusedColor="0x000000FF"
-        focusBitmapUri="pkg:/images/pill.9.png" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" numRows="9" />
+        focusBitmapUri="pkg:/images/pill.9.png" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" numRows="9" vertFocusAnimationStyle="floatingFocus" />
     </Rectangle>
   </children>
   <script type="text/brightscript" uri="OptionsMenu.brs" />
