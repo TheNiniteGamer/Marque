@@ -42,6 +42,7 @@ sub init()
     m.barWidth = 1560
     m.video.notificationInterval = 0.5
     m.video.observeField("state", "onState")
+    m.video.observeField("availableAudioTracks", "onAudioTracks")
     m.video.observeField("position", "onPosition")
     m.reportTimer.observeField("fire", "onReportTimer")
     m.hideTimer.observeField("fire", "hideOverlay")
@@ -68,6 +69,8 @@ sub init()
     m.ctls = []
     m.upNextShown = false
     m.upNextDismissed = false
+    m.atEnd = false
+    m.wantAudio = invalid
     m.upNextIndex = 0
     m.tp = invalid
     m.tpAskedAt = -1000
@@ -124,6 +127,7 @@ sub onItem(event as Object)
     if not m.versionPicked then
         m.versionPicked = true
         v = pickVersion(r.data)
+        if mqStr(m.top.params.version) <> "" then v = mqStr(m.top.params.version)
         if v <> "" and v <> mqStr(r.data.id) then
             m.pb = invalid
             m.tp = invalid
@@ -135,26 +139,41 @@ sub onItem(event as Object)
     start()
 end sub
 
-' A film with several versions: the best one the Roku plays as it is that fits the TV (4K on a
-' 4K TV), else the smallest it plays as it is, else the smallest.
+' A film with several versions (as on the web): the best one the Roku plays as it is that fits
+' the TV (4K on a 4K TV), else the best whose picture is sent as it is with only the sound
+' converted, else the smallest (the least converting). A version picked on the details page wins.
 function pickVersion(x as Object) as String
     vs = x.versions
     if vs = invalid or vs.Count() < 2 then return ""
     screenH = Val(CreateObject("roDeviceInfo").GetVideoMode())
     if screenH <= 0 then screenH = 1080
-    fits = invalid
-    direct = invalid
+    direct = []
+    remux = []
     smallest = invalid
     for each v in vs
-        h = mqNum(v.height)
         asIs = canPlayDirectly({ media: { container: v.container, video: { codec: v.videoCodec, profile: v.profile, pixFmt: v.pixFmt }, audio: [{ codec: v.audioCodec }] } })
-        if asIs and h <= screenH * 1.05 and (fits = invalid or h > mqNum(fits.height)) then fits = v
-        if asIs and (direct = invalid or h < mqNum(direct.height)) then direct = v
-        if smallest = invalid or h < mqNum(smallest.height) then smallest = v
+        if asIs then direct.Push(v)
+        if mqIsTrue(v.remux) then remux.Push(v)
+        if smallest = invalid or mqNum(v.height) < mqNum(smallest.height) then smallest = v
     end for
-    if fits <> invalid then return mqStr(fits.id)
-    if direct <> invalid then return mqStr(direct.id)
+    for each l in [direct, remux]
+        best = bestFor(l, screenH)
+        if best <> invalid then return mqStr(best.id)
+    end for
     return mqStr(smallest.id)
+end function
+
+' The tallest picture that fits the screen, else the smallest there is.
+function bestFor(list as Object, screenH as Float) as Dynamic
+    fits = invalid
+    small = invalid
+    for each v in list
+        h = mqNum(v.height)
+        if h <= screenH * 1.05 and (fits = invalid or h > mqNum(fits.height)) then fits = v
+        if small = invalid or h < mqNum(small.height) then small = v
+    end for
+    if fits <> invalid then return fits
+    return small
 end function
 
 sub onPlayback(event as Object)
@@ -264,6 +283,8 @@ sub start()
     m.duration = mqNum(x.duration)
     if m.duration <= 0 and x.media <> invalid then m.duration = mqNum(x.media.duration)
     if canPlayDirectly(x) then m.mode = "direct" else m.mode = "hls"
+    ' Away from home the server may only send converted video (set by the admin).
+    if m.pb.originalAllowed <> invalid and not mqIsTrue(m.pb.originalAllowed) then m.mode = "hls"
     ' Night mode (clearer dialogue) is done by the server, so it needs the converted stream.
     if m.prefs.nightMode then m.mode = "hls"
     ' The sound language last picked for this show (the server converts with that track).
@@ -275,7 +296,7 @@ sub start()
                 exit for
             end if
         end for
-        if m.audio > 0 then m.mode = "hls"
+        if m.audio > 0 then preferAudio()
     else if m.prefs.audioLang <> "" and x.audioTracks <> invalid then
         for i = 0 to x.audioTracks.Count() - 1
             if sameLang(x.audioTracks[i].lang, m.prefs.audioLang) then
@@ -283,7 +304,7 @@ sub start()
                 exit for
             end if
         end for
-        if m.audio > 0 then m.mode = "hls"
+        if m.audio > 0 then preferAudio()
     end if
 
     startAt = mqNum(m.top.params.start)
@@ -311,7 +332,7 @@ sub start()
     load(startAt)
     m.reportTimer.control = "start"
     ' The subtitle language picked for this show, else the one picked last time anywhere.
-    want = mqRead("subLang")
+    want = mqRead(subLangKey())
     if pref <> invalid and pref.subs <> invalid then
         want = mqStr(pref.subs)
     else if m.prefs.subLang <> "" then
@@ -330,7 +351,43 @@ sub start()
             end if
         end for
     end if
+    ' Settings → Turn on subtitles by default: any language, when nothing else was picked.
+    if m.subOn = invalid and want = "" and mqRead("subsOn:" + mqStr(m.global.username)) = "1" then
+        for i = 0 to m.subs.Count() - 1
+            if m.subs[i].burn = invalid then
+                setSubtitle(i)
+                exit for
+            end if
+        end for
+    end if
     if m.subOn = invalid then m.video.globalCaptionMode = "Off"
+end sub
+
+' Another sound track than the first: playing the file as it is, the Roku switches to it once the
+' video has opened (onAudioTracks) when it decodes that track; otherwise the server converts with it.
+sub preferAudio()
+    ac = ""
+    md = m.item.media
+    if md <> invalid and md.audio <> invalid and m.audio < md.audio.Count() then ac = LCase(mqStr(md.audio[m.audio].codec))
+    if m.mode = "direct" and (ac = "aac" or ac = "ac3" or ac = "eac3" or ac = "mp3" or ac = "flac") then
+        m.wantAudio = m.audio
+    else
+        m.mode = "hls"
+    end if
+end sub
+
+sub onAudioTracks()
+    if m.wantAudio = invalid or m.mode <> "direct" then return
+    avail = m.video.availableAudioTracks
+    if avail = invalid or avail.Count() = 0 then return
+    i = m.wantAudio
+    m.wantAudio = invalid
+    if avail.Count() = m.item.audioTracks.Count() then
+        m.video.audioTrack = avail[i].Track
+    else
+        m.mode = "hls"
+        load(m.video.position)
+    end if
 end sub
 
 ' (Re)loads the stream at a position: on start, and when the sound track or drawn-in subtitles change.
@@ -815,7 +872,7 @@ sub showUpNext(stillWatching as Boolean)
     m.upNextShown = true
     m.stillWatching = stillWatching
     m.top.findNode("nextThumb").uri = mqArt("thumb", nxt)
-    m.top.findNode("nextKind").text = "NEXT EPISODE  ·  " + mqEpLabel(nxt)
+    m.top.findNode("nextKind").text = "NEXT EPISODE · " + mqEpLabel(nxt)
     m.top.findNode("nextTitle").text = mqStr(nxt.title)
     m.upNextIndex = 0
     m.count = 10
@@ -828,7 +885,7 @@ sub showUpNext(stillWatching as Boolean)
     paintUpNext()
     if m.autoplay then
         m.countTimer.control = "start"
-    else if not stillWatching and m.prefs.skipFade > 0 then
+    else if not stillWatching and m.prefs.skipFade > 0 and not m.atEnd then
         ' No countdown: the card fades like the skip buttons (Next Episode is also under the bar).
         m.count = Int(m.prefs.skipFade)
         m.countTimer.control = "start"
@@ -843,6 +900,7 @@ sub paintUpNext()
     first = "Next Episode in " + m.count.ToStr()
     if not m.autoplay then first = "Next Episode"
     second = "Watch Credits"
+    if m.atEnd then second = "Back to browsing"
     if m.stillWatching then
         m.top.findNode("nextKind").text = "ARE YOU STILL WATCHING?"
         first = "Continue Watching"
@@ -864,6 +922,7 @@ sub paintUpNext()
 end sub
 
 sub onCountdown()
+    if m.video.state = "paused" then return
     m.count = m.count - 1
     if m.count <= 0 then
         m.countTimer.control = "stop"
@@ -886,8 +945,8 @@ sub finished()
     if m.item.next <> invalid then
         ' Three episodes in a row with nobody touching the remote: ask first.
         if not m.prefs.autoplayNext then
-            leave()
-            m.top.navigate = { back: true }
+            m.atEnd = true
+            showUpNext(false)
         else if m.global.autoNexts >= 3 then
             showUpNext(true)
         else
@@ -998,13 +1057,18 @@ sub onSubtitlePicked()
     i = m.subList.checkedItem - 1
     if i < 0 then
         setSubtitle(-1)
-        mqWrite("subLang", "")
+        mqWrite(subLangKey(), "off")
     else
         setSubtitle(i)
-        mqWrite("subLang", mqStr(m.subs[i].lang))
+        mqWrite(subLangKey(), mqStr(m.subs[i].lang))
     end if
     rememberTracks()
 end sub
+
+' The subtitle language picked last on this Roku, for each profile.
+function subLangKey() as String
+    return "subLang:" + mqStr(m.global.username)
+end function
 
 ' Episodes: the show remembers the sound and subtitle languages picked.
 sub rememberTracks()
@@ -1157,7 +1221,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             if m.upNextIndex = 0 then
                 m.countTimer.control = "stop"
                 playNext(false)
-            else if m.stillWatching then
+            else if m.stillWatching or m.atEnd then
                 leave()
                 m.top.navigate = { back: true }
             else

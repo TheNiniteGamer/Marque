@@ -7,6 +7,7 @@ sub init()
     m.bar = m.top.findNode("bar")
     m.badgeBg = m.top.findNode("badgeBg")
     m.badge = m.top.findNode("badge")
+    m.initial = m.top.findNode("initial")
 end sub
 
 sub onSize()
@@ -17,6 +18,8 @@ sub onSize()
     m.bg.height = h
     m.art.width = w
     m.art.height = h
+    m.initial.width = w
+    m.initial.height = h * 0.8
     ' Crop to fill the card (Roku only keeps the picture's shape when the load size is set).
     m.art.loadWidth = w
     m.art.loadHeight = h
@@ -40,6 +43,15 @@ sub onContent()
     if c = invalid then return
     m.art.uri = c.HDPosterUrl
     m.title.text = c.title
+    ' Someone in the cast without a photo: their initial on their colour.
+    noPhoto = c.kind = "person" and c.HDPosterUrl = ""
+    m.initial.visible = noPhoto
+    if noPhoto then
+        m.initial.text = c.initial
+        m.bg.color = c.tint
+    else
+        m.bg.color = "0x242424FF"
+    end if
     p = 0.0
     if c.progress <> invalid then p = c.progress
     m.track.visible = p > 0

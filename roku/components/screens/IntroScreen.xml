@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A short intro when the channel starts (about 1.8 s, with a sound): MARQUEE on black grows a
+     little as it fades in, a light passes across the letters, then it all fades out to the first
+     screen, which is already loading underneath. Any key skips it. -->
+<component name="IntroScreen" extends="Group">
+  <interface>
+    <!-- Set when it's over (played through or skipped). -->
+    <field id="done" type="boolean" alwaysNotify="true" />
+  </interface>
+  <children>
+    <Group id="all">
+      <Rectangle width="1920" height="1080" color="0x000000FF" />
+      <Group id="mark" scaleRotateCenter="[960,540]" opacity="0">
+        <Label id="word" text="MARQUEE" color="0xE31B23FF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="150" /></Label>
+        <!-- The light: the same word in paler colours, seen only through narrow moving slits
+             (each slit moves one way and the word inside it the other, so the letters stay put). -->
+        <Group id="glow" opacity="0.3"><Label id="glowWord" text="MARQUEE" color="0xFF8A8FFF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="150" /></Label></Group>
+        <Group id="haze" opacity="0.45"><Label id="hazeWord" text="MARQUEE" color="0xFFB8BBFF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="150" /></Label></Group>
+        <Group id="shine" opacity="0.85"><Label id="shineWord" text="MARQUEE" color="0xFFE3E4FF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="150" /></Label></Group>
+      </Group>
+    </Group>
+    <Audio id="sound" />
+    <Animation id="anim" duration="1.8" repeat="false" easeFunction="linear">
+      <FloatFieldInterpolator key="[0.0, 0.3, 1.0]" keyValue="[0.0, 1.0, 1.0]" fieldToInterp="mark.opacity" />
+      <Vector2DFieldInterpolator key="[0.0, 0.3, 1.0]" keyValue="[[0.9, 0.9], [1.0, 1.0], [1.05, 1.05]]" fieldToInterp="mark.scale" />
+      <Vector2DFieldInterpolator id="glowMove" key="[0.0, 0.25, 0.62, 1.0]" fieldToInterp="glow.translation" />
+      <Vector2DFieldInterpolator id="glowWordMove" key="[0.0, 0.25, 0.62, 1.0]" fieldToInterp="glowWord.translation" />
+      <Vector2DFieldInterpolator id="hazeMove" key="[0.0, 0.25, 0.62, 1.0]" fieldToInterp="haze.translation" />
+      <Vector2DFieldInterpolator id="hazeWordMove" key="[0.0, 0.25, 0.62, 1.0]" fieldToInterp="hazeWord.translation" />
+      <Vector2DFieldInterpolator id="shineMove" key="[0.0, 0.25, 0.62, 1.0]" fieldToInterp="shine.translation" />
+      <Vector2DFieldInterpolator id="shineWordMove" key="[0.0, 0.25, 0.62, 1.0]" fieldToInterp="shineWord.translation" />
+      <FloatFieldInterpolator key="[0.0, 0.78, 1.0]" keyValue="[1.0, 1.0, 0.0]" fieldToInterp="all.opacity" />
+    </Animation>
+  </children>
+  <script type="text/brightscript" uri="IntroScreen.brs" />
+</component>

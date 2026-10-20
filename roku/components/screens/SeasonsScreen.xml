@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "More seasons" (as on the web): the show's seasons that aren't all here yet, to tick and ask for. -->
+<component name="SeasonsScreen" extends="Group">
+  <interface>
+    <field id="params" type="assocarray" onChange="onParams" />
+    <field id="navigate" type="assocarray" />
+    <field id="refresh" type="boolean" />
+  </interface>
+  <children>
+    <Label id="title" translation="[96,60]" width="1700" color="0xFFFFFFFF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="56" /></Label>
+    <Label id="status" translation="[96,150]" width="1700" wrap="true" maxLines="2" color="0xA8A8A8FF" font="font:MediumSystemFont" />
+    <CheckList id="list" translation="[96,250]" itemSize="[900,72]" numRows="9" vertFocusAnimationStyle="floatingFocus" color="0xE6E6E6FF" focusedColor="0x000000FF"
+      focusBitmapUri="pkg:/images/pill.9.png" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" />
+    <ButtonRow id="ask" translation="[1100,250]" rest="-1" />
+  </children>
+  <script type="text/brightscript" uri="SeasonsScreen.brs" />
+  <script type="text/brightscript" uri="pkg:/components/common.brs" />
+</component>

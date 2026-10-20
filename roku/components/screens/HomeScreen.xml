@@ -5,7 +5,7 @@
   <interface>
     <field id="params" type="assocarray" />
     <field id="navigate" type="assocarray" />
-    <field id="refresh" type="boolean" onChange="onRefresh" />
+    <field id="refresh" type="boolean" alwaysNotify="true" onChange="onRefresh" />
   </interface>
   <children>
     <Poster id="backdrop" width="1920" height="1080" loadWidth="1920" loadHeight="1080" loadDisplayMode="scaleToZoom" />
@@ -27,6 +27,7 @@
       rowItemSize="[[384,216]]" rowItemSpacing="[[16,0]]" showRowLabel="[true]" rowLabelOffset="[[0,14]]" rowLabelColor="0xFFFFFFFF"
       rowLabelFont="font:MediumBoldSystemFont" rowFocusAnimationStyle="floatingFocus" vertFocusAnimationStyle="fixedFocus" drawFocusFeedback="true" />
     <Label id="status" translation="[96,700]" width="1600" wrap="true" color="0xA8A8A8FF" font="font:MediumSystemFont" />
+    <OptionsMenu id="menu" />
   </children>
   <script type="text/brightscript" uri="HomeScreen.brs" />
   <script type="text/brightscript" uri="pkg:/components/common.brs" />

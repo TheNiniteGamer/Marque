@@ -30,15 +30,20 @@ function mqStr(v as Dynamic) as String
     if v = invalid then return ""
     t = type(v)
     if t = "roString" or t = "String" then return v
-    if t = "roInt" or t = "Integer" or t = "roFloat" or t = "Float" or t = "Double" or t = "roDouble" or t = "LongInteger" then return v.ToStr()
+    if mqIsNumber(v) then return v.ToStr()
     return ""
 end function
 
 function mqNum(v as Dynamic) as Float
-    if v = invalid then return 0
-    t = type(v)
-    if t = "roInt" or t = "Integer" or t = "roFloat" or t = "Float" or t = "Double" or t = "roDouble" or t = "LongInteger" then return v
+    if mqIsNumber(v) then return v
     return 0
+end function
+
+' (Numbers from ParseJson are "roInteger" / "roFloat"; ones made in code "Integer", "Float"…)
+function mqIsNumber(v as Dynamic) as Boolean
+    if v = invalid then return false
+    t = type(v)
+    return t = "roInt" or t = "roInteger" or t = "Integer" or t = "roFloat" or t = "Float" or t = "Double" or t = "roDouble" or t = "LongInteger" or t = "roLongInteger"
 end function
 
 ' A playback file or picture on the server. The address carries the media key, which opens only
@@ -118,6 +123,9 @@ function mqCard(item as Object) as Object
         title = mqStr(item.showTitle)
         art = "thumb"
         sub_ = mqEpLabel(item) + " · " + mqStr(item.title)
+    else if kind = "extra" then
+        art = "thumb"
+        sub_ = mqStr(item.extraLabel)
     else if kind = "show" then
         sub_ = mqStr(item.seasonCount) + " seasons"
     else
@@ -137,6 +145,91 @@ function mqCard(item as Object) as Object
     c.title = title
     c.HDPosterUrl = mqArt(art, item)
     return c
+end function
+
+' Someone in the cast: their photo (or their initial on a colour), name and part.
+function mqPersonCard(p as Object) as Object
+    c = CreateObject("roSGNode", "ContentNode")
+    c.addFields({ kind: "person", progress: 0.0, badge: "", sub: mqStr(p.character), data: { type: "person", name: mqStr(p.name) }, initial: UCase(Left(mqStr(p.name), 1)), tint: mqAvatarColor(mqStr(p.name)) })
+    c.title = mqStr(p.name)
+    if p.photo <> invalid and mqStr(p.photo) <> "" then
+        ' (/api/people/<name>/photo, or a full address)
+        if Left(mqStr(p.photo), 1) = "/" then c.HDPosterUrl = mqMediaUrl(mqStr(p.photo)) else c.HDPosterUrl = mqStr(p.photo)
+    end if
+    return c
+end function
+
+' A collection or franchise: its cover title's artwork, its name and how many titles.
+function mqCollectionCard(col as Object) as Object
+    c = CreateObject("roSGNode", "ContentNode")
+    c.addFields({ kind: "collection", progress: 0.0, badge: "", sub: mqStr(col.count) + " titles", data: col })
+    c.id = mqStr(col.id)
+    c.title = mqStr(col.name)
+    if col.cover <> invalid then c.HDPosterUrl = mqArt("backdrop", col.cover)
+    return c
+end function
+
+' Where choosing a card goes: episodes and extras play, collections and people open their titles,
+' movies and shows their details. Coming soon: the show's details (a film not here yet has none).
+function mqOpen(item as Object) as Dynamic
+    kind = mqStr(item.type)
+    if kind = "upcoming" then
+        if item.showId <> invalid then return { screen: "DetailsScreen", params: { id: item.showId, kind: "show" } }
+        return invalid
+    end if
+    if kind = "episode" then return { screen: "PlayerScreen", params: { id: item.id, start: -1 } }
+    if kind = "extra" then return { screen: "PlayerScreen", params: { id: item.id, start: 0 } }
+    if kind = "person" then return { screen: "GridScreen", params: { title: item.name, path: "/api/people/" + mqEscape(item.name), current: "" } }
+    if kind = "collection" or item.memberIds <> invalid then return { screen: "GridScreen", params: { title: mqStr(item.name), path: "/api/collections/" + mqStr(item.id), current: "", collection: true } }
+    return { screen: "DetailsScreen", params: { id: item.id, kind: kind } }
+end function
+
+' The ✱ options of a card: { title, labels, acts } (invalid for cards without any).
+' inContinue: the card is in Continue Watching (it can be taken out of it).
+function mqCardMenu(item as Object, inContinue as Boolean) as Dynamic
+    kind = mqStr(item.type)
+    if kind <> "movie" and kind <> "show" and kind <> "episode" then return invalid
+    acts = [{ label: "Details", act: "details" }]
+    if kind = "episode" and item.showId <> invalid then acts.Push({ label: "Go to " + mqStr(item.showTitle), act: "show" })
+    if inContinue then acts.Push({ label: "Remove from Continue Watching", act: "hide" })
+    if kind <> "episode" then
+        if mqIsTrue(item.inWatchlist) then acts.Push({ label: "Remove from My List", act: "list" }) else acts.Push({ label: "Add to My List", act: "list" })
+    end if
+    if mqWatched(item) then acts.Push({ label: "Mark unwatched", act: "watched" }) else acts.Push({ label: "Mark watched", act: "watched" })
+    labels = []
+    for each a in acts
+        labels.Push(a.label)
+    end for
+    title = mqStr(item.title)
+    if kind = "episode" then title = mqStr(item.showTitle) + " · " + mqEpLabel(item)
+    return { title: title, labels: labels, acts: acts }
+end function
+
+function mqWatched(item as Object) as Boolean
+    if mqStr(item.type) = "show" then return mqNum(item.episodeCount) > 0 and mqNum(item.unwatchedCount) = 0
+    return item.progress <> invalid and type(item.progress) = "roAssociativeArray" and mqIsTrue(item.progress.watched)
+end function
+
+' Does what was picked in a card's menu: returns where to go (details), or starts the change on
+' the server and calls `callback` when it's done (to reload the page).
+function mqCardAct(item as Object, action as String, callback as String) as Dynamic
+    kind = mqStr(item.type)
+    if action = "details" then return { screen: "DetailsScreen", params: { id: item.id, kind: kind } }
+    if action = "show" then return { screen: "DetailsScreen", params: { id: item.showId, kind: "show" } }
+    if action = "hide" then
+        mqApi("/api/continue/" + item.id + "/hide", callback, "POST", {})
+    else if action = "list" then
+        method = "PUT"
+        if mqIsTrue(item.inWatchlist) then method = "DELETE"
+        mqApi("/api/watchlist/" + item.id, callback, method)
+    else if action = "watched" then
+        if kind = "show" then
+            mqApi("/api/shows/" + item.id + "/watched", callback, "POST", { watched: not mqWatched(item) })
+        else
+            mqApi("/api/items/" + item.id + "/watched", callback, "POST", { watched: not mqWatched(item) })
+        end if
+    end if
+    return invalid
 end function
 
 ' "Coming soon" (a show's next episode, or a film on its way): its artwork and when.
@@ -207,12 +300,27 @@ function mqClock(sec as Dynamic) as String
     return mi.ToStr() + ":" + ss
 end function
 
+' Is this node on screen (it and everything it sits in visible)? Screens under the one you're
+' looking at are hidden, and must never act on keys.
+function mqShown(node as Object) as Boolean
+    n = node
+    while n <> invalid
+        if not n.visible then return false
+        n = n.getParent()
+    end while
+    return true
+end function
+
 ' What choosing something in the top bar (TopBar) opens. fromHome: the bar is on Home; elsewhere a
 ' library replaces the page you're on, and Home goes back to it.
 function mqTopBarNav(c as Object, fromHome as Boolean) as Object
-    if c.key = "home" then return { back: true }
+    if c.key = "home" then return { screen: "HomeScreen", reset: true }
     if c.key = "search" then return { screen: "SearchScreen" }
     if c.key = "profiles" then return { screen: "ProfilesScreen", params: {} }
+    if c.key = "bell" then return { screen: "NotificationsScreen", params: {} }
+    if c.key = "requests" then return { screen: "RequestsScreen", params: {} }
+    if c.key = "settings" then return { screen: "SettingsScreen", params: {} }
+    if c.key = "collections" then return { screen: "CollectionsScreen", params: {}, replace: not fromHome }
     params = { title: "My List", path: "/api/watchlist", current: "list" }
     if c.key = "lib" then params = { title: mqStr(c.title), path: "/api/libraries/" + mqStr(c.id) + "/items", current: "lib:" + mqStr(c.id) }
     return { screen: "GridScreen", params: params, replace: not fromHome }
@@ -225,5 +333,5 @@ function mqAvatarColor(name as String) as String
     for i = 1 to Len(name)
         n& = (n& * 31 + Asc(Mid(name, i, 1))) mod 4294967296&
     end for
-    return colors[n& mod colors.Count()]
+    return colors[CInt(n& mod colors.Count())]
 end function

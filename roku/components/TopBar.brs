@@ -2,18 +2,21 @@ sub init()
     m.links = m.top.findNode("links")
     m.searchPill = m.top.findNode("searchPill")
     m.searchIcon = m.top.findNode("searchIcon")
+    m.bellPill = m.top.findNode("bellPill")
+    m.bellIcon = m.top.findNode("bellIcon")
     m.avatarRing = m.top.findNode("avatarRing")
     m.account = m.top.findNode("account")
     m.accountList = m.top.findNode("accountList")
     m.items = []
     m.index = 0
     m.wasIn = false
+    m.picked = false
     name = mqStr(m.global.username)
     if name = "" then name = "?"
     m.top.findNode("avatarText").text = UCase(Left(name, 1))
     m.top.findNode("avatarBg").color = mqAvatarColor(name)
     menu = CreateObject("roSGNode", "ContentNode")
-    for each label in ["Switch profile", "Sign out"]
+    for each label in ["Switch profile", "My requests", "Settings", "Sign out"]
         n = menu.createChild("ContentNode")
         n.title = label
     end for
@@ -22,6 +25,23 @@ sub init()
     m.top.observeField("focusedChild", "onFocus")
     build([])
     mqApi("/api/libraries", "onLibraries")
+    mqApi("/api/notifications", "onNotifications")
+end sub
+
+sub onReload()
+    mqApi("/api/notifications", "onNotifications")
+end sub
+
+' Notifications not read yet: a count on the bell.
+sub onNotifications(event as Object)
+    r = event.getData()
+    if r.status <> 200 or r.data = invalid then return
+    n = mqNum(r.data.unread)
+    dot = m.top.findNode("bellDot")
+    count = m.top.findNode("bellCount")
+    dot.visible = n > 0
+    count.visible = n > 0
+    if n > 9 then count.text = "9+" else count.text = Int(n).ToStr()
 end sub
 
 sub onLibraries(event as Object)
@@ -29,7 +49,8 @@ sub onLibraries(event as Object)
     if r.status = 200 and r.data <> invalid then build(r.data)
 end sub
 
-' Home, each library, My List (as words), then Search and your profile on the right.
+' Home, each library, Collections, My List (as words), then notifications, Search and your
+' profile on the right.
 sub build(libraries as Object)
     while m.links.getChildCount() > 0
         m.links.removeChildIndex(0)
@@ -38,12 +59,13 @@ sub build(libraries as Object)
     for each lib in libraries
         entries.Push({ key: "lib", id: mqStr(lib.id), title: mqStr(lib.name) })
     end for
+    if libraries.Count() > 0 then entries.Push({ key: "collections", title: "Collections" })
     entries.Push({ key: "list", title: "My List" })
     m.items = []
     x = 0
     for each e in entries
         ' (Libraries that don't fit are left out of the bar; Search finds everything.)
-        if e.key = "lib" and x > 980 then goto skip
+        if e.key = "lib" and x > 700 then goto skip
         g = m.links.createChild("Group")
         g.translation = [x, 0]
         pill = g.createChild("Poster")
@@ -65,6 +87,7 @@ sub build(libraries as Object)
         x = x + w + 48 + 8
         skip:
     end for
+    m.items.Push({ key: "bell" })
     m.items.Push({ key: "search" })
     m.items.Push({ key: "avatar" })
     if m.index >= m.items.Count() then m.index = 0
@@ -80,6 +103,7 @@ sub onFocus()
     inBar = m.top.isInFocusChain()
     ' Coming up into the bar: start on the page you're on.
     if inBar and not m.wasIn then
+        m.picked = false
         for i = 0 to m.items.Count() - 1
             if keyOf(m.items[i]) = m.top.current then m.index = i
         end for
@@ -94,7 +118,10 @@ sub paint()
     for i = 0 to m.items.Count() - 1
         e = m.items[i]
         on = inBar and i = m.index
-        if e.key = "search" then
+        if e.key = "bell" then
+            if on then m.bellPill.opacity = 1 else m.bellPill.opacity = 0
+            if on then m.bellIcon.uri = "pkg:/images/ic_bell_dark.png" else m.bellIcon.uri = "pkg:/images/ic_bell.png"
+        else if e.key = "search" then
             if on then m.searchPill.opacity = 1 else m.searchPill.opacity = 0
             if on then m.searchIcon.uri = "pkg:/images/ic_search_dark.png" else m.searchIcon.uri = "pkg:/images/ic_search.png"
         else if e.key = "avatar" then
@@ -116,12 +143,14 @@ sub choose()
     e = m.items[m.index]
     if e = invalid then return
     if e.key = "avatar" then
+        ' (Only on the screen you're looking at: a hidden screen's menu must never take the keys.)
+        if not mqShown(m.top) then return
         m.account.visible = true
         m.accountList.jumpToItem = 0
         m.accountList.setFocus(true)
         paint()
-    else if e.key = "search" then
-        m.top.chosen = { key: "search" }
+    else if e.key = "search" or e.key = "bell" then
+        m.top.chosen = { key: e.key }
     else if keyOf(e) = m.top.current then
         m.top.leave = true ' (already here)
     else
@@ -136,10 +165,16 @@ sub closeAccount()
 end sub
 
 sub onAccount()
-    if m.accountList.itemSelected = 0 then
+    ' (Only a choice made in the open menu counts: signing out needs Sign out to be picked.)
+    if not m.account.visible or not m.accountList.hasFocus() then return
+    i = m.accountList.itemSelected
+    ' The OK that picked it may still come up to the bar: it mustn't open the menu again.
+    m.picked = true
+    if i < 3 then
         closeAccount()
-        m.top.chosen = { key: "profiles" }
+        m.top.chosen = { key: ["profiles", "requests", "settings"][i] }
     else
+        ' (The menu stays up until the server has signed this Roku out.)
         mqApi("/api/auth/logout", "onLoggedOut", "POST")
     end if
 end sub
@@ -152,13 +187,21 @@ sub onLoggedOut()
 end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
+    ' A key still on its way up from the menu after it opened another screen (the OK that chose
+    ' Settings, say) is used up: acting on it here would open this hidden bar's menu again.
+    if not m.top.isInFocusChain() then return true
     if not press then return false
+    if key = "OK" and m.picked then
+        m.picked = false
+        return true
+    end if
+    m.picked = false
     if m.account.visible then
         if key = "back" or key = "left" or (key = "up" and m.accountList.itemFocused = 0) then
             closeAccount()
             return true
         end if
-        return key = "right" or key = "down" or key = "up"
+        return key = "right" or key = "down" or key = "up" or key = "OK"
     end if
     if key = "left" then
         if m.index > 0 then m.index = m.index - 1
