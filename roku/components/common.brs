@@ -326,6 +326,23 @@ function mqTopBarNav(c as Object, fromHome as Boolean) as Object
     return { screen: "GridScreen", params: params, replace: not fromHome }
 end function
 
+' A profile's picture (see lib/auth.js): a built-in face (in the channel) on its colour, or their
+' photo from the server. Without one, uri is "" and they get their initial on a steady colour.
+function mqAvatar(name as String, avatar as Dynamic) as Object
+    if avatar <> invalid and type(avatar) = "roAssociativeArray" then
+        if mqStr(avatar.photo) <> "" then return { uri: mqMediaUrl(mqStr(avatar.photo)), color: "0x222222FF" }
+        if mqNum(avatar.face) > 0 and Len(mqStr(avatar.color)) = 7 then return { uri: "pkg:/images/faces/face-" + mqStr(avatar.face) + ".png", color: "0x" + UCase(Mid(mqStr(avatar.color), 2)) + "FF" }
+    end if
+    return { uri: "", color: mqAvatarColor(name) }
+end function
+
+' Your own picture, kept on the Roku between runs (and looked up again when the channel starts).
+sub mqSetAvatar(avatar as Dynamic)
+    if avatar = invalid or type(avatar) <> "roAssociativeArray" then avatar = {}
+    m.global.avatar = avatar
+    mqWrite("avatar", FormatJson(avatar))
+end sub
+
 ' A steady colour per person, the same as on the web.
 function mqAvatarColor(name as String) as String
     colors = ["0x2F6FB3FF", "0xB3402FFF", "0x7A4FB3FF", "0x2F8A5CFF", "0xB3862FFF", "0x2F9BB3FF", "0xB32F7AFF", "0x5C6B2FFF"]

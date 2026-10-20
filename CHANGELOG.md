@@ -4,6 +4,17 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.0
+
+- **Profile pictures:** click your picture on the Account page to pick one of 16 cartoon faces and
+  a colour, or upload a photo (cut to a square for you). Admins can set anyone's from
+  Settings → Users (handy for the kids). They show in the top bar, on “Who's watching?”, in
+  Settings → Users and on the Activity page, and on the Roku and Android TV apps too. Photos are
+  included in backups.
+- The notifications pop-up no longer stays open over the account menu when you open that menu.
+- The MARQUEE logo in the top left is no longer a link (Home is right next to it).
+- Roku 1.14: profile pictures in the top bar and on “Who's watching?”.
+
 ## 0.23.1
 
 **Roku 1.13: the Roku channel catches up with the Android TV app.**

@@ -33,6 +33,7 @@
       <Rectangle id="avatarRing" translation="[-5,-5]" width="70" height="70" color="0xFFFFFFFF" visible="false" />
       <Rectangle id="avatarBg" width="60" height="60" color="0x2F6FB3FF" />
       <Label id="avatarText" width="60" height="60" horizAlign="center" vertAlign="center" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" />
+      <Poster id="avatarPic" width="60" height="60" loadWidth="120" loadHeight="120" visible="false" />
     </Group>
     <Group id="account" visible="false" translation="[1452,112]">
       <Rectangle width="360" height="312" color="0x181818FA" />

@@ -109,7 +109,7 @@ function renderUserMenu() {
   document.body.classList.toggle('kids', !!u && u.maxAge != null); // the "KIDS" label by the logo
   if (!u) { root.innerHTML = ''; return; }
   root.innerHTML = html`
-    <button class="avatar" id="user-btn" aria-haspopup="true" aria-expanded="false" title="${u.username}" aria-label="${u.username}: account menu" style="background:${avatarColor(u.username)}">${u.username.slice(0, 1).toUpperCase()}</button>
+    <button class="avatar ${avatarClass(u)}" id="user-btn" aria-haspopup="true" aria-expanded="false" title="${u.username}" aria-label="${u.username}: account menu" style="background:${avatarBg(u)}">${avatarPic(u)}</button>
     <div class="user-pop" id="user-pop" hidden>
       <div class="user-pop-head"><b>${u.username}</b><span class="muted">${u.role === 'admin' ? 'Administrator' : 'User'}</span></div>
       ${tv.on ? html`<a href="#/account">Settings</a>` : html`<a href="#/account">Account</a>
@@ -124,7 +124,12 @@ function renderUserMenu() {
       <button id="sign-out">Sign out</button>
     </div>`.s;
   const pop = $('#user-pop');
-  $('#user-btn').onclick = (e) => { e.stopPropagation(); pop.hidden = !pop.hidden; $('#user-btn').setAttribute('aria-expanded', String(!pop.hidden)); };
+  $('#user-btn').onclick = (e) => {
+    e.stopPropagation();
+    $('#bell-pop').hidden = true; // (one menu at a time: this click doesn't reach the bell's own closing)
+    pop.hidden = !pop.hidden;
+    $('#user-btn').setAttribute('aria-expanded', String(!pop.hidden));
+  };
   pop.onclick = (e) => {
     if (e.target.id === 'sign-out') signOut();
     if (e.target.id === 'switch-server') window.MarqueeAndroid?.changeServer();
@@ -231,7 +236,7 @@ async function viewAccount({ query, seq }) {
   if (!setView(seq, html`
     <div class="acct">
       <div class="acct-head">
-        <span class="acct-avatar" style="background:${avatarColor(u.username)}">${u.username.slice(0, 1).toUpperCase()}</span>
+        <button class="acct-avatar ${avatarClass(u)}" id="acct-avatar" style="background:${avatarBg(u)}" title="Change your picture" aria-label="Change your picture">${avatarPic(u)}<span class="acct-avatar-edit">${icon('pencil')}</span></button>
         <div class="acct-who"><h1>${u.username}</h1>
           <span class="muted">${u.role === 'admin' ? 'Administrator' : u.maxAge != null ? 'Kids profile' : 'Member'}${u.libraries ? ` · ${u.libraries.length} librar${u.libraries.length === 1 ? 'y' : 'ies'}` : ''}</span></div>
         <div class="row acct-actions"><button class="btn small" id="acct-switch">Switch profile</button><button class="btn small" id="acct-signout">Sign out</button></div>
@@ -293,6 +298,7 @@ async function viewAccount({ query, seq }) {
 
   $('#acct-signout').onclick = signOut;
   $('#acct-switch').onclick = () => showProfilePicker();
+  $('#acct-avatar').onclick = () => showAvatarPicker();
   $('#tv-mode').onchange = (e) => { try { localStorage.setItem('marquee:tvMode', String(e.target.checked)); } catch { /* ignore */ } initTvMode(); toast(e.target.checked ? 'TV mode on' : 'TV mode off'); };
   $('#app-update')?.addEventListener('click', () => { try { window.MarqueeAndroid.checkUpdates(); } catch { toast('Update check failed', true); } });
   $('#player-prefs').onchange = async (e) => {
@@ -555,7 +561,7 @@ function usersSection(users, { heading = true } = {}) {
     <div id="user-form-slot"></div>
     ${users.map((u) => html`
       <div class="panel lib-row" data-user="${u.id}">
-        <div class="avatar static">${u.username.slice(0, 1).toUpperCase()}</div>
+        <button class="avatar static ${avatarClass(u)}" data-avatar-for="${u.id}" style="background:${avatarBg(u)}" title="Change ${u.username}'s picture" aria-label="Change ${u.username}'s picture">${avatarPic(u)}</button>
         <div class="lib-info">
           <div style="font-weight:600">${u.username}${u.id === state.user.id ? html` <span class="muted" style="font-weight:400">(you)</span>` : ''}
             <span class="chip" style="margin-left:6px">${u.role === 'admin' ? 'Admin' : 'User'}</span> ${lockBadge(u)}
@@ -576,6 +582,7 @@ function usersSection(users, { heading = true } = {}) {
 
 function bindUsersSection(users) {
   $('#add-user').onclick = () => showUserForm();
+  $$('[data-avatar-for]').forEach((b) => { b.onclick = () => showAvatarPicker(users.find((x) => x.id === b.dataset.avatarFor)); });
   $$('[data-uact]').forEach((b) => {
     b.onclick = async () => {
       const u = users.find((x) => x.id === b.closest('[data-user]').dataset.user);
@@ -841,20 +848,92 @@ async function viewDownloads({ seq }) {
   };
 }
 
+// ---------- profile picture ----------
+// A built-in face on a colour, or a photo (made into a small square here before it's sent). Your
+// own from the Account page; admins can also set anyone's from Settings → Users.
+function showAvatarPicker(who = state.user) {
+  const self = who.id === state.user.id;
+  const q = self ? '' : `?user=${encodeURIComponent(who.id)}`;
+  let face = who.avatar?.face || 1, color = who.avatar?.color || FACE_COLORS[5];
+  const m = openModal({ title: self ? 'Your picture' : `${who.username}’s picture`, wide: true, body: html`
+    <div class="av-pick">
+      <div class="av-preview" aria-hidden="true"></div>
+      <div class="av-side">
+        <h3 class="av-h">Pick a face</h3>
+        <div class="av-faces">${Array.from({ length: FACE_COUNT }, (_, i) => html`<button type="button" class="av-face" data-face="${i + 1}" aria-label="Face ${i + 1}"><img src="${faceUrl(i + 1)}" alt=""></button>`)}</div>
+        <h3 class="av-h">And a colour</h3>
+        <div class="av-colors">${FACE_COLORS.map((c) => html`<button type="button" class="av-color" data-color="${c}" style="background:${c}" aria-label="Colour ${c}"></button>`)}</div>
+        <div class="row av-actions">
+          <button type="button" class="btn primary" data-av="save">Use this picture</button>
+          <label class="btn">Upload a photo<input type="file" accept="image/*" hidden data-av="file"></label>
+          ${who.avatar ? html`<button type="button" class="btn" data-av="reset">Use ${self ? 'my' : 'their'} initial</button>` : ''}
+        </div>
+        <div class="form-error"></div>
+      </div>
+    </div>`.s });
+  const root = m.body, err = $('.form-error', root);
+  const paint = () => {
+    $('.av-preview', root).style.background = color;
+    $('.av-preview', root).innerHTML = html`<img src="${faceUrl(face)}" alt="">`.s;
+    for (const b of $$('.av-face', root)) { b.style.background = color; b.classList.toggle('on', +b.dataset.face === face); }
+    for (const b of $$('.av-color', root)) b.classList.toggle('on', b.dataset.color === color);
+  };
+  paint();
+  const done = (user) => {
+    if (self) { state.user = { ...state.user, avatar: user.avatar }; renderUserMenu(); }
+    m.close();
+    toast('Picture changed');
+    router();
+  };
+  root.addEventListener('click', async (e) => {
+    const f = e.target.closest('[data-face]'), c = e.target.closest('[data-color]'), act = e.target.closest('button[data-av]')?.dataset.av;
+    if (f) { face = +f.dataset.face; paint(); }
+    if (c) { color = c.dataset.color; paint(); }
+    if (!act) return;
+    try {
+      const r = await api(`/api/auth/avatar${q}`, { method: 'PUT', body: act === 'save' ? { face, color } : {} });
+      done(r.user);
+    } catch (e2) { err.textContent = e2.message; }
+  });
+  $('[data-av="file"]', root).onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    err.textContent = '';
+    try {
+      const blob = await squarePhoto(file, 320);
+      const res = await fetch(`/api/auth/avatar/photo${q}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || `Upload failed (${res.status})`);
+      done(data.user);
+    } catch (e2) { err.textContent = e2.message || 'Couldn’t use that picture'; }
+  };
+}
+
+// The middle square of a photo, `size` pixels across, as a JPEG.
+async function squarePhoto(file, size) {
+  let img;
+  try { img = await createImageBitmap(file); } catch { throw new Error('Couldn’t open that picture: try a JPEG or PNG'); }
+  const side = Math.min(img.width, img.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  canvas.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Couldn’t use that picture'))), 'image/jpeg', 0.88));
+}
+
 // ---------- "Who's watching?" ----------
 async function showProfilePicker({ atStart = false } = {}) {
   if ($('.profile-picker')) return;
   let data;
   try { data = await api('/api/profiles'); } catch { return; }
   const list = data.profiles.some((p) => p.id === data.current) ? data.profiles
-    : [{ id: data.current, username: state.user.username, needsPin: false }, ...data.profiles];
+    : [{ id: data.current, username: state.user.username, avatar: state.user.avatar, needsPin: false }, ...data.profiles];
   if (atStart && list.length < 2) return; // nobody else to switch to
   const root = document.createElement('div');
   root.className = 'profile-picker';
   root.innerHTML = html`<div class="pp-inner">
       <h1>Who's watching?</h1>
       <div class="pp-list">${list.map((p) => html`<button class="pp-profile ${p.id === data.current ? 'current' : ''}" data-pid="${p.id}">
-        <span class="pp-avatar" style="background:${avatarColor(p.username)}">${p.username.slice(0, 1).toUpperCase()}${p.needsPin && p.id !== data.current
+        <span class="pp-avatar ${avatarClass(p)}" style="background:${avatarBg(p)}">${avatarPic(p)}${p.needsPin && p.id !== data.current
           ? html`<span class="pp-lock" title="Needs a PIN">${icon('lock')}</span>` : ''}${p.kids ? html`<span class="pp-kids">KIDS</span>` : ''}</span><span>${p.username}</span></button>`)}</div>
       <form class="pp-pin" hidden><label>PIN for <b class="pp-name"></b>
         <input class="input" name="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off"></label>

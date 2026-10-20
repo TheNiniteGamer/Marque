@@ -401,7 +401,8 @@ async function viewActivity({ seq }) {
   };
   const title = (it) => (!it ? 'Unknown video' : it.type === 'episode' ? `${it.showTitle} · ${epLabel(it)} — ${it.title}` : it.title);
   const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} hr ago`; };
-  const who = (name) => html`<span class="act-avatar" style="background:${avatarColor(name)}">${String(name).slice(0, 1).toUpperCase()}</span>`;
+  let avatars = {};
+  const who = (name) => { const u = { username: String(name), avatar: avatars[name] }; return html`<span class="act-avatar ${avatarClass(u)}" style="background:${avatarBg(u)}">${avatarPic(u)}</span>`; };
   const streamCard = (s) => {
     const how = howLabel(s);
     return html`<div class="panel act-card">
@@ -429,7 +430,7 @@ async function viewActivity({ seq }) {
       <div class="muted act-job-note">${o.queue ? `${o.queue} waiting` : 'Nothing waiting'} · ${o.counts.done} made so far · <a href="#/settings/convert">Settings</a></div>
     </div>`;
   };
-  const render = (a) => html`
+  const render = (a) => (avatars = a.avatars || {}, html`
     <div class="toolbar"><h1>Activity<span class="count">${a.streams.length}</span></h1>
       <span class="muted">Updates every few seconds</span></div>
     <div class="activity-stats">
@@ -451,7 +452,7 @@ async function viewActivity({ seq }) {
     ${a.recent.length ? html`<div class="panel act-recent">${a.recent.map((r) => html`<div class="act-recent-row">${who(r.user)}<b>${r.user}</b>
         <a href="#/item/${r.item.id}">${title(r.item)}</a>
         <span class="muted">${r.watched ? 'watched' : `stopped at ${fmtClock(r.position)}`} · ${ago(r.at)}</span></div>`)}</div>`
-      : html`<div class="panel muted">Nothing watched in the last day.</div>`}`;
+      : html`<div class="panel muted">Nothing watched in the last day.</div>`}`);
   const bind = () => {
     bindOptimizeButtons(view, () => load());
     for (const b of $$('[data-stop]', view)) {

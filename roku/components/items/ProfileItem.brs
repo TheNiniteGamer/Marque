@@ -2,6 +2,7 @@ sub init()
     m.frame = m.top.findNode("frame")
     m.square = m.top.findNode("square")
     m.initial = m.top.findNode("initial")
+    m.pic = m.top.findNode("pic")
     m.name = m.top.findNode("name")
     m.lock = m.top.findNode("lock")
     m.kids = m.top.findNode("kids")
@@ -14,6 +15,9 @@ sub onContent()
     m.name.text = c.title
     m.initial.text = UCase(Left(c.title, 1))
     m.square.color = c.color
+    m.pic.uri = c.pic
+    m.pic.visible = c.pic <> ""
+    m.initial.visible = c.pic = ""
     m.lock.visible = c.needsPin
     m.kids.visible = c.kids
     m.kidsBg.visible = c.kids

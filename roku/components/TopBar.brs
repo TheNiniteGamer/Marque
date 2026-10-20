@@ -11,10 +11,8 @@ sub init()
     m.index = 0
     m.wasIn = false
     m.picked = false
-    name = mqStr(m.global.username)
-    if name = "" then name = "?"
-    m.top.findNode("avatarText").text = UCase(Left(name, 1))
-    m.top.findNode("avatarBg").color = mqAvatarColor(name)
+    paintAvatar()
+    m.global.observeField("avatar", "paintAvatar")
     menu = CreateObject("roSGNode", "ContentNode")
     for each label in ["Switch profile", "My requests", "Settings", "Sign out"]
         n = menu.createChild("ContentNode")
@@ -26,6 +24,18 @@ sub init()
     build([])
     mqApi("/api/libraries", "onLibraries")
     mqApi("/api/notifications", "onNotifications")
+end sub
+
+' Your picture, or your initial on your colour.
+sub paintAvatar()
+    name = mqStr(m.global.username)
+    if name = "" then name = "?"
+    pic = mqAvatar(name, m.global.avatar)
+    m.top.findNode("avatarText").text = UCase(Left(name, 1))
+    m.top.findNode("avatarText").visible = pic.uri = ""
+    m.top.findNode("avatarBg").color = pic.color
+    m.top.findNode("avatarPic").uri = pic.uri
+    m.top.findNode("avatarPic").visible = pic.uri <> ""
 end sub
 
 sub onReload()

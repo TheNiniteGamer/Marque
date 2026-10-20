@@ -51,6 +51,7 @@ sub onPollResult(event as Object)
         if d.user <> invalid then
             mqWrite("username", d.user.username)
             m.global.username = d.user.username
+            mqSetAvatar(d.user.avatar)
         end if
         m.top.navigate = { screen: "HomeScreen", reset: true }
     end if

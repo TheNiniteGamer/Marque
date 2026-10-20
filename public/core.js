@@ -87,6 +87,7 @@ const ICONS = {
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
   stack: '<rect x="3" y="7" width="14" height="13" rx="1.5"/><path d="M7 4h13a1 1 0 011 1v12"/>',
   link: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/>',
+  pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
   up: '<path d="M7 11v9H4v-9zM7 11l4-8a2 2 0 012.6 2.4L12.5 9H18a2 2 0 012 2.3l-1.2 7A2 2 0 0116.8 20H7"/>',
   down: '<path d="M7 13V4H4v9zM7 13l4 8a2 2 0 002.6-2.4L12.5 15H18a2 2 0 002-2.3l-1.2-7A2 2 0 0016.8 4H7"/>',
@@ -95,6 +96,15 @@ const icon = (name) => raw(`<svg viewBox="0 0 24 24" fill="none" stroke="current
 // A steady colour per person for avatars and profile squares.
 const AVATAR_COLORS = ['#2f6fb3', '#b3402f', '#7a4fb3', '#2f8a5c', '#b3862f', '#2f9bb3', '#b32f7a', '#5c6b2f'];
 const avatarColor = (name) => AVATAR_COLORS[[...String(name || '')].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7) % AVATAR_COLORS.length];
+// A profile's picture (see lib/auth.js): a built-in face on a colour, an uploaded photo, or without
+// one their initial. Used as `<span class="x ${avatarClass(u)}" style="background:${avatarBg(u)}">${avatarPic(u)}</span>`.
+const FACE_COUNT = 16;
+const FACE_COLORS = ['#e5484d', '#f76b15', '#ffc53d', '#46a758', '#12a594', '#3e8ed0', '#5b5bd6', '#8e4ec6', '#e93d82', '#a18072', '#8b8d98', '#f2f2f2'];
+const faceUrl = (n) => `/avatars/face-${n}.svg`;
+const avatarBg = (u) => (u?.avatar?.photo ? '#222' : u?.avatar?.color || avatarColor(u?.username));
+const avatarClass = (u) => (u?.avatar ? 'has-pic' : '');
+const avatarPic = (u) => (u?.avatar?.photo ? html`<img class="av-img" src="${u.avatar.photo}" alt="">`
+  : u?.avatar?.face ? html`<img class="av-img" src="${faceUrl(u.avatar.face)}" alt="">` : String(u?.username || '?').slice(0, 1).toUpperCase());
 const pct = (p, d) => (d ? Math.min(100, Math.max(0, (p / d) * 100)) : 0);
 
 // ---------- ui helpers ----------

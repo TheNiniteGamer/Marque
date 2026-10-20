@@ -3,6 +3,7 @@
 // Registered by server.js, which passes the shared helpers and services in `app`.
 
 const { fare } = require('../lib/report');
+const { avatarOf } = require('../lib/auth');
 
 module.exports = function register(app) {
   const {
@@ -72,6 +73,7 @@ module.exports = function register(app) {
       streams, others, background, recent: recent.slice(0, 25), optimize: app.optimizer.status(),
       cpu: activity.cpu(), memory: { total: os.totalmem(), free: os.freemem() },
       encoder: { active: hwaccel.active, name: ENCODER_NAMES[hwaccel.active] },
+      avatars: Object.fromEntries(auth.users.map((u) => [u.username, avatarOf(u)])),
     });
   }, 'admin');
 

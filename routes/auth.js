@@ -3,13 +3,28 @@
 // Registered by server.js, which passes the shared helpers and services in `app`.
 
 const os = require('node:os');
-const { playerPrefs, cleanPrefs } = require('../lib/auth');
+const fs = require('node:fs');
+const path = require('node:path');
+const { playerPrefs, cleanPrefs, cleanAvatar } = require('../lib/auth');
 
 module.exports = function register(app) {
   const {
     publicUser, store, auth, HttpError, json, readBody, getUser, isPrivateIp,
-    clientIp, route, tokens,
+    clientIp, route, tokens, readRaw, sendFile, DATA_DIR,
   } = app;
+
+  // Profile pictures: a built-in face on a colour, or an uploaded photo. Your own, or (admins)
+  // anyone's with ?user=<id>.
+  const AVATAR_DIR = path.join(DATA_DIR, 'avatars');
+  const photoFile = (id) => path.join(AVATAR_DIR, path.basename(id));
+  const removePhoto = (id) => fs.rmSync(photoFile(id), { force: true });
+  const avatarTarget = (url, me) => {
+    const id = url.searchParams.get('user');
+    if (!id || id === me.id) return me;
+    if (me.role !== 'admin') throw new HttpError(403, 'Admins only');
+    return getUser(id);
+  };
+  const IMAGE_TYPES = [['image/jpeg', [0xff, 0xd8, 0xff]], ['image/png', [0x89, 0x50, 0x4e, 0x47]], ['image/webp', [0x52, 0x49, 0x46, 0x46]]];
 
   // --- auth ---
   // Public: also used by the Android app to recognise Marquee servers on the network.
@@ -109,6 +124,37 @@ module.exports = function register(app) {
     json(res, 200, { user: publicUser(user) });
   });
 
+  // { face, color } for a built-in picture, or {} to go back to your initial.
+  route('PUT', '/api/auth/avatar', async (req, res, p, url, me) => {
+    const target = avatarTarget(url, me);
+    const body = await readBody(req);
+    let avatar = null;
+    if (body.face != null) {
+      try { avatar = cleanAvatar(body); } catch (err) { throw new HttpError(400, err.message); }
+    }
+    removePhoto(target.id);
+    if (avatar) target.avatar = avatar; else delete target.avatar;
+    store.save();
+    json(res, 200, { user: publicUser(target) });
+  });
+  // A photo (the page makes it a small square JPEG first): the image itself as the body.
+  route('POST', '/api/auth/avatar/photo', async (req, res, p, url, me) => {
+    const target = avatarTarget(url, me);
+    const buf = await readRaw(req, 2 * 1024 * 1024);
+    const type = IMAGE_TYPES.find(([, magic]) => magic.every((b, i) => buf[i] === b))?.[0];
+    if (!type) throw new HttpError(400, 'That isn’t a JPEG, PNG or WebP picture');
+    fs.mkdirSync(AVATAR_DIR, { recursive: true });
+    fs.writeFileSync(photoFile(target.id), buf);
+    target.avatar = { photo: Date.now(), type };
+    store.save();
+    json(res, 200, { user: publicUser(target) });
+  });
+  route('GET', '/api/avatars/:id', async (req, res, { id }) => {
+    const u = getUser(id);
+    if (!u.avatar?.photo || !fs.existsSync(photoFile(u.id))) throw new HttpError(404, 'No photo');
+    sendFile(req, res, photoFile(u.id), { type: u.avatar.type || 'image/jpeg', headers: { 'Cache-Control': 'private, max-age=31536000, immutable' } });
+  }, 'media');
+
   // Where you're signed in (browsers and the phone app), and signing out of all of them but this one.
   route('GET', '/api/auth/sessions', async (req, res, p, url, user) => {
     const { deviceName } = require('../lib/activity');
@@ -183,6 +229,7 @@ module.exports = function register(app) {
     const target = getUser(id);
     if (target.id === me.id) throw new HttpError(400, 'You cannot delete your own account');
     auth.deleteUser(target);
+    removePhoto(target.id);
     tokens.rotate(); // playback links they were given stop working too
     json(res, 200, { ok: true });
   }, 'admin');

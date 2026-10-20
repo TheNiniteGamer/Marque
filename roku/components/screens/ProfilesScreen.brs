@@ -65,7 +65,7 @@ sub onProfiles(event as Object)
         list.Push(p)
     end for
     ' You're always on your own picker, even without a PIN.
-    if not found then list.Unshift({ id: current, username: mqStr(r.data.currentName), needsPin: false, kids: false })
+    if not found then list.Unshift({ id: current, username: mqStr(r.data.currentName), avatar: m.global.avatar, needsPin: false, kids: false })
     m.current = current
     if atStart() and list.Count() < 2 then
         goHome()
@@ -77,7 +77,8 @@ sub onProfiles(event as Object)
     for i = 0 to list.Count() - 1
         p = list[i]
         c = root.createChild("ContentNode")
-        c.addFields({ color: mqAvatarColor(mqStr(p.username)), needsPin: mqIsTrue(p.needsPin) and mqStr(p.id) <> current, kids: mqIsTrue(p.kids) })
+        pic = mqAvatar(mqStr(p.username), p.avatar)
+        c.addFields({ color: pic.color, pic: pic.uri, needsPin: mqIsTrue(p.needsPin) and mqStr(p.id) <> current, kids: mqIsTrue(p.kids) })
         c.title = mqStr(p.username)
         if mqStr(p.id) = current then focusAt = i
     end for
@@ -175,6 +176,7 @@ sub onSwitched(event as Object)
         if r.data.user <> invalid then
             mqWrite("username", mqStr(r.data.user.username))
             m.global.username = mqStr(r.data.user.username)
+            mqSetAvatar(r.data.user.avatar)
         end if
         goHome()
         return

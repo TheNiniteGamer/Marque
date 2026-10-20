@@ -1,11 +1,18 @@
 sub init()
     m.top.backgroundColor = "0x0B0B0BFF"
     m.top.backgroundUri = ""
-    m.global.addFields({ server: mqRead("server"), token: mqRead("token"), username: mqRead("username"), mediaKey: mqRead("mediaKey") })
+    m.global.addFields({ server: mqRead("server"), token: mqRead("token"), username: mqRead("username"), mediaKey: mqRead("mediaKey"), avatar: {} })
+    saved = invalid
+    text = mqRead("avatar")
+    if text <> "" then saved = ParseJson(text)
+    if saved <> invalid and type(saved) = "roAssociativeArray" then m.global.avatar = saved
     ' Pictures and videos are fetched with a media key rather than the sign-in itself (see
     ' mqMediaUrl). A new sign-in (linking, switching profile) gets a new key; signing out drops it.
     m.global.observeField("token", "onToken")
-    if m.global.token <> "" then mqApi("/api/auth/media-key", "onMediaKey")
+    if m.global.token <> "" then
+        mqApi("/api/auth/media-key", "onMediaKey")
+        mqApi("/api/auth/me", "onMe")
+    end if
     m.stack = []
     m.screens = m.top.findNode("screens")
     ' Only the screen on top may have the highlight (see onScreensFocus).
@@ -35,6 +42,12 @@ sub onToken()
     m.global.mediaKey = ""
     mqDelete("mediaKey")
     if m.global.token <> "" then mqApi("/api/auth/media-key", "onMediaKey")
+end sub
+
+' Your picture may have been changed on a phone or computer since last time.
+sub onMe(event as Object)
+    r = event.getData()
+    if r.status = 200 and r.data <> invalid and r.data.user <> invalid then mqSetAvatar(r.data.user.avatar)
 end sub
 
 sub onMediaKey(event as Object)
