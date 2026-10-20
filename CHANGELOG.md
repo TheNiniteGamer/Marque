@@ -4,6 +4,14 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.21.1
+
+- **Roku: a top bar like the other apps.** The side menu is replaced by the bar the web and Android TV
+  apps have: MARQUEE, Home, each library and My List (the highlighted one a white pill, the page
+  you're on in bold), with Search and your profile (Switch profile, Sign out) on the right. Press up
+  from the banner to reach it; library and My List pages have it too. The broken "Menu" hint in the
+  corner is gone. Roku 1.11.
+
 ## 0.21.0
 
 **Requests with Radarr and Sonarr, continued.**

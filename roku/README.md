@@ -31,10 +31,12 @@ To update, upload the new zip the same way (it replaces the old one).
 
 **Who's watching?** When anyone else on the server has a profile (a PIN set on their Account page,
 or one an admin lets be picked without a PIN), the channel starts by asking who's watching. A profile with a PIN asks for it
-on a number pad. *Switch profile* is in the menu.
+on a number pad. *Switch profile* is under your profile in the top bar.
 
-In the menu (press **left** on the home page) are Search, My List, each library, *Switch profile*
-and *Sign out*.
+**The top bar**, as in the web and Android TV apps: Home, each library and My List, with Search and
+your profile on the right. Press **up** from the banner (or a library's top row) to reach it, **left /
+right** to move along it and **OK** to open; the page you're on is in bold. Your profile has *Switch
+profile* and *Sign out*.
 On the home page ✱ opens search; on the code screen it changes the server.
 
 ## Remote

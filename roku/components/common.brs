@@ -173,6 +173,17 @@ function mqClock(sec as Dynamic) as String
     return mi.ToStr() + ":" + ss
 end function
 
+' What choosing something in the top bar (TopBar) opens. fromHome: the bar is on Home; elsewhere a
+' library replaces the page you're on, and Home goes back to it.
+function mqTopBarNav(c as Object, fromHome as Boolean) as Object
+    if c.key = "home" then return { back: true }
+    if c.key = "search" then return { screen: "SearchScreen" }
+    if c.key = "profiles" then return { screen: "ProfilesScreen", params: {} }
+    params = { title: "My List", path: "/api/watchlist", current: "list" }
+    if c.key = "lib" then params = { title: mqStr(c.title), path: "/api/libraries/" + mqStr(c.id) + "/items", current: "lib:" + mqStr(c.id) }
+    return { screen: "GridScreen", params: params, replace: not fromHome }
+end function
+
 ' A steady colour per person, the same as on the web.
 function mqAvatarColor(name as String) as String
     colors = ["0x2F6FB3FF", "0xB3402FFF", "0x7A4FB3FF", "0x2F8A5CFF", "0xB3862FFF", "0x2F9BB3FF", "0xB32F7AFF", "0x5C6B2FFF"]

@@ -6,11 +6,9 @@ sub init()
     m.overview = m.top.findNode("overview")
     m.heroButtons = m.top.findNode("heroButtons")
     m.rows = m.top.findNode("rows")
-    m.menu = m.top.findNode("menu")
-    m.menuList = m.top.findNode("menuList")
+    m.topBar = m.top.findNode("topBar")
     m.status = m.top.findNode("status")
     m.hero = invalid
-    m.libraries = []
     m.focus = m.rows
     m.top.observeField("focusedChild", "onFocusChange")
     m.heroIndex = 0
@@ -18,10 +16,11 @@ sub init()
     m.heroButtons.observeField("focusedChild", "paintHeroButtons")
     m.rows.observeField("rowItemFocused", "onRowFocused")
     m.rows.observeField("rowItemSelected", "onRowSelected")
-    m.menuList.observeField("itemSelected", "onMenuSelected")
+    m.topBar.observeField("chosen", "onTopBar")
+    m.topBar.observeField("leave", "onTopBarLeave")
+    m.topBar.observeField("focusedChild", "paintHeroButtons")
     m.status.text = "Loading…"
     load()
-    mqApi("/api/libraries", "onLibraries")
 end sub
 
 sub onFocusChange()
@@ -76,25 +75,6 @@ sub onHome(event as Object)
     if m.focus.isSameNode(m.heroButtons) then showInfo(m.hero) else onRowFocused()
 end sub
 
-sub onLibraries(event as Object)
-    r = event.getData()
-    if r.status <> 200 or r.data = invalid then return
-    m.libraries = r.data
-    root = CreateObject("roSGNode", "ContentNode")
-    for each label in ["Home", "Search", "My List"]
-        n = root.createChild("ContentNode")
-        n.title = label
-    end for
-    for each lib in m.libraries
-        n = root.createChild("ContentNode")
-        n.title = lib.name
-    end for
-    n = root.createChild("ContentNode")
-    n.title = "Switch profile"
-    n = root.createChild("ContentNode")
-    n.title = "Sign out"
-    m.menuList.content = root
-end sub
 
 ' The top of the screen: a title's artwork, name, details and summary.
 sub showInfo(item as Dynamic)
@@ -169,10 +149,11 @@ sub setHeroButtons(labels as Object)
 end sub
 
 ' The highlighted button is white, the other grey. While moving through the rows the top shows the
-' highlighted title instead, so the banner's buttons are hidden until you go back up.
+' highlighted title instead, so the banner's buttons are hidden until you go back up (they stay
+' while you're in the top bar, as on the web).
 sub paintHeroButtons()
     focused = m.heroButtons.hasFocus()
-    if focused then m.heroButtons.opacity = 1.0 else m.heroButtons.opacity = 0.0
+    if focused or m.topBar.isInFocusChain() then m.heroButtons.opacity = 1.0 else m.heroButtons.opacity = 0.0
     for i = 0 to m.heroCount - 1
         on = focused and i = m.heroIndex
         bg = m.top.findNode("hbBg" + i.ToStr())
@@ -198,39 +179,27 @@ sub onHeroButton(i as Integer)
     end if
 end sub
 
-sub openMenu()
-    m.menu.visible = true
-    m.menuList.setFocus(true)
+' The top bar: up from the banner (or the first row) reaches it.
+sub toTopBar()
+    m.topBar.setFocus(true)
+    if m.hero <> invalid then showInfo(m.hero)
 end sub
 
-sub closeMenu()
-    m.menu.visible = false
+sub onTopBarLeave()
     m.focus.setFocus(true)
+    paintHeroButtons()
+    if m.focus.isSameNode(m.rows) then onRowFocused()
 end sub
 
-sub onMenuSelected()
-    i = m.menuList.itemSelected
-    m.menu.visible = false
-    m.focus.setFocus(true)
-    libStart = 3
-    if i = 0 then
+sub onTopBar()
+    c = m.topBar.chosen
+    if c.key = "signedout" then
+        signedOut()
         return
-    else if i = 1 then
-        m.top.navigate = { screen: "SearchScreen" }
-    else if i = 2 then
-        m.top.navigate = { screen: "GridScreen", params: { title: "My List", path: "/api/watchlist" } }
-    else if i >= libStart and i < libStart + m.libraries.Count() then
-        lib = m.libraries[i - libStart]
-        m.top.navigate = { screen: "GridScreen", params: { title: lib.name, path: "/api/libraries/" + lib.id + "/items" } }
-    else if i = libStart + m.libraries.Count() then
-        m.top.navigate = { screen: "ProfilesScreen", params: {} }
-    else
-        mqApi("/api/auth/logout", "onLoggedOut", "POST")
     end if
-end sub
-
-sub onLoggedOut()
-    signedOut()
+    m.focus.setFocus(true)
+    paintHeroButtons()
+    if c.key <> "home" then m.top.navigate = mqTopBarNav(c, true)
 end sub
 
 sub signedOut()
@@ -241,12 +210,9 @@ end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
-    if m.menu.visible then
-        if key = "right" or key = "back" then
-            closeMenu()
-            return true
-        end if
-        return false
+    if m.heroButtons.hasFocus() and key = "up" then
+        toTopBar()
+        return true
     end if
     if m.heroButtons.hasFocus() then
         if key = "left" and m.heroIndex > 0 then
@@ -264,10 +230,6 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return true
         end if
     end if
-    if key = "left" then
-        openMenu()
-        return true
-    end if
     if key = "options" then
         m.top.navigate = { screen: "SearchScreen" }
         return true
@@ -284,6 +246,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         m.heroButtons.setFocus(true)
         paintHeroButtons()
         showInfo(m.hero)
+        return true
+    end if
+    if key = "up" and m.rows.hasFocus() then
+        toTopBar()
         return true
     end if
     return false

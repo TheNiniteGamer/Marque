@@ -2,6 +2,9 @@ sub init()
     m.title = m.top.findNode("title")
     m.count = m.top.findNode("count")
     m.grid = m.top.findNode("grid")
+    m.topBar = m.top.findNode("topBar")
+    m.topBar.observeField("chosen", "onTopBar")
+    m.topBar.observeField("leave", "onTopBarLeave")
     m.items = []
     m.top.observeField("focusedChild", "onFocusChange")
     m.grid.observeField("itemSelected", "onSelected")
@@ -11,7 +14,31 @@ sub onFocusChange()
     if m.top.hasFocus() then m.grid.setFocus(true)
 end sub
 
+sub onTopBarLeave()
+    m.grid.setFocus(true)
+end sub
+
+sub onTopBar()
+    c = m.topBar.chosen
+    if c.key = "signedout" then
+        m.top.navigate = { screen: "PairScreen", reset: true }
+        return
+    end if
+    m.grid.setFocus(true)
+    m.top.navigate = mqTopBarNav(c, false)
+end sub
+
+' Up from the top row reaches the top bar.
+function onKeyEvent(key as String, press as Boolean) as Boolean
+    if press and key = "up" and m.grid.hasFocus() then
+        m.topBar.setFocus(true)
+        return true
+    end if
+    return false
+end function
+
 sub onParams()
+    m.topBar.current = mqStr(m.top.params.current)
     m.title.text = mqStr(m.top.params.title)
     m.count.text = "Loading…"
     load()

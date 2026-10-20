@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- "Who's watching?": the profiles on this Marquee (the people who set a PIN, and kids' profiles).
-     Shown when the channel starts if there's someone to switch to, and from Home's menu. A profile
+     Shown when the channel starts if there's someone to switch to, and from the top bar. A profile
      with a PIN asks for it on a number pad. -->
 <component name="ProfilesScreen" extends="Group">
   <interface>
