@@ -50,3 +50,17 @@ test('home rows: New in each library, Because you watched, and big genres', () =
   assert.ok(titles.includes('Comedy'), 'a genre with at least 6 titles gets a row');
   assert.ok(!titles.includes('Science Fiction'), 'small genres do not');
 });
+
+test('the home screen rows can be chosen in Settings', () => {
+  const store = makeStore();
+  const all = lib.home(store, user);
+  assert.ok(all.hero);
+  assert.ok(all.hubs.some((h) => h.key.startsWith('recent-')));
+  assert.throws(() => lib.cleanHome({ genres: 99 }), /Between 0 and 8/);
+  store.data.settings = { home: lib.cleanHome({ hero: false, genres: 0, recent: false, bogus: true }) };
+  const s = lib.homeSettings(store);
+  assert.deepEqual([s.hero, s.genres, s.recent, s.top10, s.bogus], [false, 0, false, true, undefined], 'the rest stays as it was');
+  const less = lib.home(store, user);
+  assert.equal(less.hero, null);
+  assert.ok(!less.hubs.some((h) => h.key.startsWith('genre-') || h.key.startsWith('recent-')));
+});

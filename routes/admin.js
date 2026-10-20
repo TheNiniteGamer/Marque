@@ -55,6 +55,7 @@ module.exports = function register(app) {
       autoMatch: st.autoMatch !== false,
       updateCheck: st.updateCheck !== false,
       introDetection: st.introDetection !== false,
+      home: lib.homeSettings(store),
       providers: metadata.available(),
       opensubtitles: { keySet: !!st.opensubtitles?.apiKey, keyHint: st.opensubtitles?.apiKey ? `••••${st.opensubtitles.apiKey.slice(-4)}` : null, username: st.opensubtitles?.username || '' },
     };
@@ -92,6 +93,9 @@ module.exports = function register(app) {
         st.opensubtitles = next;
         try { await opensubs.test(); } catch (err) { st.opensubtitles = prev.apiKey ? prev : undefined; if (!prev.apiKey) delete st.opensubtitles; throw err; }
       }
+    }
+    if (body.home !== undefined) {
+      try { st.home = lib.cleanHome(body.home, lib.homeSettings(store)); } catch (err) { throw new HttpError(400, err.message); }
     }
     if (body.introDetection !== undefined) {
       st.introDetection = !!body.introDetection;

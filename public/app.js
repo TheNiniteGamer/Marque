@@ -152,7 +152,7 @@ function renderNav() {
     ${state.libraries.map((l) => html`<a href="#/library/${l.id}" class="${on(path === `/library/${l.id}`)}">${l.name}</a>`)}
     ${state.libraries.length ? html`<a href="#/collections" class="${on(path.startsWith('/collection'))}">Collections</a>` : ''}
     <a href="#/watchlist" class="desk-only ${on(path === '/watchlist')}">My List</a>
-    ${!state.libraries.length && state.user?.role === 'admin' ? html`<a href="#/settings">＋ Add a library</a>` : ''}`.s;
+    ${!state.libraries.length && state.user?.role === 'admin' ? html`<a href="#/settings/libraries?add=1">＋ Add a library</a>` : ''}`.s;
   $('#tabbar').innerHTML = html`
     <a href="#/" class="${on(path === '/')}">${icon('home')}Home</a>
     <button type="button" data-tab="search">${icon('search')}Search</button>
@@ -506,12 +506,12 @@ async function viewHome({ seq }) {
   if (!state.libraries.length) {
     return setView(seq, html`<div class="empty"><h2>Welcome to Marquee</h2>
       <p>Point Marquee at the folders where you keep your movies and TV shows,<br>and it will organize them into a browsable library.</p>
-      <a class="btn primary" href="#/settings?add=1">Add a library</a></div>`);
+      <a class="btn primary" href="#/settings/libraries?add=1">Add a library</a></div>`);
   }
   if (!homeData.hubs.length) {
     return setView(seq, html`<div class="empty"><h2>${state.status?.scanning ? 'Scanning your libraries…' : 'No media found yet'}</h2>
       <p>${state.status?.scanning ? 'New items will appear here as they are found.' : 'Check that your library folders contain video files, then scan again.'}</p>
-      <a class="btn" href="#/settings">Manage libraries</a></div>`);
+      <a class="btn" href="#/settings/libraries">Manage libraries</a></div>`);
   }
   if (seq !== renderSeq) return;
   view.classList.toggle('has-hero', !!homeData.hero);
@@ -932,98 +932,6 @@ function cacheSummary(m) {
   return parts.length ? parts.join(' · ') : 'Nothing yet';
 }
 
-async function viewSettings({ query, seq }) {
-  view.onclick = null;
-  if (state.user.role !== 'admin') { location.replace('#/account'); return; }
-  if (state.status?.adminBlockedHere) {
-    setView(seq, html`<div class="toolbar"><h1>Settings</h1></div><div class="panel">🔒 Settings are switched to <b>only at home</b> (Settings → Remote access). Open Marquee on your home network to change them.</div>`);
-    return;
-  }
-  const [, s, users, metaSettings, updates, remote, backupInfo, transcoding, introInfo, problems, maint, health] = await Promise.all([refreshLibraries(), api('/api/status'), api('/api/users'),
-    api('/api/settings'), api('/api/updates'), api('/api/remote'), api('/api/backups'), api('/api/transcoding'), api('/api/intro'), api('/api/problems'), api('/api/maintenance'),
-    api('/api/health-check').catch(() => null)]);
-  state.status = s;
-  const libs = state.libraries;
-  if (!setView(seq, html`
-    <div class="toolbar"><h1>Settings</h1>
-      ${libs.length ? html`<button class="btn" id="scan-all">↻ Scan all</button>` : ''}
-      <button class="btn primary" id="add-lib">＋ Add library</button>
-    </div>
-    <div id="lib-form-slot"></div>
-    ${health ? healthSection(health) : ''}
-    <h2 style="margin:8px 0 12px">Libraries</h2>
-    ${libs.length ? libs.map((l) => html`
-      <div class="panel lib-row" data-lib="${l.id}">
-        <div style="font-size:28px">${l.type === 'show' ? '📺' : '🎬'}</div>
-        <div class="lib-info">
-          <div style="font-weight:600">${l.name} <span class="muted" style="font-weight:400">· ${l.type === 'show' ? `${l.count} shows, ${l.episodeCount} episodes` : `${l.count} movies`}</span></div>
-          <div class="paths">${l.paths.map((p) => html`<div class="path-line">📁 ${l.pathLabels?.[p] ? html`${l.pathLabels[p]} <span class="path-inner">(${p})</span>` : p}
-            ${l.missingPaths.includes(p) ? html`<span class="path-tag bad">offline / not found</span>` : html`<span class="path-tag">${l.pathCounts[p]} file${l.pathCounts[p] === 1 ? '' : 's'}</span>`}</div>`)}</div>
-          <div class="muted" style="font-size:12px;margin-top:4px">Last scanned: ${fmtDate(l.scannedAt)}</div>
-        </div>
-        <div class="row">
-          <button class="btn small" data-act="scan">↻ Scan</button>
-          ${metaSettings.providers.some((p) => p.enabled && p.kinds.includes(l.type)) ? html`<button class="btn small" data-act="meta" title="Look up every title again (your edits are kept)">Refresh metadata</button>` : ''}
-          <button class="btn small" data-act="edit">Edit</button>
-          <button class="btn small danger" data-act="delete">Delete</button>
-        </div>
-      </div>`) : html`<div class="panel muted">No libraries yet. Add one to get started.</div>`}
-    ${s.requestsPending ? html`<div class="panel row" style="justify-content:space-between"><span>🙋 <b>${s.requestsPending}</b> request${s.requestsPending === 1 ? '' : 's'} waiting</span><a class="btn small primary" href="#/requests">Open requests</a></div>` : ''}
-    ${libs.length ? html`<div id="problems-wrap">${problemsSection(problems)}</div>` : ''}
-    ${updates.check?.status === 'available' || updates.helper.state === 'updating' ? updatesSection(updates) : ''}
-    ${metadataSection(metaSettings)}
-    ${usersSection(users)}
-    ${remoteSection(remote)}
-    ${transcodingSection(transcoding, introInfo, metaSettings)}
-    ${backupsSection(backupInfo)}
-    ${updates.check?.status === 'available' || updates.helper.state === 'updating' ? '' : updatesSection(updates)}
-    <h2 style="margin:28px 0 12px">Server</h2>
-    <div class="panel">
-      <dl class="kv">
-        <dt>Version</dt><dd>${s.name} ${s.version}</dd>
-        <dt>Web address</dt><dd><code>${location.origin}</code>${/^(localhost|127\.)/.test(location.hostname) ? html` <span class="muted">— from phones, TVs and other computers, use this PC's name or IP address instead of “localhost”</span>` : ''}</dd>
-        <dt>Active streams</dt><dd>${s.activeTranscodes} transcoding</dd>
-        <dt>Video downloader</dt><dd>${s.downloader.available ? html`yt-dlp ${s.downloader.version} — <a href="#/downloads">Downloads</a>` : 'yt-dlp not installed'}</dd>
-        <dt>Data folder</dt><dd><code>${s.dataDir}</code></dd>
-        <dt>Space used</dt><dd>${cacheSummary(maint)}</dd>
-      </dl>
-      <div class="row"><button class="btn small" id="maint-clean">Clean up now</button>
-        <span class="muted" style="font-size:13px">Removes cached pictures and files for videos that are gone. Runs by itself once a day${maint.lastCleanup ? ` (last: ${fmtDate(maint.lastCleanup.at)})` : ''}.</span></div>
-    </div>
-    ${logsSection()}`)) return;
-  bindLogsSection();
-  if (problems.recheck) setTimeout(refreshProblems, 2000);
-  $('#maint-clean').onclick = async (e) => {
-    e.target.disabled = true;
-    try { const r = await api('/api/maintenance/cleanup', { method: 'POST' }); toast(r.files ? `Removed ${r.files} file(s), ${fmtSize(r.bytes)}` : 'Nothing to clean up'); router(); } catch (err) { toast(err.message, true); }
-  };
-
-  $('#add-lib').onclick = () => showLibraryForm();
-  bindUsersSection(users);
-  bindMetadataSection();
-  bindUpdatesSection(updates);
-  bindRemoteSection();
-  bindBackupsSection();
-  bindHealthSection();
-  bindTranscodingSection();
-  if (query.get('section')) $(`#${query.get('section')}`)?.scrollIntoView({ block: 'start' });
-  if ($('#scan-all')) $('#scan-all').onclick = async () => { await api('/api/scan', { method: 'POST' }); toast('Scanning all libraries…'); pollStatus(); };
-  if (query.get('add')) showLibraryForm();
-  view.onclick = async (e) => {
-    const b = e.target.closest('[data-act]'); if (!b || !b.closest('[data-lib]')) return;
-    const lib = libs.find((l) => l.id === b.closest('[data-lib]').dataset.lib);
-    try {
-      if (b.dataset.act === 'scan' || b.dataset.act === 'meta') {
-        await api(`/api/libraries/${lib.id}/scan`, { method: 'POST', body: { refreshMetadata: b.dataset.act === 'meta' } });
-        toast(`Scanning ${lib.name}…`); pollStatus();
-      } else if (b.dataset.act === 'edit') showLibraryForm(lib);
-      else if (b.dataset.act === 'delete' && confirm(`Remove the library “${lib.name}”? Your files are not touched, but watch history for it is cleared.`)) {
-        await api(`/api/libraries/${lib.id}`, { method: 'DELETE' });
-        toast('Library removed'); router();
-      }
-    } catch (err) { toast(err.message, true); }
-  };
-}
 
 function showLibraryForm(lib = null) {
   const slot = $('#lib-form-slot');
@@ -1085,7 +993,7 @@ function showLibraryForm(lib = null) {
         else await api('/api/libraries', { method: 'POST', body });
         toast(lib ? 'Library updated' : 'Library added — scanning now');
         await refreshLibraries(); pollStatus();
-        history.replaceState(null, '', '#/settings'); router();
+        history.replaceState(null, '', '#/settings/libraries'); router();
       } catch (err) { $('#form-error').textContent = err.message; }
     };
     nameInp.focus();
@@ -2162,7 +2070,7 @@ const routes = [
   [/^\/item\/(\w+)$/, viewItem],
   [/^\/play\/(\w+)$/, viewPlay],
   [/^\/search$/, viewSearch],
-  [/^\/settings$/, viewSettings],
+  [/^\/settings(?:\/(\w+))?$/, viewSettings],
   [/^\/account$/, viewAccount],
   [/^\/link$/, viewAccount],
   [/^\/downloads$/, viewDownloads],

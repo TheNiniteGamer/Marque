@@ -251,7 +251,7 @@ async function openMatcher(id) {
     body: html`
       <p class="muted" style="margin-top:0">${current}</p>
       ${!providers.length ? html`<div class="error-box">${d.kind === 'movie'
-        ? html`To look up movies, add a free TMDB API key in <a href="#/settings" data-close>Settings → Metadata</a>.`
+        ? html`To look up movies, add a free TMDB API key in <a href="#/settings/metadata" data-close>Settings → Metadata</a>.`
         : 'No metadata source is available.'}</div>` : html`
       <form class="row match-form" id="match-form">
         <input class="input" name="q" value="${d.searchTitle || ''}" placeholder="Title" required style="flex:3;min-width:180px">
@@ -317,22 +317,28 @@ const LANGUAGES = [['en-US', 'English (US)'], ['en-GB', 'English (UK)'], ['es-ES
   ['nl-NL', 'Nederlands'], ['sv-SE', 'Svenska'], ['da-DK', 'Dansk'], ['nb-NO', 'Norsk'], ['fi-FI', 'Suomi'], ['pl-PL', 'Polski'],
   ['ru-RU', 'Русский'], ['tr-TR', 'Türkçe'], ['ja-JP', '日本語'], ['ko-KR', '한국어'], ['zh-CN', '中文'], ['hi-IN', 'हिन्दी'], ['ar-SA', 'العربية']];
 
-function metadataSection(st) {
+// A short "What's this?" that opens to the longer explanation (so pages stay calm).
+const helpText = (body, summary = 'What’s this?') => html`<details class="help"><summary>${summary}</summary><div>${body}</div></details>`;
+
+function metadataSection(st, { heading = true } = {}) {
   const keyStatus = st.tmdbKeySet ? html`Saved (${st.tmdbKeyHint})` : st.tmdbKeyFromEnv ? 'Set by the server configuration' : html`<span style="color:var(--danger)">Not set</span> — movies can't be looked up online`;
+  const tmdbDone = st.tmdbKeySet || st.tmdbKeyFromEnv;
   return html`
-    <h2 style="margin:28px 0 12px">Metadata</h2>
+    ${heading ? html`<h2 style="margin:28px 0 12px">Metadata</h2>` : ''}
     <div class="panel form" id="meta-settings" style="max-width:none">
       <div class="meta-sources">
         ${st.providers.map((p) => html`<div class="source ${p.enabled ? 'on' : ''}"><b>${p.name}</b>
           <span class="muted">${p.kinds.includes('movie') ? 'Movies & TV' : 'TV shows'} · ${p.enabled ? 'Active' : p.id === 'tmdb' ? 'Needs API key' : 'Off'}</span></div>`)}
       </div>
-      <label>TMDB API key <span class="muted" style="font-weight:400">— ${keyStatus}</span>
+      ${tmdbDone ? html`<div class="row setup-done"><span>✓ TMDB connected <span class="muted">${st.tmdbKeyHint || '(set by the server configuration)'}</span></span>
+        <button type="button" class="btn small" data-reveal="tmdb-edit">Change</button></div>` : ''}
+      <label id="tmdb-edit" ${tmdbDone ? raw('hidden') : ''}>TMDB API key <span class="muted" style="font-weight:400">— ${keyStatus}</span>
         <div class="row">
           <input class="input" id="tmdb-key" type="password" autocomplete="off" placeholder="${st.tmdbKeySet ? 'Paste a new key to replace it' : 'Paste your TMDB API key (v3)'}" style="flex:1;min-width:220px">
           <button class="btn small" id="tmdb-save">Save key</button>
           ${st.tmdbKeySet ? html`<button class="btn small danger" id="tmdb-remove">Remove</button>` : ''}
         </div>
-        <span class="muted" style="font-size:13px">Free: create an account at <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org → Settings → API</a> and copy the “API Key”.</span>
+        ${helpText(html`Free: create an account at <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org → Settings → API</a> and copy the “API Key”. TMDB gives posters, summaries, cast and ratings for films and shows.`, 'Where do I get one?')}
       </label>
       <div class="row" style="align-items:flex-end">
         <label style="min-width:220px">Language for titles and summaries
@@ -343,17 +349,21 @@ function metadataSection(st) {
       <div class="row"><button class="btn small" id="meta-refresh-all">↻ Refresh metadata for all libraries</button>
         <span class="muted" style="font-size:13px">Your own edits are always kept.</span></div>
       <h3 style="margin:12px 0 0">Subtitles from OpenSubtitles.com</h3>
-      <span class="muted" style="font-size:13px">Lets everyone search for missing subtitles from the player (Subtitles → Search online…).
+      ${helpText(html`Lets everyone search for missing subtitles from the player (Subtitles → Search online…).
         Get a free API key at <a href="https://www.opensubtitles.com/en/consumers" target="_blank" rel="noopener">opensubtitles.com → API consumers</a>.
-        Without an OpenSubtitles account only a few downloads a day are allowed; signing in raises the limit.</span>
+        Without an OpenSubtitles account only a few downloads a day are allowed; signing in raises the limit.`)}
+      ${st.opensubtitles.keySet ? html`<div class="row setup-done"><span>✓ OpenSubtitles connected <span class="muted">${st.opensubtitles.keyHint}${st.opensubtitles.username ? ` · signed in as ${st.opensubtitles.username}` : ''}</span></span>
+        <button type="button" class="btn small" data-reveal="os-edit">Change</button>
+        <button type="button" class="btn small danger" id="os-remove">Remove</button></div>` : ''}
+      <div id="os-edit" ${st.opensubtitles.keySet ? raw('hidden') : ''}>
       <div class="row">
-        <label style="flex:1;min-width:200px">API key <span class="muted" style="font-weight:400">— ${st.opensubtitles.keySet ? `saved (${st.opensubtitles.keyHint})` : 'not set'}</span>
+        <label style="flex:1;min-width:200px">API key ${st.opensubtitles.keySet ? html`<span class="muted" style="font-weight:400">— saved (${st.opensubtitles.keyHint})</span>` : ''}
           <input class="input" id="os-key" type="password" autocomplete="off" placeholder="${st.opensubtitles.keySet ? 'Paste a new key to replace it' : 'API key'}"></label>
         <label style="min-width:150px">Account (optional)<input class="input" id="os-user" autocomplete="off" value="${st.opensubtitles.username}" placeholder="Username"></label>
         <label style="min-width:150px">Password<input class="input" id="os-pass" type="password" autocomplete="new-password" placeholder="${st.opensubtitles.username ? 'Unchanged' : ''}"></label>
       </div>
-      <div class="row"><button class="btn small" id="os-save">Save</button>
-        ${st.opensubtitles.keySet ? html`<button class="btn small danger" id="os-remove">Remove</button>` : ''}</div>
+      <div class="row"><button class="btn small" id="os-save">Save</button></div>
+      </div>
     </div>`;
 }
 
@@ -570,7 +580,7 @@ async function refreshStatus() {
 }
 
 // ---------- Settings → Remote access ----------
-function remoteSection(r) {
+function remoteSection(r, { heading = true } = {}) {
   const names = { tailscale: 'Tailscale', cloudflare: 'Cloudflare Tunnel' };
   const on = r.configured.map((x) => names[x] || x);
   let body;
@@ -592,16 +602,17 @@ function remoteSection(r) {
   } else {
     body = html`
       <div class="upd-state">Only available at home</div>
-      <p class="muted" style="font-size:14px;margin:6px 0 0">To watch from anywhere, the easiest way is <b>Tailscale</b> (free).
+      ${helpText(html`To watch from anywhere, the easiest way is <b>Tailscale</b> (free).
         Create an account, paste an auth key into <code>TS_AUTHKEY</code> in the <code>.env</code> file next to <code>start-marquee.bat</code>,
-        then run <b>start-marquee.bat</b> again. Your phone also needs the Tailscale app. The README has step-by-step instructions, including a Cloudflare Tunnel option.</p>`;
+        then run <b>start-marquee.bat</b> again. Your phone also needs the Tailscale app. The README has step-by-step instructions, including a Cloudflare Tunnel option.`, 'How do I watch away from home?')}`;
   }
   return html`
-    <h2 style="margin:28px 0 12px">Remote access</h2>
+    ${heading ? html`<h2 style="margin:28px 0 12px">Remote access</h2>` : ''}
     <div class="panel" id="remote-panel">${body}
       ${r.viaRemoteNow ? html`<p class="muted" style="font-size:13px;margin:10px 0 0">🔒 You're connected remotely over HTTPS right now.</p>` : ''}
       <label class="check" style="margin-top:12px"><input type="checkbox" id="admin-home-only" ${r.adminAtHomeOnly ? 'checked' : ''}>
-        Admin settings only at home <span class="muted">· away from home, admins can still watch, but Settings, users and the other admin pages only work on your home network, so a leaked admin password can't be used to change anything from outside.</span></label>
+        Admin settings only at home</label>
+      ${helpText('Away from home, admins can still watch, but Settings, users and the other admin pages only work on your home network, so a leaked admin password can’t be used to change anything from outside. Switch it on from home.')}
     </div>`;
 }
 
@@ -646,10 +657,10 @@ function bindHealthSection() {
   };
 }
 
-function backupsSection(b) {
+function backupsSection(b, { heading = true } = {}) {
   const s = b.settings;
   return html`
-    <h2 style="margin:28px 0 12px" id="backups">Backups</h2>
+    ${heading ? html`<h2 style="margin:28px 0 12px" id="backups">Backups</h2>` : ''}
     <div class="panel form" id="backups-panel" style="max-width:none">
       <div class="row" style="justify-content:space-between;align-items:flex-start">
         <div>
@@ -669,8 +680,8 @@ function backupsSection(b) {
         <span class="bk-keep muted">keep the last <input class="input" type="number" id="bk-keep" min="1" max="365" value="${s.keep}" aria-label="Number of automatic backups to keep"> automatic backups</span>
       </div>
       <div class="bk-copy">
-        <div><b>Also keep a copy somewhere else</b> <span class="muted">· another drive, a network share, or a OneDrive / Google Drive / Dropbox
-          folder (which then copies it off this PC), so the backups survive if this PC's disk dies.</span></div>
+        <div><b>Also keep a copy somewhere else</b></div>
+        ${helpText('Another drive, a network share, or a OneDrive / Google Drive / Dropbox folder (which then copies it off this PC), so the backups survive if this PC’s disk dies.')}
         ${b.copy ? html`
           <div class="row bk-settings">📁 <code>${b.copy.label}</code>
             <span class="bk-keep muted">keep the last <input class="input" type="number" id="bk-copy-keep" min="1" max="365" value="${b.copy.keep}" aria-label="Number of copies to keep there"> there</span>
@@ -782,12 +793,11 @@ function transcodingSection(t, intro, settings) {
       <label>Maximum quality away from home
         <select id="tc-remote">${[['', 'No limit'], ['1080p', '1080p (about 8 Mbps)'], ['720p', '720p (about 4 Mbps)'], ['480p', '480p (about 1.5 Mbps)'], ['360p', '360p (under 1 Mbps)']]
           .map(([v, l]) => html`<option value="${v}" ${t.remoteMaxQuality === v ? 'selected' : ''}>${l}</option>`)}</select></label>
-      <div class="muted" style="font-size:13px;margin-top:-6px">For people watching through Tailscale, Cloudflare or from outside your network, so one viewer can't use up your home internet's upload.
-        Videos are converted down to this quality; at home nothing changes.</div>
+      ${helpText('For people watching through Tailscale, Cloudflare or from outside your network, so one viewer can’t use up your home internet’s upload. Videos are converted down to this quality; at home nothing changes.')}
       <label>Address for cast devices <span class="muted" style="font-weight:400">(optional)</span>
         <input class="input" id="tc-cast" placeholder="${t.castUrlFromEnv || 'e.g. http://192.168.1.20:32500'}" value="${t.castUrl}"></label>
-      <div class="muted" style="font-size:13px;margin-top:-6px">Chromecasts and TVs fetch the video from Marquee themselves, so they need an address that works on your network —
-        this PC's IP address and port. Only needed when you open Marquee as “localhost”. Casting works from Chrome or Edge on pages opened as <code>localhost</code> or over HTTPS.</div>
+      ${helpText(html`Chromecasts and TVs fetch the video from Marquee themselves, so they need an address that works on your network:
+        this PC's IP address and port. Only needed when you open Marquee as “localhost”. Casting works from Chrome or Edge on pages opened as <code>localhost</code> or over HTTPS.`)}
       <div class="row"><button class="btn small primary" id="tc-save-cast">Save address</button></div>
     </div>
     <h2 style="margin:28px 0 12px" id="intro">Skip intro</h2>
@@ -795,8 +805,8 @@ function transcodingSection(t, intro, settings) {
       <label class="check"><input type="checkbox" id="intro-on" ${settings.introDetection ? 'checked' : ''}> Find TV show intros, recaps and credits automatically after scans</label>
       <div class="muted" style="font-size:14px">${intro.running && intro.current
         ? `Looking at ${intro.current.show}, season ${intro.current.season} (${intro.current.done}/${intro.current.total})${intro.queued ? ` · ${intro.queued} more season(s) waiting` : ''}…`
-        : `${intro.found} of ${intro.episodes} episodes have a detected intro${intro.recapsFound ? `, ${intro.recapsFound} a recap` : ''} (${intro.checked} checked).`}
-        Episodes in the same season are compared to find the theme song they share, and recaps ("previously on…") made of clips from the episodes before.</div>
+        : `${intro.found} of ${intro.episodes} episodes have a detected intro${intro.recapsFound ? `, ${intro.recapsFound} a recap` : ''} (${intro.checked} checked).`}</div>
+      ${helpText('Episodes in the same season are compared to find the theme song they share, and recaps (“previously on…”) made of clips from the episodes before.', 'How does it work?')}
       <div class="row"><button class="btn small" id="intro-run">Find intros now</button><button class="btn small" id="intro-redo">Redo all</button></div>
     </div>`;
 }

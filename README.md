@@ -57,7 +57,7 @@ Run `start-marquee.bat` again, and the new folders join your existing Movies / T
 their own. There are up to 4 movie and 4 TV folders. If a drive is unplugged, its movies and watch
 history are kept, and the folder is marked *offline* in Settings until it's back.
 
-You can also manage folders by hand in **Settings → Edit** on a library, using
+You can also manage folders by hand in **Settings → Libraries → Edit** on a library, using
 **＋ Add another folder** and **Browse…**. Folders you remove there stay removed, even if they're
 still listed in `.env`.
 
@@ -72,7 +72,7 @@ DRIVE_1=E:/
 DRIVE_2=F:/
 ```
 
-Run `start-marquee.bat` again. **Settings → Add library → Browse…** then lists *E: drive* and
+Run `start-marquee.bat` again. **Settings → Libraries → Add library → Browse…** then lists *E: drive* and
 *F: drive* on the left, and you can pick any folder on them (or type a path like `E:/Movies`).
 Marquee only reads from these drives. The picker shows how many videos a folder holds, counting
 the folders inside it — a library always includes everything below the folder you pick, so
@@ -134,7 +134,7 @@ this much faster than the CPU, and can handle several viewers at once.
 1. In `.env`, set `GPU=nvidia` (an NVIDIA card on Windows or Linux), or `GPU=intel` / `GPU=amd`
    (built-in graphics, **Linux hosts only**: Docker Desktop on Windows can't pass these through).
 2. Run `start-marquee.bat` again.
-3. *Settings → Transcoding* shows which converter is in use, and why a card isn't used if it
+3. *Settings → Playback* shows which converter is in use, and why a card isn't used if it
    couldn't start. Marquee tests each card with a short encode at start-up, and falls back to the
    CPU on its own if the card fails during playback.
 
@@ -150,7 +150,7 @@ NVENC / VAAPI / QSV support. Set `HWACCEL=nvenc|vaapi|qsv|software` to force a c
   `http://192.168…` addresses.
 - The TV fetches the video from Marquee itself, so it needs an address it can reach.
   `start-marquee.bat` passes this PC's network address automatically. If casting doesn't start,
-  set it in *Settings → Transcoding*, e.g. `http://192.168.1.20:32500`. A Tailscale address only
+  set it in *Settings → Playback*, e.g. `http://192.168.1.20:32500`. A Tailscale address only
   works for casting with `TAILSCALE_PUBLIC=true`, because the TV isn't on your tailnet.
 - **AirPlay:** Safari on Mac, iPhone and iPad shows its AirPlay button in the player.
 - Casting uses a signed link that lasts 12 hours and only opens that one video.
@@ -171,10 +171,10 @@ instead* is there if you need it). Linked TVs are listed on that page, where you
 ### Updating
 
 Marquee checks GitHub for new versions twice a day. Admins see a green dot on their avatar when an
-update is available. **Settings → Updates** shows what's new, and has **Check now** and
+update is available. **Settings → Server & updates** shows what's new, and has **Check now** and
 **Update now** buttons.
 
-Big releases are labelled **Significant update** in Settings → Updates, and listed in
+Big releases are labelled **Significant update** in Settings → Server & updates, and listed in
 [CHANGELOG.md](CHANGELOG.md). For maintainers: a commit is marked by an `Update-Type: significant`
 line in its message, or a subject starting with `[Significant]`.
 
@@ -202,7 +202,7 @@ never gets access to Docker itself.
 | **Libraries** | Movie and TV Show libraries, each combining one or more folders, which can be on different drives. Everything inside the folders is found, including shows in folders of their own (`Kids/Bluey/…`). Add, edit and remove them in Settings with a built-in folder picker that lists your drives, accepts typed paths and shows how many videos a folder holds; whole drives can be shared with Docker (see *Other drives*). |
 | **Scanning** | Probes new or changed files with `ffprobe`, removes deleted ones, and rescans periodically. If a drive is offline, its items and watch history are kept. |
 | **Filename matching** | `Movie (Year).ext`, release-style names like `Movie.2019.1080p.BluRay.x264`, `Show/Season 01/Show - S01E02 - Title.ext`, `1x02`, `S01E01-E02`, Specials folders. |
-| **Online metadata** | Posters, backgrounds, summaries, genres, ratings, cast and episode titles. TV shows use **TVmaze** (no key needed). Movies and TV can also use **TMDB**: paste a free API key in *Settings → Metadata*. Pick the metadata language there too. New items are matched automatically. |
+| **Online metadata** | Posters, backgrounds, summaries, genres, ratings, cast and episode titles. TV shows use **TVmaze** (no key needed). Movies and TV can also use **TMDB**: paste a free API key in *Settings → Metadata & subtitles*. Pick the metadata language there too. New items are matched automatically. |
 | **Fix match / refresh** | When a title is matched wrong: *⋯ → Fix match…*, search, and pick the right result from a list with posters. *Refresh metadata* and *Unmatch* are in the same menu. |
 | **Edit anything** | Change the title, sort title, year, tagline, summary and genres of a movie, show or episode. Set a poster or background by **uploading an image**, pasting a URL, or choosing from the matched source's alternatives. Your edits always win: refreshes and rescans never overwrite them, and each field can be reset to automatic. |
 | **Artwork** | Local `poster.jpg` / `fanart.jpg` / `<name>-poster.jpg`, online artwork, your own uploads, or a frame grabbed from the video. |
@@ -225,15 +225,15 @@ never gets access to Docker itself.
 | **Activity** | *Activity* (admins) shows who's watching what right now, on which device, whether at home or away, direct or converted (and on the graphics card or CPU), plus the server's CPU and memory use. |
 | **Casting** | Chromecast / Google TV from Chrome and Edge, AirPlay from Safari. Includes subtitles, resume position and next episode. |
 | **Watch together** | 👥 in the player makes a watch party and gives you a link. Everyone with an account who opens it stays in sync: play, pause, skipping and the next episode. |
-| **Subtitles** | Sidecar `.srt`/`.vtt`, embedded text subtitles, and Blu-ray / DVD picture subtitles (PGS, VobSub), which the server draws into the video. Missing ones can be found on **OpenSubtitles.com** from the player (*Subtitles → Search online…*) once an admin adds a free API key in *Settings → Metadata*. |
-| **Quality limit away from home** | *Settings → Transcoding*: cap the quality for people watching through Tailscale, Cloudflare or from outside, so one viewer can't use up your upload. |
+| **Subtitles** | Sidecar `.srt`/`.vtt`, embedded text subtitles, and Blu-ray / DVD picture subtitles (PGS, VobSub), which the server draws into the video. Missing ones can be found on **OpenSubtitles.com** from the player (*Subtitles → Search online…*) once an admin adds a free API key in *Settings → Metadata & subtitles*. |
+| **Quality limit away from home** | *Settings → Playback*: cap the quality for people watching through Tailscale, Cloudflare or from outside, so one viewer can't use up your upload. |
 | **Collections** | Film series from TMDB (e.g. “The Matrix Collection”) are grouped automatically, and admins can make their own with *⋯ → Add to collection…* or by selecting titles (**☑ Select**). Collections are listed in separate **Movies, TV and YouTube** sections (worked out from their titles, or chosen with *Show under*). Each collection has an **order**: release date, **episode number in the title** (“Ep 12”, “S2E5”, “Part 3”…), title, date added, reversed, or **arranged by hand**. **⌕ Find series** turns videos like “Hardcore Survival Ep 1, Ep 2…” into collections. Movies in a collection show as the collection on the home page and in libraries; switch a library to *All titles* (or untick it under *Account*) to see every movie on its own. Admins can override anything: rename (TMDB ones too), add or remove titles, pick the cover (*⋯ → Use as the collection's cover*), hide TMDB collections, *Reset to TMDB*, and **⇅ Arrange** each section. |
 | **Select several** | **☑ Select** in a library, collection, My List or search: click titles (Shift+click for a range, Ctrl+A for all), then add them to a collection or a new one, mark watched/unwatched, add to My List, add or remove a genre, or refresh metadata — all at once. |
 | **Extras** | Trailers, featurettes and behind-the-scenes clips show on their movie or show page instead of in the library (see the folder layout below). |
 | **New files appear by themselves** | Marquee notices files added, removed or renamed in your folders within about 15 seconds, including on Windows drives in Docker. Files still being copied are picked up once they're finished. |
-| **Logs and housekeeping** | *Settings → Logs* shows recent warnings and errors with plain-language explanations. *Settings → Server* shows the space caches use; unused cached files are cleaned up daily. The database is saved crash-safely (with a `.bak` copy) and restored from the newest backup if it's ever unreadable. |
-| **Accurate matching** | Each match gets a score from the title (ignoring punctuation, “The”, “II” vs “2”, original-language titles), the year, and for movies the **running time** (so a 2-hour file isn't matched to the 90-minute film or remake with the same name). Poor matches are never applied. Doubtful ones are listed under *Settings → Library problems → Matches that need a check*, with the best guesses as posters to pick from in one click, or *✓ It's right*. **Ids in names** match exactly: `Heat (1995) {tmdb-949}`, `[imdbid-tt0113277]`, or `{tvdb-81189}` on a show folder. **Re-check matches** looks up a whole library again with these rules (matches you picked or confirmed are kept). |
-| **Library problems** | *Settings → Library problems* lists offline folders, unreadable files, matches that need a check, titles with no online match, duplicates and missing episodes. |
+| **Logs and housekeeping** | *Settings → Server & updates → Logs* shows recent warnings and errors with plain-language explanations. *Settings → Server & updates* shows the space caches use; unused cached files are cleaned up daily. The database is saved crash-safely (with a `.bak` copy) and restored from the newest backup if it's ever unreadable. |
+| **Accurate matching** | Each match gets a score from the title (ignoring punctuation, “The”, “II” vs “2”, original-language titles), the year, and for movies the **running time** (so a 2-hour file isn't matched to the 90-minute film or remake with the same name). Poor matches are never applied. Doubtful ones are listed under *Settings → Libraries → Library problems → Matches that need a check*, with the best guesses as posters to pick from in one click, or *✓ It's right*. **Ids in names** match exactly: `Heat (1995) {tmdb-949}`, `[imdbid-tt0113277]`, or `{tvdb-81189}` on a show folder. **Re-check matches** looks up a whole library again with these rules (matches you picked or confirmed are kept). |
+| **Library problems** | *Settings → Libraries → Library problems* lists offline folders, unreadable files, matches that need a check, titles with no online match, duplicates and missing episodes. |
 | **Player** | Seek bar with hover time, skip, volume, **playback speed**, **picture-in-picture**, fullscreen, keyboard shortcuts, audio track choice, subtitles (sidecar `.srt`/`.vtt` or embedded), and an Up Next countdown. Autoplay and default subtitles can be set per browser under *Account*. |
 | **YouTube downloader** | Paste a video or playlist link, pick a library and quality. Saves an MP4 that plays directly, the thumbnail as its poster, English subtitles when available, and the video's details: its title, description, upload date, channel, a link to the original and its chapters (shown as marks on the seek bar). It is never matched to the wrong movie. **Nothing is downloaded twice**: a link you already have is caught, with *Download again* to override. Admins can set **download hours** (e.g. overnight) and a **speed limit**. Failed downloads are **retried automatically** and continue where they stopped. **yt-dlp updates itself** daily, and you get a notice when a download finishes. |
 
@@ -286,11 +286,11 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `AUTO_LIBRARIES` | — | Libraries to set up from config: `Name:movie\|show:/path1,/path2;…`. Checked on every start, so new folders are added. |
 | `MEDIA_LABELS` | — | Display names for container folders: `/media/movies=D:/Movies\|…` (set by Docker Compose) |
 | `SCAN_INTERVAL` | `30` | Minutes between automatic rescans (`0` disables). While new files are noticed on their own (`WATCH_INTERVAL`), full rescans run at most every 6 hours. |
-| `TMDB_API_KEY` / `TMDB_TOKEN` | — | TMDB key from the environment (easier: set it in *Settings → Metadata*) |
-| `METADATA_LANGUAGE` | `en-US` | Default metadata language (also settable in *Settings → Metadata*) |
+| `TMDB_API_KEY` / `TMDB_TOKEN` | — | TMDB key from the environment (easier: set it in *Settings → Metadata & subtitles*) |
+| `METADATA_LANGUAGE` | `en-US` | Default metadata language (also settable in *Settings → Metadata & subtitles*) |
 | `TVMAZE_DISABLED` | — | Set to `1` to stop using TVmaze |
 | `TRANSCODE_PRESET` | `veryfast` | x264 preset used when video must be re-encoded |
-| `HWACCEL` | `auto` | Video converter: `auto`, `software`, `nvenc`, `qsv`, `vaapi` (also in *Settings → Transcoding*) |
+| `HWACCEL` | `auto` | Video converter: `auto`, `software`, `nvenc`, `qsv`, `vaapi` (also in *Settings → Playback*) |
 | `GPU` | — | `.env` only: `nvidia`, `intel` or `amd` passes the graphics card into Docker |
 | `VAAPI_DEVICE` | `/dev/dri/renderD128` | Graphics device for VAAPI / Quick Sync |
 | `TRANSCODE_DIR` | system temp folder | Where adaptive-streaming segments are written while you watch |
@@ -326,7 +326,7 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
   than their sign-in. Sign-ins are limited per address and per username; PINs lock after repeated
   wrong tries.
 - The web pages send a Content-Security-Policy (only Marquee's own scripts, plus Google's Cast SDK,
-  can run; no framing), and server error details stay in Settings → Logs rather than the browser.
+  can run; no framing), and server error details stay in Settings → Server & updates → Logs rather than the browser.
   New passwords need at least 8 characters.
 - Backups contain password hashes and your TMDB key: keep them somewhere private (that includes
   the second copy you may keep in a cloud folder).

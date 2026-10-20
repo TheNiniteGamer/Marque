@@ -872,3 +872,60 @@ body.tv .episode:focus-within { background: #2e2e2e; }
 .health-fine .health-row { margin-top: 8px; }
 .lock-chip { color: #ffb4b4; border-color: rgba(255,138,138,.5); }
 .temp-pw { font-size: 20px; letter-spacing: 1px; padding: 8px 12px; background: var(--bg-3); border-radius: 6px; user-select: all; }
+
+/* ---------- Settings: a menu of pages, each made of cards (Netflix's account pages) ---------- */
+.st { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 44px; max-width: 1160px; margin: 0 auto; padding-top: 8px; }
+.st-nav { position: sticky; top: calc(var(--topbar) + 16px); align-self: start; display: grid; gap: 2px; }
+.st-nav a { position: relative; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 500; font-size: 15px; }
+.st-nav a svg { width: 20px; height: 20px; flex: none; }
+.st-nav a:hover, .st-nav a:focus-visible { color: var(--text); background: rgba(255,255,255,.06); }
+.st-nav a.on { color: var(--text); background: rgba(255,255,255,.09); font-weight: 600; }
+.st-nav a.on::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px; border-radius: 2px; background: var(--accent); }
+.st-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--accent); color: #fff; font-style: normal; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.st-nav-sep { height: 1px; background: var(--line); margin: 10px 12px; }
+.st-main { min-width: 0; }
+.st-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
+.st-head h1 { margin: 0; font-size: 34px; }
+.st-main .panel { border-radius: 12px; }
+.st-main > h2, .st-main h2 { font-size: 19px; }
+.st-sub { font-size: 14px !important; color: var(--muted); font-weight: 600; letter-spacing: .02em; margin: 28px 0 10px; }
+.st-intro { margin: -8px 0 18px; }
+.st-card { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+.st-row { display: flex; align-items: center; gap: 16px; padding: 16px 20px; color: var(--text); text-decoration: none; border-top: 1px solid var(--line); }
+.st-row:first-child { border-top: 0; }
+a.st-row:hover, a.st-row:focus-visible { background: rgba(255,255,255,.04); }
+.st-row-label { flex: 1; min-width: 0; font-weight: 600; display: grid; gap: 3px; }
+.st-row-note { font-weight: 400; color: var(--muted); font-size: 13px; }
+.st-row-value { color: var(--muted); font-size: 14px; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.st-row.warn .st-row-value { color: #ffd479; }
+.st-chev { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.st-toggle { cursor: pointer; }
+.st-select { background: var(--bg-3); color: var(--text); border: 1px solid var(--line); border-radius: 6px; height: 34px; padding: 0 10px; }
+/* An on/off switch */
+input.switch { appearance: none; -webkit-appearance: none; flex: none; width: 44px; height: 26px; border-radius: 13px; background: #4a4a4a; position: relative; cursor: pointer; transition: background .15s; margin: 0; }
+input.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; }
+input.switch:checked { background: var(--accent); }
+input.switch:checked::after { transform: translateX(18px); }
+input.switch:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* "What's this?" and things already set up */
+.help { font-size: 13px; }
+.help summary { cursor: pointer; color: var(--muted); list-style: none; width: max-content; }
+.help summary::-webkit-details-marker { display: none; }
+.help summary::before { content: 'ⓘ '; }
+.help summary:hover { color: var(--text); }
+.help > div { color: var(--muted); margin-top: 6px; line-height: 1.55; max-width: 72ch; }
+.setup-done { justify-content: space-between; align-items: center; padding: 12px 14px; background: var(--bg-3); border-radius: 8px; }
+.lib-icon { font-size: 28px; }
+@media (max-width: 860px) {
+  .st { grid-template-columns: 1fr; gap: 10px; }
+  .st-nav { position: sticky; top: var(--topbar); z-index: 5; display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 12px; margin: 0 calc(-1 * var(--pad)); padding-left: var(--pad); padding-right: var(--pad); background: var(--bg); scrollbar-width: none; }
+  .st-nav::-webkit-scrollbar { display: none; }
+  .st-nav a { flex: none; padding: 7px 14px; border: 1px solid var(--line); border-radius: 18px; font-size: 14px; }
+  .st-nav a svg { width: 16px; height: 16px; }
+  .st-nav a.on { background: var(--text); color: #000; border-color: var(--text); }
+  .st-nav a.on::before { display: none; }
+  .st-nav-sep { display: none; }
+  .st-head h1 { font-size: 26px; }
+  .st-row { padding: 14px 16px; gap: 10px; }
+  .st-row-value { max-width: 55%; }
+}

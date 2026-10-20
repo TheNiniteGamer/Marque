@@ -73,7 +73,7 @@ module.exports = function register(app) {
   route('GET', '/api/home', async (req, res, p, url, user) => {
     const h = lib.home(store, user);
     // Collections as rows of their own (the first few, in the order an admin arranged them), after "New in …".
-    const rows = collections.list(store, user).filter((c) => !c.hidden && c.count >= 3).slice(0, 3)
+    const rows = collections.list(store, user).filter((c) => !c.hidden && c.count >= 3).slice(0, lib.homeSettings(store).collections)
       .map((c) => { const d = collections.detail(store, user, c.id); return { key: `col-${c.id}`, title: c.name, note: `Collection · ${c.count} titles`, link: `#/collection/${c.id}`, style: 'poster', items: d.items }; });
     const at = h.hubs.findLastIndex((x) => x.key.startsWith('recent-')) + 1 || h.hubs.length;
     h.hubs.splice(at, 0, ...rows);

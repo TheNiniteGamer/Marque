@@ -4,6 +4,19 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.11.0
+
+**A calmer Settings, and a choice of what the home page shows.**
+- Settings is now a set of pages with a menu on the left (a row of tabs on phones), in the style
+  of Netflix's account pages: **Overview** (the health check, anything that needs you, and every
+  area at a glance), **Libraries**, **Users**, **Home screen**, **Playback**, **Metadata &
+  subtitles**, **Remote access**, **Backups** and **Server & updates**. Each page loads on its own
+  and fits on about one screen; things already set up (the TMDB key, OpenSubtitles) show as
+  "✓ connected · Change", and the longer explanations are behind "What's this?".
+- **Home screen** (new): choose what everyone's home page shows: the banner, Top 10, My List, New
+  in each library, "Because you watched / liked", and how many collection and genre rows.
+- Links from notifications, the health check and the update badge open the right page.
+
 ## 0.10.2
 
 **Admins can reset passwords and unlock people.**

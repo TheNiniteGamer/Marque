@@ -118,7 +118,7 @@ function renderUserMenu() {
       ${u.canDownload ? html`<a href="#/downloads">${phoneDownloads() ? 'Video downloader' : 'Downloads'}</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/activity">Activity</a>` : ''}
       ${u.role === 'admin' ? html`<a href="#/settings">Settings</a>` : ''}
-      ${u.role === 'admin' ? html`<a href="#/settings?section=updates" class="upd-link">Update available</a>` : ''}`}
+      ${u.role === 'admin' ? html`<a href="#/settings/server" class="upd-link">Update available</a>` : ''}`}
       <button id="switch-profile">Switch profile</button>
       ${window.MarqueeAndroid ? html`<button id="switch-server">Switch server</button>` : ''}
       <button id="sign-out">Sign out</button>
@@ -417,12 +417,12 @@ function showResetPassword(u) {
   };
 }
 
-function usersSection(users) {
+function usersSection(users, { heading = true } = {}) {
   const libName = (id) => state.libraries.find((l) => l.id === id)?.name;
   return html`
-    <div class="row" style="justify-content:space-between;margin:28px 0 12px">
+    ${heading ? html`<div class="row" style="justify-content:space-between;margin:28px 0 12px">
       <h2>Users</h2><button class="btn small" id="add-user">＋ Add user</button>
-    </div>
+    </div>` : ''}
     <div id="user-form-slot"></div>
     ${users.map((u) => html`
       <div class="panel lib-row" data-user="${u.id}">
@@ -588,7 +588,7 @@ async function viewDownloads({ seq }) {
     </div>
     ${!data.available ? html`<div class="error-box" style="margin-bottom:16px">The video downloader (yt-dlp) isn't installed on the server. The Docker image includes it; for a manual install see the README.</div>` : ''}
     ${!data.targets.length ? html`<div class="panel">To download videos you need a <b>Movies</b>-type library to save them into.
-        ${admin ? html`<a href="#/settings?add=1">Create one</a> — for example a library named “YouTube”.` : 'Ask an administrator to share one with you.'}</div>` : html`
+        ${admin ? html`<a href="#/settings/libraries?add=1">Create one</a> — for example a library named “YouTube”.` : 'Ask an administrator to share one with you.'}</div>` : html`
     <form class="panel form dl-form" id="dl-form" style="max-width:none">
       <label>Video or playlist URL
         <input class="input" name="url" type="url" required placeholder="https://www.youtube.com/watch?v=…" autocomplete="off"></label>
