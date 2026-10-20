@@ -4,6 +4,14 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.13.2
+
+- **Android TV app 1.5.2 / phone app 1.10.2: MKV files that the TV can't play as they are now
+  play.** When a file (often an MKV with HEVC 10-bit video or DTS / Dolby sound) can't be played
+  as it is, the apps now use the server's adaptive stream at its best quality. Before, they used
+  a single converted stream that Android's player often couldn't open, so the video stopped with
+  "The server could not stream this video".
+
 ## 0.13.1
 
 - **TV: Collections no longer gets stuck.** On a TV (the Android TV app, or TV mode in a browser),

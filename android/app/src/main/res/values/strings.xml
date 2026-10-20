@@ -19,7 +19,7 @@
     <string name="change_server">Change server</string>
     <string name="downloading">Downloading %1$s…</string>
     <string name="download_failed">The download could not be started.</string>
-    <string name="switching_to_convert">This phone can\'t play the original file — converting it on the server instead.</string>
+    <string name="switching_to_convert">This device can\'t play the original file — the server is converting it instead.</string>
     <string name="playback_error">The server could not stream this video.</string>
     <string name="cant_play">Can\'t play this video</string>
     <string name="reconnecting">Reconnecting to Marquee…\nThe server is restarting; this carries on where you were.</string>
@@ -71,7 +71,7 @@
     <string name="quality">Quality</string>
     <string name="quality_original">Original</string>
     <string name="quality_auto">Auto (adjusts to your connection)</string>
-    <string name="adaptive_failed">Adaptive streaming didn\'t work on this phone — playing the original instead.</string>
+    <string name="adaptive_failed">Adaptive streaming didn\'t work on this device — playing the original instead.</string>
     <string name="sound">Sound</string>
     <string name="night_mode">Night mode</string>
     <string name="voice_prompt">What would you like to watch?</string>

@@ -329,6 +329,14 @@ public class PlayerActivity extends Activity {
             video.setVideoURI(Uri.fromFile(offlineFile));
             return;
         }
+        // A file that can't be played as it is comes through the adaptive stream at its best quality:
+        // Android's player can't be relied on with the server's one-piece converted stream (an MP4
+        // sent as it's made, with no length), which failed on some MKVs. (Servers without adaptive
+        // streaming still send that one.)
+        if (!hls && !direct && qualities().length() > 0) {
+            hls = true;
+            quality = qualities().optJSONObject(0).optString("id");
+        }
         if (hls) {
             offset = 0;
             pendingSeek = t;
@@ -429,18 +437,20 @@ public class PlayerActivity extends Activity {
     }
 
     private boolean playbackFailed() {
-        if (hls && item != null && originalAllowed()) {
+        if (item == null) { fail(getString(R.string.playback_error)); return true; }
+        double at = now();
+        if (hls && directCapable && burn < 0 && originalAllowed()) {
+            // The adaptive stream didn't play: try the file as it is.
             Toast.makeText(this, R.string.adaptive_failed, Toast.LENGTH_SHORT).show();
-            double at = now();
             hls = false;
+            direct = true;
             quality = "original";
             open(at);
             return true;
         }
-        if (direct && item != null) {
-            // The phone couldn't play the original file: let the server convert it.
+        if (direct && !hls) {
+            // The TV or phone couldn't play the original file: let the server convert it.
             Toast.makeText(this, R.string.switching_to_convert, Toast.LENGTH_SHORT).show();
-            double at = now();
             direct = directCapable = false;
             open(at);
             return true;
