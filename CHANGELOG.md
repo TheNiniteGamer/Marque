@@ -4,6 +4,16 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.10.2
+
+**Admins can reset passwords and unlock people.**
+- Settings → Users → **Reset password**: Marquee makes a temporary password for you to give them
+  (or you set one). By default they choose their own the next time they sign in (Marquee lets them
+  do nothing else until then), and they're signed out everywhere, TVs included. Their PIN can be
+  removed too, if they've forgotten it.
+- Someone locked out by too many wrong passwords or PINs shows **🔒 Locked** in the list, with an
+  **Unlock** button that lets them straight back in (from the device they were using, too).
+
 ## 0.10.1
 
 **Security fixes from a review of every part of the server.**

@@ -121,15 +121,42 @@ module.exports = function register(app) {
 
   route('POST', '/api/auth/password', async (req, res, p, url, user) => {
     const body = await readBody(req);
-    if (!(await auth.login(user.username, body.currentPassword))) throw new HttpError(400, 'Current password is incorrect');
+    // After an admin's reset, the temporary password was just used to sign in: not asked again.
+    if (!user.mustChangePassword && !(await auth.login(user.username, body.currentPassword))) throw new HttpError(400, 'Current password is incorrect');
+    if (user.mustChangePassword && body.newPassword && (await auth.login(user.username, body.newPassword))) throw new HttpError(400, 'Choose a password that isn’t the temporary one');
     await auth.updateUser(user, { password: body.newPassword || '' });
+    delete user.mustChangePassword;
     auth.endSessionsFor(user.id, req.sessionKey); // sign out other devices
     tokens.rotate(); // and playback links handed out before (they last up to 12 hours)
     json(res, 200, { ok: true });
   });
 
   // --- users (admin) ---
-  route('GET', '/api/users', async (req, res) => json(res, 200, auth.users.map(publicUser)), 'admin');
+  route('GET', '/api/users', async (req, res) => json(res, 200, auth.users.map((u) => ({ ...publicUser(u), locks: auth.lockInfo(u) }))), 'admin');
+
+  // Reset someone's password (a temporary one is made unless one is given; see auth.resetPassword).
+  route('POST', '/api/users/:id/reset-password', async (req, res, { id }, url, me) => {
+    const target = getUser(id);
+    const body = await readBody(req);
+    let temporary;
+    try {
+      temporary = await auth.resetPassword(target, {
+        password: body.password ? String(body.password) : null, mustChange: body.mustChange !== false, signOut: body.signOut !== false,
+        removePin: !!body.removePin, keepSession: target.id === me.id ? req.sessionKey : null,
+      });
+    } catch (err) { throw new HttpError(err.status || 400, err.message); }
+    tokens.rotate(); // playback links handed out to them before stop working
+    console.log(`[users] ${me.username} reset the password of ${target.username}`);
+    json(res, 200, { user: { ...publicUser(target), locks: auth.lockInfo(target) }, temporaryPassword: temporary });
+  }, 'admin');
+
+  // Lift a lockout (too many wrong passwords or PINs).
+  route('POST', '/api/users/:id/unlock', async (req, res, { id }, url, me) => {
+    const target = getUser(id);
+    auth.unlock(target);
+    console.log(`[users] ${me.username} unlocked ${target.username}`);
+    json(res, 200, { ...publicUser(target), locks: auth.lockInfo(target) });
+  }, 'admin');
 
   route('POST', '/api/users', async (req, res) => {
     const user = await auth.createUser(await readBody(req));

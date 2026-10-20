@@ -478,6 +478,7 @@ function serveStatic(req, res, pathname) {
   sendFile(req, res, file, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
+const MUST_CHANGE_ALLOWED = new Set(['GET /api/auth/me', 'POST /api/auth/password', 'POST /api/auth/logout', 'GET /api/health']);
 const PROTO_KEYS = new Set(['__proto__', 'constructor', 'prototype', 'hasOwnProperty', 'toString', 'valueOf']);
 
 // A malformed %-escape in an address is the client's mistake (400), not a server error.
@@ -542,6 +543,10 @@ const server = http.createServer(async (req, res) => {
           }
         }
         if (user) noteRemoteOrigin(req);
+        // A temporary password from an admin: nothing but choosing their own (and signing out) until then.
+        if (user?.mustChangePassword && !MUST_CHANGE_ALLOWED.has(`${method} ${url.pathname}`)) {
+          throw Object.assign(new HttpError(403, 'Choose a new password first'), { mustChangePassword: true });
+        }
         if (r.access !== 'public') {
           if (!user) throw Object.assign(new HttpError(401, 'Please sign in'), { setupRequired: !auth.hasUsers() });
           if (r.access === 'admin' && user.role !== 'admin') throw new HttpError(403, 'Admins only');
@@ -560,7 +565,7 @@ const server = http.createServer(async (req, res) => {
     if (status === 500) console.error(`[http] ${req.method} ${url.pathname}:`, err);
     // Unexpected errors can mention files and folders on the server: details go to the log only.
     const message = !err.status ? 'Something went wrong on the server (details are in Settings → Logs)' : err.message || 'Internal error';
-    if (!res.headersSent) json(res, status, { error: message, ...(err.setupRequired ? { setupRequired: true } : {}), ...(err.duplicate ? { duplicate: true } : {}) });
+    if (!res.headersSent) json(res, status, { error: message, ...(err.setupRequired ? { setupRequired: true } : {}), ...(err.mustChangePassword ? { mustChangePassword: true } : {}), ...(err.duplicate ? { duplicate: true } : {}) });
     else res.destroy();
   }
 });

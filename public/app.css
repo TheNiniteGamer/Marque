@@ -870,3 +870,5 @@ body.tv .episode:focus-within { background: #2e2e2e; }
 .health-detail { font-size: 13px; }
 .health-fine summary { cursor: pointer; font-size: 13px; }
 .health-fine .health-row { margin-top: 8px; }
+.lock-chip { color: #ffb4b4; border-color: rgba(255,138,138,.5); }
+.temp-pw { font-size: 20px; letter-spacing: 1px; padding: 8px 12px; background: var(--bg-3); border-radius: 6px; user-select: all; }

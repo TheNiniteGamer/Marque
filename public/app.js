@@ -21,6 +21,11 @@ async function api(url, { method = 'GET', body } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
+  // Reset by an admin while this page was open: choose a new password first.
+  if (res.status === 403 && data?.mustChangePassword && state.user && !$('.modal-backdrop form[aria-label="Choose your own password"]')) {
+    state.user.mustChangePassword = true;
+    showChoosePassword();
+  }
   if (res.status === 401 && state.user) showAuth({ setupRequired: data?.setupRequired, message: 'Your session has ended. Please sign in again.' });
   if (!res.ok) throw Object.assign(new Error(data?.error || `Request failed (${res.status})`), { status: res.status, data });
   return data;
@@ -2285,6 +2290,7 @@ document.addEventListener('keydown', (e) => {
 
 async function startApp() {
   document.body.classList.remove('auth-mode');
+  if (state.user?.mustChangePassword) return showChoosePassword();
   renderUserMenu();
   await Promise.all([refreshLibraries().catch(() => {}), api('/api/status').then((s) => { state.status = s; }).catch(() => {})]);
   view.innerHTML = '';

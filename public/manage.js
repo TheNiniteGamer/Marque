@@ -339,6 +339,84 @@ async function viewAccount({ query, seq }) {
 }
 
 // ---------- users (admin, part of Settings) ----------
+// After an admin reset your password: choose your own before anything else (the server allows
+// nothing else until then).
+function showChoosePassword() {
+  const root = document.createElement('div');
+  root.className = 'modal-backdrop';
+  root.innerHTML = html`<form class="modal" role="dialog" aria-modal="true" aria-label="Choose your own password">
+      <header class="modal-head"><h2>Choose your own password</h2></header>
+      <div class="modal-body form" style="display:grid;gap:12px">
+        <p class="muted" style="margin:0">Hi ${state.user.username}. You signed in with a temporary password from whoever runs this server. Choose your own to carry on.</p>
+        <label>New password<input class="input" type="password" name="pw" autocomplete="new-password" minlength="8" required></label>
+        <label>The same again<input class="input" type="password" name="pw2" autocomplete="new-password" minlength="8" required></label>
+        <div class="form-error"></div>
+      </div>
+      <footer class="row" style="justify-content:space-between"><button type="button" class="btn" data-out>Sign out</button><button class="btn primary">Save and carry on</button></footer>
+    </form>`.s;
+  document.body.append(root);
+  const form = $('form', root);
+  form.elements.pw.focus();
+  $('[data-out]', root).onclick = () => { root.remove(); signOut(); };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const f = form.elements;
+    if (f.pw.value !== f.pw2.value) { $('.form-error', form).textContent = 'Those two don’t match'; return; }
+    try {
+      await api('/api/auth/password', { method: 'POST', body: { newPassword: f.pw.value } });
+      location.reload();
+    } catch (err) { $('.form-error', form).textContent = err.message; }
+  };
+}
+
+// The Users list's lock badge: "Locked: wrong password" / "PIN locked", until when.
+function lockBadge(u) {
+  const parts = [];
+  if (u.locks?.signIn) parts.push('wrong passwords');
+  if (u.locks?.pin) parts.push(u.locks.pin.forToday ? 'wrong PINs (for today)' : 'wrong PINs');
+  if (!parts.length) return '';
+  const until = Math.max(u.locks.signIn?.until || 0, u.locks.pin?.until || 0);
+  return html`<span class="chip lock-chip" title="Until ${fmtDate(until)}">🔒 Locked: ${parts.join(', ')}</span>`;
+}
+
+function showResetPassword(u) {
+  const self = u.id === state.user.id;
+  const m = openModal({
+    title: `Reset ${u.username}’s password`,
+    body: html`<form class="form reset-form" style="display:grid;gap:12px">
+      <label class="check"><input type="radio" name="how" value="temp" checked> Make a temporary password for me to give them</label>
+      <label class="check"><input type="radio" name="how" value="set"> Set a password
+        <input class="input" type="text" name="password" minlength="8" autocomplete="off" placeholder="At least 8 characters" style="margin-left:8px;width:220px" disabled></label>
+      <label class="check"><input type="checkbox" name="mustChange" checked> They choose their own when they next sign in</label>
+      ${self ? '' : html`<label class="check"><input type="checkbox" name="signOut" checked> Sign them out everywhere (TVs need linking again)</label>`}
+      ${u.hasPin ? html`<label class="check"><input type="checkbox" name="removePin"> Remove their PIN too (if they've forgotten it)</label>` : ''}
+      <div class="form-error"></div>
+      <div class="row"><button class="btn primary">Reset password</button></div>
+    </form>`,
+  });
+  const form = $('form', m.body);
+  form.addEventListener('change', () => { form.elements.password.disabled = form.elements.how.value !== 'set'; if (!form.elements.password.disabled) form.elements.password.focus(); });
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const f = form.elements;
+    try {
+      const r = await api(`/api/users/${u.id}/reset-password`, {
+        method: 'POST',
+        body: { password: f.how.value === 'set' ? f.password.value : null, mustChange: f.mustChange.checked, signOut: f.signOut ? f.signOut.checked : false, removePin: !!f.removePin?.checked },
+      });
+      if (r.temporaryPassword) {
+        m.body.innerHTML = html`<div style="display:grid;gap:12px">
+          <p style="margin:0">${u.username}’s temporary password:</p>
+          <div class="row"><code class="temp-pw">${r.temporaryPassword}</code><button class="btn small" id="copy-pw">Copy</button></div>
+          <p class="muted" style="margin:0;font-size:13px">Give it to them${f.mustChange.checked ? '; they’ll choose their own when they sign in' : ''}. It isn’t shown again.</p>
+          <div class="row"><button class="btn primary" data-close-done>Done</button></div></div>`.s;
+        $('#copy-pw', m.body).onclick = () => navigator.clipboard?.writeText(r.temporaryPassword).then(() => toast('Copied'), () => {});
+        $('[data-close-done]', m.body).onclick = () => { m.close(); router(); };
+      } else { toast('Password reset'); m.close(); router(); }
+    } catch (err) { $('.form-error', form).textContent = err.message; }
+  };
+}
+
 function usersSection(users) {
   const libName = (id) => state.libraries.find((l) => l.id === id)?.name;
   return html`
@@ -351,14 +429,17 @@ function usersSection(users) {
         <div class="avatar static">${u.username.slice(0, 1).toUpperCase()}</div>
         <div class="lib-info">
           <div style="font-weight:600">${u.username}${u.id === state.user.id ? html` <span class="muted" style="font-weight:400">(you)</span>` : ''}
-            <span class="chip" style="margin-left:6px">${u.role === 'admin' ? 'Admin' : 'User'}</span></div>
+            <span class="chip" style="margin-left:6px">${u.role === 'admin' ? 'Admin' : 'User'}</span> ${lockBadge(u)}
+            ${u.mustChangePassword ? html`<span class="chip">Temporary password</span>` : ''}</div>
           <div class="muted" style="font-size:13px">
             ${u.libraries === null ? 'All libraries' : u.libraries.length ? u.libraries.map(libName).filter(Boolean).join(', ') : 'No libraries'}
             · Downloads ${u.canDownload ? 'allowed' : 'off'}${u.maxAge != null ? html` · <b>Kids: ${maturityLabel(u.maxAge)}</b>` : ''} · Last sign-in: ${fmtDate(u.lastLoginAt)}
           </div>
         </div>
         <div class="row">
+          ${u.locks?.signIn || u.locks?.pin ? html`<button class="btn small primary" data-uact="unlock">Unlock</button>` : ''}
           <button class="btn small" data-uact="edit">Edit</button>
+          <button class="btn small" data-uact="reset">Reset password</button>
           ${u.id !== state.user.id ? html`<button class="btn small danger" data-uact="delete">Delete</button>` : ''}
         </div>
       </div>`)}`;
@@ -370,6 +451,11 @@ function bindUsersSection(users) {
     b.onclick = async () => {
       const u = users.find((x) => x.id === b.closest('[data-user]').dataset.user);
       if (b.dataset.uact === 'edit') return showUserForm(u);
+      if (b.dataset.uact === 'reset') return showResetPassword(u);
+      if (b.dataset.uact === 'unlock') {
+        try { await api(`/api/users/${u.id}/unlock`, { method: 'POST' }); toast(`${u.username} can sign in again`); router(); } catch (err) { toast(err.message, true); }
+        return;
+      }
       if (!confirm(`Delete the user “${u.username}”? Their watch history will be removed.`)) return;
       try { await api(`/api/users/${u.id}`, { method: 'DELETE' }); toast('User deleted'); router(); } catch (err) { toast(err.message, true); }
     };
