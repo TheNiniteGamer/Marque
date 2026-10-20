@@ -4,6 +4,25 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.23.0
+
+- **Overnight conversions make way:** a conversion pauses whenever anyone is watching anything (not
+  only when the server is converting for them) and carries on where it was afterwards. It shows how
+  long it has left, and admins can **Pause**, **Carry on** or **Stop for tonight** from Settings →
+  Overnight conversions or the Activity page.
+- **Activity page:** a card per person watching, saying whether it plays as it is or is converted
+  and **why**, with a **Stop** button (the player stops and says an admin stopped it, on the web,
+  the Android apps and the Roku); background work in one place (conversions with time left, scans,
+  subtitles, intros); and what was watched in the last 24 hours. Rokus and the Android TV app are
+  named as such.
+- **Requests:** people who can skip approval choose each time: **Download now** or **Add to
+  requests** (for films and for more seasons).
+- **Back out of collections:** a collection's page (and an actor's) has a back button to where you
+  were: Movies, TV Shows, Home, Collections…
+- **Opening animation:** a short MARQUEE intro with sound when Marquee opens (web and the Android
+  apps); any key skips it; Account → *Opening animation* turns it off.
+- Android 1.15.0 / Android TV 1.10.0: the player says "Stopped" when an admin stops it.
+
 ## 0.22.1
 
 - **Where converted copies are kept** (Settings → Overnight conversions → *Where copies are kept*):

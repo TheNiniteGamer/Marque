@@ -35,7 +35,7 @@ function chooseVersion(list) {
 
 // Bedtime or the day's screen time (set by an admin for a profile): a message instead of the video.
 function screenTimeNotice(b) {
-  const m = openModal({ title: b.reason === 'bedtime' ? 'Bedtime' : 'That’s enough for today', body: html`<p style="margin:0;font-size:18px">${b.message}</p>`.s,
+  const m = openModal({ title: b.reason === 'bedtime' ? 'Bedtime' : b.reason === 'admin' ? 'Stopped' : 'That’s enough for today', body: html`<p style="margin:0;font-size:18px">${b.message}</p>`.s,
     footer: html`<button class="btn primary" data-close>OK</button>`.s });
   $('[data-close]', m.el).onclick = m.close;
   $('[data-close]', m.el).focus();

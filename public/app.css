@@ -240,6 +240,13 @@ body.detail-open { overflow: hidden; }
 .dlg-back:hover, .dlg-back:focus-visible { border-color: #fff; }
 .dlg-back svg { width: 20px; height: 20px; flex: none; }
 .dlg-back span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* "‹ Movies" at the top of a collection or person's page. */
+.page-back { display: inline-flex; align-items: center; gap: 6px; height: 40px; max-width: 100%; margin: 4px 0 14px; padding: 0 16px 0 10px;
+  border-radius: 20px; border: 2px solid rgba(255,255,255,.35); background: rgba(24,24,24,.6); color: #fff; font-size: 15px; font-weight: 700; }
+.page-back:hover, .page-back:focus-visible { border-color: #fff; }
+.page-back svg { width: 20px; height: 20px; flex: none; }
+.page-back.over { position: absolute; z-index: 5; top: calc(var(--topbar) + 14px); left: var(--pad); margin: 0; }
+.page-back span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .round { width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255,255,255,.55); background: rgba(42,42,42,.65); color: #fff; display: grid; place-items: center; cursor: pointer; font-size: 18px; flex: none; }
 .round:hover { border-color: #fff; }
 .round svg { width: 20px; height: 20px; }
@@ -660,10 +667,35 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .activity-stats b { font-size: 22px; }
 .meter, .activity-progress { height: 6px; border-radius: 3px; background: var(--bg-3); overflow: hidden; }
 .meter span, .activity-progress span { display: block; height: 100%; background: var(--accent); }
-.activity-row { display: grid; grid-template-columns: 160px 1fr; gap: 14px; align-items: center; }
-.activity-row img { width: 160px; aspect-ratio: 16/9; object-fit: cover; border-radius: 6px; background: var(--bg-3); }
-.activity-info { display: grid; gap: 4px; min-width: 0; }
-@media (max-width: 640px) { .activity-row { grid-template-columns: 1fr; } .activity-row img { width: 100%; } }
+/* Activity: who's watching (cards), background work, the last day. */
+.act-h { margin: 26px 0 12px; font-size: 20px; }
+.act-note { margin: -6px 0 10px; font-size: 13px; }
+.act-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(560px, 1fr)); gap: 12px; }
+.act-card { display: grid; grid-template-columns: 200px 1fr; gap: 16px; align-items: start; margin: 0; }
+.act-art { position: relative; display: block; border-radius: 6px; overflow: hidden; background: var(--bg-3); aspect-ratio: 16/9; }
+.act-art img { width: 100%; height: 100%; object-fit: cover; }
+.act-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: rgba(120,120,120,.6); }
+.act-bar i { display: block; height: 100%; background: var(--accent); }
+.act-info { display: grid; gap: 5px; min-width: 0; justify-items: start; }
+.act-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.act-who .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.act-avatar { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 4px; color: #fff; font-size: 12px; font-weight: 700; }
+.act-title { font-weight: 700; line-height: 1.3; }
+.act-state { font-size: 13px; color: var(--muted); }
+.act-how { font-size: 13px; color: #f0b429; }
+.act-how.ok { color: #46c37b; }
+.act-stop { margin-top: 4px; }
+.act-line { padding: 10px 14px; margin: 0 0 8px; }
+.act-job { margin: 0 0 8px; display: grid; gap: 8px; }
+.act-job-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.act-job-btns { margin-left: auto; display: flex; gap: 6px; }
+.act-job-line { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.act-job-note { font-size: 13px; }
+.act-recent { display: grid; gap: 0; padding: 4px 14px; }
+.act-recent-row { display: grid; grid-template-columns: 24px auto 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.act-recent-row:last-child { border-bottom: 0; }
+.act-recent-row a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) { .act-grid { grid-template-columns: 1fr; } .act-card { grid-template-columns: 1fr; } .act-recent-row { grid-template-columns: 24px 1fr; } .act-recent-row .muted { grid-column: 2; } }
 .reorder-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .reorder-list li { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2, transparent); cursor: grab; }
 .reorder-list img { width: 36px; aspect-ratio: 2/3; object-fit: cover; border-radius: 4px; background: var(--bg-3); }
@@ -1049,3 +1081,24 @@ input.switch:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .ms-state { color: var(--muted); font-size: 13px; white-space: nowrap; }
 /* Coming soon */
 .card.soon .soon-date { position: absolute; z-index: 1; top: 10px; left: 10px; padding: 3px 9px; border-radius: 4px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 700; letter-spacing: .02em; }
+
+/* ---------- opening animation (intro.js) ---------- */
+#intro { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: #000; pointer-events: none; transition: opacity .45s ease; }
+#intro:not(.play):not(.still) { display: none; }
+.intro-word { position: relative; display: flex; font-family: var(--display); font-weight: 900; font-size: clamp(48px, 11vw, 168px); letter-spacing: .06em; color: var(--accent); }
+.intro-word span { display: inline-block; text-shadow: 0 0 48px rgba(227,27,35,.5); }
+/* The letters land one after another… */
+#intro.play .intro-word span { opacity: 0; transform: translateY(.22em) scale(1.3); filter: blur(10px); animation: intro-in .55s cubic-bezier(.2,.8,.2,1) forwards; animation-delay: calc(var(--i) * 45ms + 80ms); }
+@keyframes intro-in { to { opacity: 1; transform: none; filter: none; } }
+/* …a light runs across the word… */
+.intro-word::after { content: "MARQUEE"; position: absolute; inset: 0; letter-spacing: inherit; color: transparent; pointer-events: none;
+  background: linear-gradient(100deg, transparent 35%, rgba(255,255,255,.85) 50%, transparent 65%) no-repeat; background-size: 250% 100%; background-position: 160% 0;
+  -webkit-background-clip: text; background-clip: text; }
+#intro.play .intro-word::after { animation: intro-sweep .7s ease-in-out .9s forwards; }
+@keyframes intro-sweep { to { background-position: -60% 0; } }
+/* …it grows a little while it's up, then rushes towards you as the app appears. */
+#intro.play .intro-word { animation: intro-grow 2.1s ease-in forwards; }
+@keyframes intro-grow { from { transform: scale(.96); } to { transform: scale(1.06); } }
+#intro.out { opacity: 0; }
+#intro.out .intro-word { transform: scale(1.5); transition: transform .45s ease-in; animation: none; }
+.req-when { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }

@@ -234,16 +234,16 @@ const SETTINGS_PAGES = [
       const times = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
       const gbs = (g) => (g >= 1000 ? `${g / 1000} TB` : `${g} GB`);
       const placeNote = { default: `Marquee’s copies folder: ${o.defaultFolder}`, beside: 'In a “.marquee-converted” folder beside each film or episode (Radarr, Sonarr and Plex skip folders starting with a dot). Where that drive is read-only, the copies folder is used.', folder: '' }[s.place];
-      const word = { off: 'Off', moving: 'Moving the copies', done: 'Everything chosen has a copy', full: 'Paused: the space allowed is used up', waiting: `Waiting for ${s.start}`, paused: 'Paused while someone watches', starting: 'Starting…', converting: 'Converting' };
+      const word = { off: 'Off', held: `Paused by ${o.hold?.by || 'an admin'}`, tonight: `Stopped for tonight (until ${o.hold ? fmtTime(o.hold.until) : ''})`, moving: 'Moving the copies', done: 'Everything chosen has a copy', full: 'Paused: the space allowed is used up', waiting: `Waiting for ${s.start}`, paused: 'Paused while someone watches', starting: 'Starting…', converting: 'Converting' };
       return html`
         <p class="muted st-intro">Files most of your TVs can't play as they are (DVD rips, 4K, HEVC) get a 1080p copy made at night on the graphics card.
           Each TV then plays whichever copy it can play as it is: a 4K TV still gets the original, the others the copy, so the server isn't converting while you watch.
           The originals are never changed.</p>
         <div class="st-card">
           ${stToggle('Make copies overnight', `${o.counts.done} made so far · ${fmtSize(o.used)} of ${gbs(s.maxGb)} used`, 'id="opt-on"', s.enabled)}
-          ${s.enabled ? html`<div class="st-row ${['full'].includes(o.state) ? 'warn' : ''}"><span class="st-row-label">${word[o.state]}${o.running ? html`: ${o.running.title} · ${Math.round(o.running.progress * 100)}%` : ''}
-              <span class="st-row-note">${o.queue ? `${o.queue} to go` : 'Nothing waiting'}${o.runUntil ? ` · running until ${fmtDate(o.runUntil)}` : ''}${o.last ? ` · last: ${o.last.title} ${o.last.ok ? `(${Math.round(o.last.seconds / 60)} min)` : `failed: ${o.last.error}`}` : ''}</span></span>
-            ${o.queue && !o.running ? html`<button class="btn small" id="opt-now" title="Don't wait for the night: run for the next 6 hours">Start now</button>` : ''}</div>` : ''}
+          ${s.enabled ? html`<div class="st-row ${['full'].includes(o.state) ? 'warn' : ''}"><span class="st-row-label">${word[o.state]}${o.running ? html`: ${o.running.title} · ${Math.round(o.running.progress * 100)}%${o.running.secondsLeft != null ? ` · ${fmtEta(o.running.secondsLeft)}` : ''}` : ''}
+              <span class="st-row-note">${o.state === 'paused' ? 'It carries on when nobody is watching. · ' : ''}${o.queue ? `${o.queue} to go` : 'Nothing waiting'}${o.runUntil ? ` · running until ${fmtDate(o.runUntil)}` : ''}${o.last ? ` · last: ${o.last.title} ${o.last.ok ? `(${Math.round(o.last.seconds / 60)} min)` : `failed: ${o.last.error}`}` : ''}</span></span>
+            ${optimizeButtons(o)}</div>` : ''}
         </div>
         <h2 class="st-sub">Which files</h2>
         <div class="st-card">${Object.entries(o.kinds).map(([k, label]) => stToggle(label, `${o.counts[k]} without a copy`, `data-kind="${k}"`, s.kinds[k]))}</div>
@@ -292,7 +292,7 @@ const SETTINGS_PAGES = [
         try { await api('/api/optimize/move', { method: 'POST' }); toast('Moving the copies'); } catch (err) { toast(err.message, true); }
         router();
       };
-      if ($('#opt-now')) $('#opt-now').onclick = async () => { await api('/api/optimize/start-now', { method: 'POST' }); toast('Converting for the next 6 hours'); router(); };
+      bindOptimizeButtons(view, () => router());
       if ($('#opt-clear')) $('#opt-clear').onclick = async () => {
         if (!confirm(`Remove all ${o.counts.done} copies (${fmtSize(o.used)})? The originals stay; copies are made again if conversions are on.`)) return;
         await api('/api/optimize', { method: 'DELETE' }); toast('Copies removed'); router();

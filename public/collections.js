@@ -162,6 +162,7 @@ function sagaHero(c) {
 
 async function viewCollection({ params: [id], seq }) {
   const c = await api(`/api/collections/${id}`);
+  pageNames.set(`/collection/${id}`, c.name);
   const admin = state.user.role === 'admin';
   const auto = c.kind !== 'manual';
   const saga = c.section === 'franchises';
@@ -173,6 +174,7 @@ async function viewCollection({ params: [id], seq }) {
   const byId = new Map(c.items.map((x) => [x.id, x]));
   const ctx = admin ? `collection:${c.id}` : '';
   if (!setView(seq, html`
+    ${pageBack(undefined, undefined, { over: saga })}
     ${saga ? sagaHero(c) : ''}
     <div class="toolbar">${saga ? '' : html`<h1>${c.name}<span class="count">${c.count}</span></h1>`}
       <span class="muted">${source}${c.changed ? ' · changed by an admin' : ''}${saga ? '' : ` · ${SECTION_LABEL[c.section]}`}</span>

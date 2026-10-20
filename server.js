@@ -133,9 +133,9 @@ const maintenance = new Maintenance(store, DATA_DIR, { transcodeDir: TRANSCODE_D
 // watching, converted or not (a film playing as it is still needs the disk and a calm machine).
 const someoneWatching = () => transcodes.size > 0 || hls.active > 0 || activity.watching().length > 0;
 const offline = new offlineLib.Offline(path.join(DATA_DIR, 'offline'), hwaccel, { isBusy: someoneWatching });
-// Overnight conversions (optimize.js) wait only while the server is converting something for a viewer.
+// Overnight conversions (optimize.js) pause while anyone is watching anything, so the PC is all theirs.
 const optimizer = new Optimizer(store, path.resolve(process.env.OPTIMIZED_DIR || path.join(DATA_DIR, 'optimized')), hwaccel, {
-  probe: (f) => media.probe(f), isBusy: () => transcodes.size > 0 || hls.active > 0, label: process.env.OPTIMIZED_LABEL || null,
+  probe: (f) => media.probe(f), isBusy: someoneWatching, label: process.env.OPTIMIZED_LABEL || null,
   labelFor: hostLabel, fromHost: fromHostPath,
 });
 const previews = new Previews(store, path.join(DATA_DIR, 'previews'), { isBusy: someoneWatching, episodesOf: lib.episodesOf });

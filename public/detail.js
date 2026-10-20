@@ -93,7 +93,7 @@ async function viewPerson({ params: [name], seq }) {
   const p = await api(`/api/people/${name}`);
   document.title = `${p.name} · Marquee`;
   for (const t of p.titles) knownItems.set(t.id, t);
-  setView(seq, html`<div class="person-head">
+  setView(seq, html`${pageBack('#/', 'Home')}<div class="person-head">
       <span class="person-photo big" style="background:${avatarColor(p.name)}">${p.photo ? html`<img src="${p.photo}" alt="" data-hide-broken>` : ''}<b>${p.name.slice(0, 1)}</b></span>
       <div><h1>${p.name}</h1><p class="muted">${p.titles.length} title${p.titles.length === 1 ? '' : 's'} in your library</p></div></div>
     <div class="grid sized">${p.titles.map((t) => posterCard(t))}</div>`);

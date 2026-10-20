@@ -388,50 +388,91 @@ if (sessionStorage.getItem('marquee:restored')) {
 // ---------- activity (admins): who is watching what right now ----------
 async function viewActivity({ seq }) {
   if (state.user.role !== 'admin') { location.replace('#/'); return; }
-  const modeLabel = (s) => {
+  // How each one is playing, and why it's being converted when it is.
+  const howLabel = (s) => {
     const c = s.conversion;
     const by = c?.encoderName ? ` on ${c.encoderName}` : '';
-    if (s.mode === 'cast') return 'Casting to a TV';
-    if (s.mode === 'direct') return 'Direct Play';
-    if (s.quality === 'source' || c?.quality === 'source') return 'Original picture (not converted) · sound converted';
-    if (s.mode === 'hls' || c?.kind === 'hls') return `Adaptive · ${s.quality === 'auto' || !s.quality ? (c?.quality ? `Auto (${c.quality})` : 'Auto') : s.quality}${c ? ` · converting${by}` : ''}`;
-    if (c) return c.encoder ? `Converting${by}` : 'Converting audio only (video copied)';
-    return s.mode === 'transcode' ? 'Converting' : 'Playing';
+    if (s.mode === 'cast') return { text: 'Casting to a TV', ok: true };
+    if (s.mode === 'direct') return { text: 'Plays as it is', ok: true };
+    if (s.quality === 'source' || c?.quality === 'source') return { text: 'Original picture · only the sound converted', ok: true };
+    if (s.mode === 'hls' || c?.kind === 'hls') return { text: `Converting${by} · adaptive ${s.quality === 'auto' || !s.quality ? (c?.quality ? `(${c.quality})` : '') : s.quality}`.trim() };
+    if (c) return { text: c.encoder ? `Converting${by}` : 'Converting the sound only' };
+    return { text: s.mode === 'transcode' ? 'Converting' : 'Playing', ok: s.mode !== 'transcode' };
   };
   const title = (it) => (!it ? 'Unknown video' : it.type === 'episode' ? `${it.showTitle} · ${epLabel(it)} — ${it.title}` : it.title);
+  const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} hr ago`; };
+  const who = (name) => html`<span class="act-avatar" style="background:${avatarColor(name)}">${String(name).slice(0, 1).toUpperCase()}</span>`;
+  const streamCard = (s) => {
+    const how = howLabel(s);
+    return html`<div class="panel act-card">
+      <a class="act-art" href="#/item/${s.itemId}">${s.item ? html`<img src="${artUrl(s.item.type === 'episode' ? 'thumb' : 'backdrop', s.item)}" alt="">` : ''}
+        ${s.item?.duration ? html`<span class="act-bar"><i style="width:${pct(s.position, s.item.duration)}%"></i></span>` : ''}</a>
+      <div class="act-info">
+        <div class="act-who">${who(s.user)}<b>${s.user}</b><span class="muted">· ${s.device}${s.remote ? ' · away from home' : ''}</span></div>
+        <a class="act-title" href="#/item/${s.itemId}">${title(s.item)}</a>
+        <div class="act-state">${s.paused ? '❚❚ Paused' : '▶ Playing'} · ${s.item?.duration ? `${fmtClock(s.position)} of ${fmtClock(s.item.duration)}` : fmtClock(s.position)}</div>
+        <div class="act-how ${how.ok ? 'ok' : ''}">${how.text}${s.why ? html`<span class="muted"> · because of ${s.why}</span>` : ''}</div>
+        <button class="btn small act-stop" data-stop="${s.key}" data-who="${s.user}" ${s.stopping ? 'disabled' : ''}>${s.stopping ? 'Stopping…' : 'Stop'}</button>
+      </div>
+    </div>`;
+  };
+  const optimizeCard = (o) => {
+    if (!o?.settings.enabled && !o?.running) return '';
+    const r = o.running;
+    const words = { held: 'Paused by you', tonight: `Stopped for tonight, until ${o.hold ? fmtTime(o.hold.until) : ''}`, paused: 'Paused while someone watches', converting: 'Converting',
+      waiting: `Waiting for ${o.settings.start}`, done: 'Everything chosen has a copy', full: 'Paused: the space allowed is used up', starting: 'Starting…', moving: 'Moving the copies' };
+    return html`<div class="panel act-job">
+      <div class="act-job-head"><b>Overnight conversions</b><span class="muted">${words[o.state] || ''}</span>
+        <span class="act-job-btns">${optimizeButtons(o)}</span></div>
+      ${r ? html`<div class="act-job-line"><span>${r.title}</span><span class="muted">${Math.round(r.progress * 100)}%${r.secondsLeft != null ? ` · ${fmtEta(r.secondsLeft)}` : ''}</span></div>
+        <div class="meter"><span style="width:${r.progress * 100}%"></span></div>` : ''}
+      <div class="muted act-job-note">${o.queue ? `${o.queue} waiting` : 'Nothing waiting'} · ${o.counts.done} made so far · <a href="#/settings/convert">Settings</a></div>
+    </div>`;
+  };
   const render = (a) => html`
     <div class="toolbar"><h1>Activity<span class="count">${a.streams.length}</span></h1>
       <span class="muted">Updates every few seconds</span></div>
     <div class="activity-stats">
       <div class="panel"><div class="muted">Server CPU</div><b>${a.cpu.percent}%</b><div class="meter"><span style="width:${a.cpu.percent}%"></span></div><div class="muted">${a.cpu.cores} cores</div></div>
       <div class="panel"><div class="muted">Memory in use</div><b>${Math.round((1 - a.memory.free / a.memory.total) * 100)}%</b><div class="meter"><span style="width:${(1 - a.memory.free / a.memory.total) * 100}%"></span></div><div class="muted">${fmtSize(a.memory.total)} total</div></div>
-      <div class="panel"><div class="muted">Converting video with</div><b>${a.encoder.name}</b><div class="muted">${a.streams.filter((s) => s.conversion?.encoder).length + a.others.filter((o) => o.encoder).length} video conversion(s) running</div></div>
+      <div class="panel"><div class="muted">Converting video with</div><b>${a.encoder.name}</b><div class="muted">${a.streams.filter((s) => s.conversion?.encoder).length + a.others.filter((o) => o.encoder).length} video conversion(s) for viewers</div></div>
     </div>
-    ${a.streams.length ? a.streams.map((s) => html`
-      <div class="panel activity-row">
-        ${s.item ? html`<img src="${artUrl(s.item.type === 'episode' ? 'thumb' : 'backdrop', s.item)}" alt="">` : html`<div></div>`}
-        <div class="activity-info">
-          <div><b>${s.user}</b> <span class="muted">· ${s.device}${s.remote ? ' · away from home' : ''} · ${s.ip}</span></div>
-          <a href="#/item/${s.itemId}" style="font-weight:600">${title(s.item)}</a>
-          <div class="muted" style="font-size:13px">${s.paused ? '❚❚ Paused' : '▶ Playing'} · ${modeLabel(s)} · started ${new Date(s.startedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div>
-          ${s.item?.duration ? html`<div class="activity-progress"><span style="width:${pct(s.position, s.item.duration)}%"></span></div>
-            <div class="muted" style="font-size:12px">${fmtClock(s.position)} / ${fmtClock(s.item.duration)}</div>` : ''}
-        </div>
-      </div>`) : html`<div class="panel muted">Nobody is watching right now.</div>`}
-    ${a.background?.length ? html`<h2 style="margin:24px 0 12px">Background work</h2>
-      <p class="muted" style="margin:-6px 0 10px;font-size:13px">What the server is doing by itself (it also uses the CPU or the graphics card).</p>
-      ${a.background.map((b) => html`<div class="panel" style="padding:10px 14px">${b.what}${b.title ? html` <span class="muted">· ${b.title}</span>` : ''}${b.gpu ? html` <span class="muted">· on the graphics card</span>` : ''}</div>`)}` : ''}
-    ${a.others.length ? html`<h2 style="margin:24px 0 12px">Other conversions</h2>
-      <p class="muted" style="margin:-6px 0 10px;font-size:13px">Streams with no player reporting back, for example a Chromecast fetching the video itself.</p>
-      ${a.others.map((o) => html`<div class="panel" style="padding:10px 14px">${title(o.item)} <span class="muted">· ${o.user || 'someone'} · ${o.kind === 'hls' ? `adaptive ${o.quality}` : 'converting'}${o.encoderName ? ` on ${o.encoderName}` : ''}</span></div>`)}` : ''}`;
+    <h2 class="act-h">Watching now</h2>
+    ${a.streams.length ? html`<div class="act-grid">${a.streams.map(streamCard)}</div>` : html`<div class="panel muted">Nobody is watching right now.</div>`}
+    ${a.others.length ? html`<h2 class="act-h">Other conversions</h2>
+      <p class="muted act-note">Streams with no player reporting back, for example a Chromecast fetching the video itself.</p>
+      ${a.others.map((o) => html`<div class="panel act-line">${title(o.item)} <span class="muted">· ${o.user || 'someone'} · ${o.kind === 'hls' ? `adaptive ${o.quality}` : 'converting'}${o.encoderName ? ` on ${o.encoderName}` : ''}</span></div>`)}` : ''}
+    <h2 class="act-h">Background work</h2>
+    <p class="muted act-note">What the server does by itself. It waits while anyone is watching.</p>
+    ${optimizeCard(a.optimize)}
+    ${a.background.length ? a.background.map((b) => html`<div class="panel act-line">${b.what}${b.title ? html` <span class="muted">· ${b.title}</span>` : ''}${b.gpu ? html` <span class="muted">· on the graphics card</span>` : ''}</div>`)
+      : html`<div class="panel muted act-line">Nothing else running.</div>`}
+    <h2 class="act-h">The last 24 hours</h2>
+    ${a.recent.length ? html`<div class="panel act-recent">${a.recent.map((r) => html`<div class="act-recent-row">${who(r.user)}<b>${r.user}</b>
+        <a href="#/item/${r.item.id}">${title(r.item)}</a>
+        <span class="muted">${r.watched ? 'watched' : `stopped at ${fmtClock(r.position)}`} · ${ago(r.at)}</span></div>`)}</div>`
+      : html`<div class="panel muted">Nothing watched in the last day.</div>`}`;
+  const bind = () => {
+    bindOptimizeButtons(view, () => load());
+    for (const b of $$('[data-stop]', view)) {
+      b.onclick = async () => {
+        if (!confirm(`Stop ${b.dataset.who}'s video? Their player stops within a few seconds and tells them you stopped it.`)) return;
+        b.disabled = true;
+        try { await api('/api/activity/stop', { method: 'POST', body: { key: b.dataset.stop } }); toast('Stopping it'); } catch (err) { toast(err.message, true); }
+        load();
+      };
+    }
+  };
   const load = async () => {
     const a = await api('/api/activity');
     if (parseHash().path !== '/activity') return false;
-    view.innerHTML = render(a).s;
+    // (Not while a button is being pressed or a dialog is open.)
+    if (!document.querySelector('.modal-backdrop')) { view.innerHTML = render(a).s; bind(); }
     return true;
   };
   const a = await api('/api/activity');
   if (!setView(seq, render(a))) return;
+  bind();
   // Refresh while the page is open (one timer, even when the page is opened again).
   clearInterval(activityTimer);
   activityTimer = setInterval(async () => { if (!(await load().catch(() => true))) clearInterval(activityTimer); }, 3000);
@@ -473,4 +514,23 @@ function bindLogsSection() {
     navigator.clipboard?.writeText(text).then(() => toast('Copied'), () => toast("Couldn't copy", true));
   };
   load().catch((err) => { $('#logs-list').textContent = err.message; });
+}
+
+// ---------- overnight conversions: pause, carry on, stop for tonight (Settings and Activity) ----------
+function optimizeButtons(o) {
+  if (!o.settings.enabled) return '';
+  if (o.hold) return html`<button class="btn small" data-opt-act="resume">${o.hold.kind === 'pause' ? 'Carry on' : 'Start again'}</button>`;
+  return html`${o.running ? html`<button class="btn small" data-opt-act="pause" title="It waits where it is until you carry on">Pause</button>` : ''}
+    ${o.running || o.queue ? html`<button class="btn small" data-opt-act="stop-tonight" title="Stop the one under way and make no more until tomorrow night">Stop for tonight</button>` : ''}
+    ${o.queue && !o.running ? html`<button class="btn small" data-opt-act="start-now" title="Don't wait for the night: run for the next 6 hours">Start now</button>` : ''}`;
+}
+function bindOptimizeButtons(root, done) {
+  const said = { pause: 'Paused', resume: 'Carrying on', 'stop-tonight': 'Stopped until tomorrow night', 'start-now': 'Converting for the next 6 hours' };
+  for (const b of $$('[data-opt-act]', root)) {
+    b.onclick = async () => {
+      b.disabled = true;
+      try { await api(`/api/optimize/${b.dataset.optAct}`, { method: 'POST' }); toast(said[b.dataset.optAct]); } catch (err) { toast(err.message, true); }
+      done();
+    };
+  }
 }

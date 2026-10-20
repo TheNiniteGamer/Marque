@@ -20,7 +20,8 @@ function openRequestDialog(initial = '', kind = 'movie') {
           <button class="btn">Ask for it</button>
         </form></details>
       <label class="req-note">A note for whoever runs the server (optional)
-        <input class="input" name="note" maxlength="500" placeholder="e.g. the 2019 one, or just season 1"></label>`,
+        <input class="input" name="note" maxlength="500" placeholder="e.g. the 2019 one, or just season 1"></label>
+      <div class="req-when-slot"></div>`,
   });
   const box = m.body;
   const results = $('.req-results', box);
@@ -35,6 +36,7 @@ function openRequestDialog(initial = '', kind = 'movie') {
     try {
       const r = await api(`/api/requests/search?${new URLSearchParams({ kind: currentKind(), q })}`);
       found = r.results;
+      $('.req-when-slot', box).innerHTML = r.canSend ? whenChoice().s : '';
       if (r.unavailable) {
         results.innerHTML = html`<div class="muted" style="padding:12px">Searching online isn't available (${r.unavailable}). Ask for it by name below.</div>`.s;
         $('.req-manual', box).open = true;
@@ -54,7 +56,7 @@ function openRequestDialog(initial = '', kind = 'movie') {
   };
   const send = async (body) => {
     try {
-      const r = await api('/api/requests', { method: 'POST', body: { ...body, note: note() } });
+      const r = await api('/api/requests', { method: 'POST', body: { ...body, note: note(), wait: waitChosen(box) } });
       toast(r.sent ? `${r.title} is on its way. You'll get a notification when it's here.` : `Asked for ${r.title}. You'll get a notification when it's here.`);
       m.close();
       if (parseHash().path === '/requests') router();
@@ -79,6 +81,21 @@ function openRequestDialog(initial = '', kind = 'movie') {
   if (initial) search(); else form.elements.q.focus();
 }
 
+// For people allowed to skip approval: send it to Radarr / Sonarr straight away, or leave it with
+// the requests for now (to look at later, or for an admin to decide). The last choice is kept.
+function whenChoice() {
+  const now = store.get('requestNow', true);
+  return html`<div class="req-when"><span class="muted">When I ask</span>
+    <div class="seg" role="group" aria-label="When I ask"><button type="button" data-when="now" class="${now ? 'on' : ''}">Download now</button><button type="button" data-when="wait" class="${now ? '' : 'on'}">Add to requests</button></div></div>`;
+}
+const waitChosen = (root) => !!$('.req-when [data-when="wait"].on', root);
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('.req-when [data-when]');
+  if (!b) return;
+  $$('[data-when]', b.parentElement).forEach((x) => x.classList.toggle('on', x === b));
+  store.set('requestNow', b.dataset.when === 'now');
+});
+
 // ---------- more seasons of a show that's here ----------
 async function openMoreSeasons(show) {
   let d;
@@ -91,7 +108,8 @@ async function openMoreSeasons(show) {
         <span><b>${x.name}</b> <span class="muted">${x.episodes ? `${x.episodes} episodes` : ''}${x.airDate ? ` · ${x.airDate.slice(0, 4)}` : ''}</span></span>
         <span class="ms-state">${full(x) ? '✓ Here' : x.asked ? 'Asked for' : x.here ? `${x.here} of ${x.episodes ?? '?'} here` : ''}</span></label>`)}</div>`
       : html`<p class="muted">No season list for this show (it isn't matched online). Ask for it by name with a note instead.</p>`}
-      <label class="req-note">A note (optional) <input class="input" id="ms-note" maxlength="500"></label>`.s,
+      <label class="req-note">A note (optional) <input class="input" id="ms-note" maxlength="500"></label>
+      ${d.canSend ? whenChoice() : ''}`.s,
     footer: html`<button class="btn" data-close>Cancel</button><button class="btn primary" id="ms-go" ${d.seasons.length ? '' : 'disabled'}>Ask for these seasons</button>`.s,
   });
   $$('[data-close]', m.el).forEach((b) => { b.onclick = m.close; });
@@ -100,7 +118,7 @@ async function openMoreSeasons(show) {
     if (!seasons.length) return toast('Tick the seasons you’d like', true);
     e.target.disabled = true;
     try {
-      const r = await api('/api/requests', { method: 'POST', body: { showId: show.id, seasons, note: $('#ms-note', m.el).value.trim() } });
+      const r = await api('/api/requests', { method: 'POST', body: { showId: show.id, seasons, note: $('#ms-note', m.el).value.trim(), wait: waitChosen(m.el) } });
       toast(r.sent ? `On its way. You'll get a notification when it's here.` : `Asked for. You'll get a notification when it's here.`);
       m.close();
     } catch (err) { toast(err.message, true); e.target.disabled = false; }

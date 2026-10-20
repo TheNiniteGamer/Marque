@@ -351,6 +351,23 @@ const routes = [
 // Scroll position per page, so "back" returns to where you were in a long library.
 const scrollMemo = new Map();
 let lastPath = null;
+// The page before this one (for the back button on collections and people's pages).
+let cameFrom = null;
+const pageNames = new Map(); // collection pages: '/collection/<id>' -> its name
+function pageName(path) {
+  if (path === '/') return 'Home';
+  const lib = /^\/library\/(\w+)$/.exec(path);
+  if (lib) return state.libraries.find((l) => l.id === lib[1])?.name || 'Library';
+  const fixed = { '/collections': 'Collections', '/watchlist': 'My List', '/search': 'Search', '/requests': 'Requests', '/activity': 'Activity' };
+  if (fixed[path]) return fixed[path];
+  if (path.startsWith('/person/')) return decodeURIComponent(path.slice(8));
+  return pageNames.get(path) || 'Back';
+}
+/** "‹ Movies": to the page you came from (a title's pop-up in between doesn't count), or `fallback`. */
+function pageBack(fallback = '#/collections', fallbackName = 'Collections', { over = false } = {}) {
+  const from = cameFrom && cameFrom.path !== parseHash().path ? cameFrom : null;
+  return html`<a class="page-back ${over ? 'over' : ''}" href="${from ? `#${from.path}` : fallback}">${icon('left')}<span>${from ? from.title : fallbackName}</span></a>`;
+}
 
 // The pop-up layer for movie, show and episode pages. `openedFromPage`: it was opened from a page in
 // the app (so closing goes back to it); otherwise (a link opened directly) closing goes home.
@@ -426,7 +443,10 @@ async function router() {
   const seq = ++renderSeq;
   const changedPage = path !== lastPath;
   if (!isDetail && changedPage && lastPath && !lastPath.startsWith('/play/')) scrollMemo.set(lastPath, window.scrollY);
-  if (!isPlay && !isDetail) lastPath = path;
+  if (!isPlay && !isDetail) {
+    if (changedPage && lastPath) cameFrom = { path: lastPath, title: pageName(lastPath) };
+    lastPath = path;
+  }
   // On a TV, the pages made for a keyboard point to a phone or computer instead.
   const match = tv.on && TV_ELSEWHERE.test(path) ? [/^.*$/, viewTvElsewhere] : routes.find(([re]) => re.test(path));
   if (!match) { closeDetailLayer(); return setView(seq, html`<div class="empty"><h2>Page not found</h2><a class="btn" href="#/">Go home</a></div>`); }

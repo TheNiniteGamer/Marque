@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { clip, startServer, until } = require('./helpers');
-const { kindOf } = require('../lib/optimize');
+const { kindOf, secondsLeft, Optimizer } = require('../lib/optimize');
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'marquee-optimize-'));
 const OUT = path.join(ROOT, 'copies');
@@ -46,6 +46,30 @@ test('which files get a copy', () => {
   assert.equal(kindOf({ file: 'a.mkv', media: { video: { codec: 'hevc', width: 1920, height: 1080 }, audio: [{ codec: 'aac' }] } }), 'hevc');
   assert.equal(kindOf({ file: 'a.mp4', media: { video: { codec: 'h264', width: 1920, height: 1080, pixFmt: 'yuv420p', profile: 'High' }, audio: [{ codec: 'aac' }] } }), null, 'plays as it is');
   assert.equal(kindOf({ file: 'a.mkv', media: { video: { codec: 'h264', width: 1920, height: 1080, pixFmt: 'yuv420p', profile: 'High' }, audio: [{ codec: 'dts' }] } }), 'other');
+});
+
+test('time left, not counting time spent paused', () => {
+  const now = 1_000_000;
+  assert.equal(secondsLeft({ progress: 0.01, startedAt: now - 60_000, pausedMs: 0 }, now), null, 'too early to tell');
+  // A quarter done in 40 s of converting (20 s of the minute were paused): 2 minutes to go.
+  assert.equal(secondsLeft({ progress: 0.25, startedAt: now - 60_000, pausedMs: 20_000, paused: false }, now), 120);
+  assert.equal(secondsLeft({ progress: 0.25, startedAt: now - 70_000, pausedMs: 20_000, paused: true, pausedAt: now - 10_000 }, now), 120, 'paused right now');
+});
+
+test('admins pause, carry on, or stop for tonight', () => {
+  const store = { data: { items: {}, settings: { optimize: { enabled: true, end: '07:00' } } }, save() {} };
+  const o = new Optimizer(store, path.join(ROOT, 'hold'), null, { now: () => new Date('2026-10-20T23:30:00') });
+  o.pause('dad');
+  assert.deepEqual([o.status().state, o.status().hold.by], ['held', 'dad']);
+  o.resume();
+  assert.equal(o.status().hold, null);
+  o.stopForTonight('dad');
+  assert.equal(o.status().state, 'tonight');
+  assert.equal(new Date(o.hold().until).toString(), new Date('2026-10-21T07:00:00').toString(), 'until the morning');
+  store.data.optimizeHold.until = Date.now() - 1;
+  assert.equal(o.hold(), null, 'over by the next night');
+  o.startNow();
+  assert.equal(o.hold(), null, 'Start now carries on too');
 });
 
 test('a DVD rip gets a copy overnight (or with Start now), offered as another version', async () => {

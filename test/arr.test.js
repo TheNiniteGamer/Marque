@@ -93,6 +93,12 @@ test('who can skip approval is set separately for films and shows', async () => 
   const told = (await admin('GET', '/api/notifications')).data.items.map((n) => n.title);
   assert.ok(told.some((t) => /kid asked for Breaking Bad/.test(t)));
   assert.ok(!told.some((t) => /kid asked for The Matrix/.test(t)), 'nothing to approve for the film');
+
+  // Allowed to skip approval, but chose "Add to requests": it waits, and nothing goes to Radarr.
+  const sentBefore = radarr.sent.length;
+  const later = (await kid('POST', '/api/requests', { kind: 'movie', title: 'Waiting Film', year: 2001, wait: true })).data;
+  assert.deepEqual([later.status, later.sent], ['pending', false]);
+  assert.equal(radarr.sent.length, sentBefore);
 });
 
 test('approving a show sends it with the profile and seasons picked', async () => {

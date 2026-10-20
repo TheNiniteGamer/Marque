@@ -26,7 +26,7 @@ module.exports = function register(app) {
       // No TMDB key (films) or the source is down: a request can still be typed in by hand.
       return json(res, 200, { results: [], unavailable: err.message });
     }
-    json(res, 200, { results: requests.markResults(store, user, kind, results.slice(0, 12)) });
+    json(res, 200, { results: requests.markResults(store, user, kind, results.slice(0, 12)), canSend: requests.autoApproves(user, kind) && arr.ready(kind) });
   });
   // With how each one sent to Radarr / Sonarr is getting on (downloading 45%, not out yet…).
   route('GET', '/api/requests', async (req, res, p, url, user) => {
@@ -39,7 +39,8 @@ module.exports = function register(app) {
     const body = await readBody(req);
     const before = new Set(Object.keys(store.data.requests || {}));
     const kind = body.kind === 'show' || body.showId ? 'show' : 'movie';
-    let autoSend = requests.autoApproves(user, kind) && arr.ready(kind);
+    // Someone who may skip approval can still choose to leave it with the requests ({ wait: true }).
+    let autoSend = body.wait !== true && requests.autoApproves(user, kind) && arr.ready(kind);
     // Someone who skips approval still waits for an admin when space is low or they've had their week's worth.
     const held = autoSend ? await requests.holdReason(store, arr, user, kind) : null;
     if (held) autoSend = false;
@@ -66,6 +67,7 @@ module.exports = function register(app) {
     const asked = Object.values(store.data.requests || {}).filter((r) => r.showId === show.id && (r.status === 'pending' || r.status === 'approved'));
     json(res, 200, {
       sonarr: arr.ready('show'),
+      canSend: requests.autoApproves(user, 'show') && arr.ready('show'),
       seasons: seasons.sort((a, b) => a.season - b.season).map((x) => ({ ...x, here: here.get(x.season) || 0, asked: asked.some((r) => r.seasons.includes(x.season)) })),
     });
   });

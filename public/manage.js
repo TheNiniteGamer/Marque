@@ -168,6 +168,8 @@ async function viewTvSettings({ seq }) {
       ${tvToggle('data-acct', 'autoSkipIntro', playerPref('autoSkipIntro'), 'Skip intros automatically')}
       ${tvToggle('data-acct', 'nightMode', playerPref('nightMode'), 'Night mode: clearer dialogue, quieter loud scenes')}
       ${tvToggle('data-local', 'subsOn', store.get('subsOn', false), 'Turn on subtitles by default')}
+      ${tvToggle('data-local', 'intro', store.get('intro', true), 'Opening animation when Marquee opens')}
+      ${tvToggle('data-local', 'introSound', store.get('introSound', true), 'Sound with the opening animation')}
       <div class="tv-choice"><span>Skip Intro / Skip Credits buttons fade after</span>
         <div class="seg">${[[5, '5 s'], [10, '10 s'], [15, '15 s'], [30, '30 s'], [0, 'Never']].map(([v, l]) => html`<button type="button" data-fade="${v}" class="${fade === v ? 'on' : ''}">${l}</button>`)}</div></div>
     </section>
@@ -262,6 +264,8 @@ async function viewAccount({ query, seq }) {
         ${stToggle('Subtitles on by default', 'In any language, when there’s no choice above', 'data-pref="subsOn"', store.get('subsOn', false))}
         ${stToggle('Show films in a collection as the collection', 'On the home page and in libraries', 'data-pref="groupCollections"', store.get('groupCollections', true))}
         ${stToggle('Ask “Who’s watching?” when Marquee opens', 'For a shared TV or tablet', 'data-pref="askProfile"', store.get('askProfile', false))}
+        ${stToggle('Opening animation', 'The MARQUEE intro when Marquee opens', 'data-pref="intro"', store.get('intro', true))}
+        ${stToggle('Sound with the opening animation', 'Browsers may only play it once you’ve used the page', 'data-pref="introSound"', store.get('introSound', true))}
         ${stToggle('TV mode', 'Bigger highlights; the arrow keys or a remote move between titles', 'id="tv-mode"', tv.on)}
         ${inApp ? (typeof window.MarqueeAndroid.checkUpdates === 'function'
     ? stButton('Marquee app', `${appVersion} · Check for updates`, 'app-update')

@@ -2,6 +2,8 @@
 // Admin pages: activity, logs, maintenance, settings, metadata, updates, transcoding, remote access and backups.
 // Registered by server.js, which passes the shared helpers and services in `app`.
 
+const { fare } = require('../lib/report');
+
 module.exports = function register(app) {
   const {
     logs, fs, os, pipeline, lib, metadata, hlsLib, findProblems,
@@ -24,9 +26,19 @@ module.exports = function register(app) {
       return { id, type: it.type, title: s.title, showTitle: s.showTitle, season: s.season, episode: s.episode, duration: s.duration, artV: s.artV };
     };
     const used = new Set();
+    const capped = store.data.settings.remoteMaxQuality;
     const streams = activity.list().map((s) => {
       const conv = conversions.find((c, i) => !used.has(i) && c.itemId === s.itemId && (!c.userId || c.userId === s.userId) && used.add(i));
-      return { ...s, item: describe(s.itemId), conversion: conv ? { ...conv, encoderName: conv.encoder ? ENCODER_NAMES[conv.encoder] : null } : null };
+      // Why it isn't playing as it is on that kind of player (from the library report's rules).
+      let why = null;
+      const it = store.data.items[s.itemId];
+      if (it?.media && s.mode !== 'direct' && s.mode !== 'cast') {
+        const player = /roku/i.test(s.device) ? 'roku' : /android|shield/i.test(s.device) ? 'android' : 'browser';
+        why = (fare(it)[player]?.why || []).filter(Boolean);
+        if (s.remote && capped) why.push(`away from home: up to ${capped}`);
+        why = why.length ? why.join(', ') : null;
+      }
+      return { ...s, stopBy: undefined, stopping: !!s.stopBy, why, item: describe(s.itemId), conversion: conv ? { ...conv, encoderName: conv.encoder ? ENCODER_NAMES[conv.encoder] : null } : null };
     });
     // Conversions with no player reporting (e.g. a Chromecast fetching the stream itself).
     const others = conversions.filter((c, i) => !used.has(i)).map((c) => ({
@@ -40,11 +52,34 @@ module.exports = function register(app) {
       keyframes.current && { what: 'Finding keyframes (reading the file)', title: titleOf(keyframes.current.id) },
       intro.current && { what: activity.watching().length ? 'Finding intros (paused while someone watches)' : 'Finding intros', title: `${intro.current.show}, season ${intro.current.season}` },
       offline.running && { what: 'Making a copy for a phone download', title: titleOf(offline.running.item?.id) },
+      app.scanner.status().scanning && { what: 'Scanning a library for new files', title: store.data.libraries.find((l) => l.id === app.scanner.status().current)?.name || null },
+      app.autoSubs.running && { what: 'Fetching missing subtitles from OpenSubtitles', title: null },
     ].filter(Boolean);
+    // What was watched in the last day, by anyone (newest first).
+    const dayAgo = Date.now() - 86400_000;
+    const recent = [];
+    for (const [userId, map] of Object.entries(store.data.progress || {})) {
+      const who = auth.byId(userId)?.username;
+      if (!who) continue;
+      for (const [itemId, p] of Object.entries(map)) {
+        if (!(p.updatedAt > dayAgo) || !(p.watched || p.position > 60)) continue;
+        const item = describe(itemId);
+        if (item) recent.push({ user: who, item, at: p.updatedAt, watched: !!p.watched, position: p.position || 0 });
+      }
+    }
+    recent.sort((a, b) => b.at - a.at);
     json(res, 200, {
-      streams, others, background, cpu: activity.cpu(), memory: { total: os.totalmem(), free: os.freemem() },
+      streams, others, background, recent: recent.slice(0, 25), optimize: app.optimizer.status(),
+      cpu: activity.cpu(), memory: { total: os.totalmem(), free: os.freemem() },
       encoder: { active: hwaccel.active, name: ENCODER_NAMES[hwaccel.active] },
     });
+  }, 'admin');
+
+  // Stop someone's video (their player is told on its next report, within a few seconds).
+  route('POST', '/api/activity/stop', async (req, res, p, url, user) => {
+    const body = await readBody(req);
+    if (!activity.stop(String(body.key || ''), user.username)) throw new HttpError(404, 'That video has already stopped');
+    json(res, 200, { ok: true });
   }, 'admin');
 
   // --- logs (admin) ---
@@ -241,6 +276,9 @@ module.exports = function register(app) {
   route('GET', '/api/optimize', async (req, res) => json(res, 200, app.optimizer.status()), 'admin');
   route('PATCH', '/api/optimize', async (req, res) => { app.optimizer.update(await readBody(req)); json(res, 200, app.optimizer.status()); }, 'admin');
   route('POST', '/api/optimize/start-now', async (req, res) => { app.optimizer.startNow(); json(res, 200, app.optimizer.status()); }, 'admin');
+  route('POST', '/api/optimize/pause', async (req, res, p, url, user) => { app.optimizer.pause(user.username); json(res, 200, app.optimizer.status()); }, 'admin');
+  route('POST', '/api/optimize/resume', async (req, res) => { app.optimizer.resume(); json(res, 200, app.optimizer.status()); }, 'admin');
+  route('POST', '/api/optimize/stop-tonight', async (req, res, p, url, user) => { app.optimizer.stopForTonight(user.username); json(res, 200, app.optimizer.status()); }, 'admin');
   route('POST', '/api/optimize/move', async (req, res) => { app.optimizer.moveAll(); json(res, 202, app.optimizer.status()); }, 'admin');
   route('DELETE', '/api/optimize', async (req, res) => { app.optimizer.removeAll(); json(res, 200, app.optimizer.status()); }, 'admin');
   route('PATCH', '/api/transcoding', async (req, res) => {

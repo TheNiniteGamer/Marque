@@ -51,6 +51,9 @@ function fmtSize(b) {
   return `${b.toFixed(i > 1 ? 1 : 0)} ${u[i]}`;
 }
 const fmtDate = (t) => (t ? new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Never');
+const fmtTime = (t) => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+// "about 12 min left" (a conversion's time to go)
+const fmtEta = (sec) => (sec < 60 ? 'less than a minute left' : `about ${fmtDuration(sec)} left`);
 function resLabel(v) {
   if (!v?.height) return null;
   const h = Math.max(v.height, v.width * 9 / 16);

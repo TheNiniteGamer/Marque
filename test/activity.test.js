@@ -27,6 +27,8 @@ test('device names from browsers and the Android app', () => {
   assert.equal(deviceName('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 Edg/126.0'), 'Edge on Windows');
   assert.equal(deviceName('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'), 'Safari on iPhone/iPad');
   assert.equal(deviceName('Dalvik/2.1.0 (Linux; U; Android 14; Pixel 8)'), 'Android app');
+  assert.equal(deviceName('Roku/DVP-14.0 (14.0.4.5112-46)'), 'Roku');
+  assert.equal(deviceName('Mozilla/5.0 (Linux; Android 11; SHIELD Android TV) AppleWebKit/537.36 Chrome/120.0 Safari/537.36 MarqueeAndroid/1.9.0 MarqueeTV'), 'Android TV app');
   assert.equal(deviceName(''), 'Browser');
 });
 
@@ -66,4 +68,21 @@ test('a running conversion is matched to its viewer', async () => {
   const mine = a.streams.find((x) => x.user === 'bob');
   assert.deepEqual([mine.conversion.kind, mine.conversion.quality, mine.conversion.encoder], ['hls', '360p', 'software']);
   assert.ok(!a.others.some((o) => o.userId === mine.userId && o.itemId === film.id), 'not listed twice');
+});
+
+test('an admin can stop someone’s video; the last day is listed', async () => {
+  await bob('POST', `/api/items/${film.id}/progress`, { position: 90, paused: false, mode: 'transcode', client: 'tab-2' });
+  let a = (await admin('GET', '/api/activity')).data;
+  const s = a.streams.find((x) => x.user === 'bob');
+  assert.ok(s.why === null || typeof s.why === 'string');
+  assert.ok(a.optimize && a.optimize.settings, 'overnight conversions shown too');
+  assert.ok(a.recent.some((r) => r.user === 'bob' && r.item.id === film.id), 'in the last 24 hours');
+  assert.equal((await bob('POST', '/api/activity/stop', { key: s.key })).status, 403, 'admins only');
+  assert.equal((await admin('POST', '/api/activity/stop', { key: s.key })).status, 200);
+  assert.equal((await admin('GET', '/api/activity')).data.streams.find((x) => x.user === 'bob').stopping, true);
+  // Bob's player hears it on its next report, playing or paused.
+  const r = (await bob('POST', `/api/items/${film.id}/progress`, { position: 92, paused: true, mode: 'transcode', client: 'tab-2' })).data;
+  assert.deepEqual([r.stop.reason, r.stop.message], ['admin', 'admin stopped this from the Activity page.']);
+  await bob('POST', `/api/items/${film.id}/progress`, { position: 92, stopped: true, client: 'tab-2' });
+  assert.equal((await admin('POST', '/api/activity/stop', { key: s.key })).status, 404, 'gone once stopped');
 });

@@ -681,7 +681,7 @@ public class PlayerActivity extends Activity {
         spinner.setVisibility(View.GONE);
         try { video.pause(); } catch (Exception ignored) { }
         new AlertDialog.Builder(this)
-            .setTitle("bedtime".equals(b.optString("reason")) ? R.string.bedtime : R.string.enough_today)
+            .setTitle("bedtime".equals(b.optString("reason")) ? R.string.bedtime : "admin".equals(b.optString("reason")) ? R.string.stopped_by_admin : R.string.enough_today)
             .setMessage(b.optString("message"))
             .setPositiveButton(android.R.string.ok, (d, w) -> finish()).setOnCancelListener(d -> finish()).show();
     }

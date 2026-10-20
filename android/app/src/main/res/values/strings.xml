@@ -23,6 +23,7 @@
     <string name="playback_error">The server could not stream this video.</string>
     <string name="bedtime">Bedtime</string>
     <string name="enough_today">That’s enough for today</string>
+    <string name="stopped_by_admin">Stopped</string>
     <string name="cant_play">Can\'t play this video</string>
     <string name="reconnecting">Reconnecting to Marquee…\nThe server is restarting; this carries on where you were.</string>
     <string name="server_gone">Marquee hasn\'t come back yet. Check the PC it runs on, then try again.</string>

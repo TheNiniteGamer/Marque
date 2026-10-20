@@ -224,18 +224,20 @@ module.exports = function register(app) {
     const body = await readBody(req);
     const position = Number(body.position);
     if (!Number.isFinite(position)) throw new HttpError(400, 'position (seconds) required');
-    activity.report(user, item, { ...body, position, ip: clientIp(req), remote: isRemote(req), ua: String(req.headers['user-agent'] || '') });
+    const session = activity.report(user, item, { ...body, position, ip: clientIp(req), remote: isRemote(req), ua: String(req.headers['user-agent'] || '') });
+    // Stopped by an admin on the Activity page: the player stops as at bedtime, with this message.
+    const adminStop = session?.stopBy ? { reason: 'admin', message: `${session.stopBy} stopped this from the Activity page.` } : null;
     // Players also report while paused (for the Activity page); the resume point only changes when it moved.
     const prev = store.data.progress[user.id]?.[item.id];
     if (body.paused && prev && !body.stopped && Math.abs((prev.position || 0) - position) < 1) {
       if (store.timer) store.save(); // a position still waiting to be written goes now
-      const stop = screenTime.blocked(store, user);
+      const stop = adminStop || screenTime.blocked(store, user);
       return json(res, 200, { ...lib.progressOf(store, user, item.id), ...(stop ? { stop } : {}) });
     }
     // Watching time for a daily limit; and when bedtime starts or the limit is reached, the player
     // is told to stop (`stop`: { reason, message }).
     if (!body.paused && !body.stopped) screenTime.tick(store, user);
-    const stop = body.stopped ? null : screenTime.blocked(store, user);
+    const stop = body.stopped ? null : adminStop || screenTime.blocked(store, user);
     // Stopping or pausing is saved straight away; the reports in between can wait a little.
     json(res, 200, { ...lib.setProgress(store, user, item, position, { lazy: !body.stopped && !body.paused }), ...(stop ? { stop } : {}) });
   });
