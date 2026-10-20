@@ -24,6 +24,8 @@ installing one.
   the picture is kept as it is too, instead of the whole video being converted.
 - Activity shows "Original picture (not converted)" for these streams; Settings → Server lists
   the space the keyframe lists take (a few KB per title).
+- The number of waiting requests in the profile menu is a small red badge at the end of the
+  link (it ran into the word: "Requests2"); the same for the phone's Downloads count.
 
 ## 0.13.2
 

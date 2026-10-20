@@ -335,6 +335,10 @@ body.auth-mode main { padding: 0; }
 .user-pop-head .muted { font-size: 12px; }
 .user-pop a, .user-pop button { text-align: left; padding: 8px 10px; border-radius: 6px; border: 0; background: none; cursor: pointer; font-size: 14px; }
 .user-pop a:hover, .user-pop button:hover { background: var(--bg-3); }
+.user-pop a { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* How many requests are waiting / downloads are going, as a small pill at the end of the link. */
+.user-pop .count, .tabbar .count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+  background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; }
 fieldset.access { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px 12px; margin: 0; display: grid; gap: 6px; }
 fieldset.access:disabled { opacity: .45; }
 fieldset.access legend { font-size: 13px; color: var(--muted); padding: 0 6px; }
@@ -426,6 +430,8 @@ input.p-volume { width: 90px; accent-color: var(--accent); }
     padding: 6px 0 calc(6px + env(safe-area-inset-bottom)); background: #141414; border-top: 1px solid #262626; }
   .tabbar a, .tabbar button { display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 44px; justify-content: center; border: 0; background: none; color: #a8a8a8; font-size: 11px; cursor: pointer; }
   .tabbar a.active { color: #fff; }
+  .tabbar a { position: relative; }
+  .tabbar .count { position: absolute; top: 2px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
   .tabbar svg { width: 22px; height: 22px; }
   .hero { height: min(130vw, 620px); min-height: 0; margin-bottom: 4px; }
   .hero::after { background: linear-gradient(0deg, var(--bg) 0%, rgba(11,11,11,.6) 35%, rgba(11,11,11,0) 60%); }
