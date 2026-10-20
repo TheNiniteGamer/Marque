@@ -4,6 +4,28 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.19.2
+
+**Fixing TV episodes, and sturdier backups.**
+- **Fix episode** (*⋯ → Fix episode…* on an episode, admins): when a file's name has the wrong
+  numbers (DVD order, specials, a double episode named as one) and it shows another episode's
+  title, summary and picture, pick the episode it really is from the show's episode list. The list
+  shows which of your files each episode is now; you can also type the season and episode. The
+  choice is kept when files are rescanned, and *Use the file name's numbers* undoes it.
+- **Fix show match…** in every episode's ⋯ menu, to re-match its show without going to the show.
+- **Backups are checked as they're made:** each one is read back straight after it's written, so a
+  full or failing drive is caught at once. A failed automatic backup now shows in the health check
+  (with why) until one works again.
+- **Fixed: a backup made while artwork was being replaced** (during a metadata refresh, say) could
+  come out damaged and impossible to restore. Each file now goes in at exactly the size it was
+  listed at.
+- **Restoring works even while a library scan is running** (for example straight after another
+  restore, which rescans): the scan is stopped part-way without removing anything, and runs again
+  once the restore is done. Before, the restore was refused until the scan finished.
+- **A damaged or partly downloaded backup is refused** before anything changes, and two restores
+  can't run at once.
+- If the artwork folder can't be swapped during a restore, everything is put back as it was.
+
 ## 0.19.1
 
 - **‹ Back in the More info pop-up.** Opening an episode from its show (or a film from "More like

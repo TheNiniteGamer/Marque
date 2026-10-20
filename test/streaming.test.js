@@ -292,7 +292,8 @@ test('playback info gives a signed link that works without the cookie', async ()
   assert.equal((await anonGet(`/api/items/${other.id}/stream?mt=${pb.token}`)).status, 401);
   assert.equal((await anonGet(`/api/items/${ep.id}?mt=${pb.token}`)).status, 401);
   assert.equal((await anonGet(`/api/home?mt=${pb.token}`)).status, 401);
-  assert.equal((await anonGet(`/api/items/${ep.id}/stream?mt=${pb.token.slice(0, -1)}A`)).status, 401);
+  const tampered = pb.token.slice(0, -1) + (pb.token.endsWith('A') ? 'B' : 'A'); // (always a different last character)
+  assert.equal((await anonGet(`/api/items/${ep.id}/stream?mt=${tampered}`)).status, 401);
 
   const pre = await fetch(`${BASE}/api/items/${ep.id}/hls/master.m3u8`, { method: 'OPTIONS' });
   assert.equal(pre.status, 204);

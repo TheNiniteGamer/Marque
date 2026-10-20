@@ -10,7 +10,8 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { clip, startServer, until } = require('./helpers');
 const { Backups, remapPaths } = require('../lib/backup');
-const { createTarGz } = require('../lib/tar');
+const { createTarGz, extractTarGz } = require('../lib/tar');
+const { Scanner } = require('../lib/scanner');
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'marquee-backup-'));
 const BACKUP_DIR = path.join(ROOT, 'backups');
@@ -124,6 +125,24 @@ test('files that are not Marquee backups are rejected without changing anything'
   assert.equal((await admin('GET', '/api/users')).data.length, before);
 });
 
+test('restoring again straight away works: the rescan after a restore is stopped, not in the way', async () => {
+  for (let i = 0; i < 3; i++) {
+    const r = await admin('POST', '/api/backups/restore', null, { raw: fs.readFileSync(ids.downloaded), type: 'application/gzip' });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+  }
+  await until(async () => !(await admin('GET', '/api/status')).data.scanning);
+  assert.equal((await admin('GET', `/api/libraries/${ids.lib}/items`)).data.items.length, 1, 'scanned again afterwards');
+});
+
+test('a damaged backup (cut short) is refused and changes nothing', async () => {
+  const whole = fs.readFileSync(ids.downloaded);
+  for (const cut of [whole.subarray(0, Math.floor(whole.length / 2)), whole.subarray(0, whole.length - 40)]) {
+    const r = await admin('POST', '/api/backups/restore', null, { raw: cut, type: 'application/gzip' });
+    assert.equal(r.status, 400, `${cut.length} of ${whole.length} bytes`);
+  }
+  assert.equal((await admin('GET', `/api/items/${ids.movie}`)).data.title, 'Before Backup');
+});
+
 test('only admins can back up or restore', async () => {
   const bob = srv.client();
   await bob('POST', '/api/auth/login', { username: 'bob', password: 'password2' });
@@ -182,4 +201,59 @@ test('paths from a different data folder are remapped on restore', () => {
   assert.equal(data.other, '/old/imagesX/no', 'only whole path prefixes');
   remapPaths(data, 'C:\\Marquee\\data\\images', '/data/images');
   assert.equal(data.items.a.meta.poster, '/data/images/a-poster.jpg');
+});
+
+test('each backup is read back before it counts, and checking an archive writes nothing', async () => {
+  const { b } = manager('verify');
+  const made = await b.create('manual');
+  const names = await extractTarGz(fs.createReadStream(path.join(b.dir, made.name)), null);
+  assert.ok(names.includes('db.json') && names.includes('marquee-backup.json'));
+  assert.deepEqual(fs.readdirSync(b.dir), [made.name], 'no half-written files left');
+});
+
+test('a backup copes with artwork that changes size while it is being written', async () => {
+  const dir = path.join(ROOT, 'growing');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, 'poster.jpg');
+  fs.writeFileSync(file, Buffer.alloc(1000, 1));
+  const stream = createTarGz([{ name: 'a.jpg', file }, { name: 'b.txt', data: Buffer.from('after') }]);
+  fs.appendFileSync(file, Buffer.alloc(5000, 2)); // replaced by a bigger one meanwhile
+  const out = path.join(ROOT, 'growing.tar.gz');
+  await writeStream(stream, out);
+  const dest = path.join(ROOT, 'growing-out');
+  assert.deepEqual(await extractTarGz(fs.createReadStream(out), dest), ['a.jpg', 'b.txt']);
+  assert.equal(fs.readFileSync(path.join(dest, 'b.txt'), 'utf8'), 'after', 'what follows it is intact');
+});
+
+test('two restores at once: the second is turned away', async () => {
+  const { b } = manager('twice');
+  const made = await b.create('manual');
+  let release;
+  b.pauseScans = () => new Promise((r) => { release = r; });
+  const first = b.restore(fs.createReadStream(path.join(b.dir, made.name)), { safetyCopy: false });
+  await until(async () => release);
+  await assert.rejects(b.restore(fs.createReadStream(path.join(b.dir, made.name))), (err) => err.status === 409);
+  release();
+  await first;
+});
+
+test('pausing scans stops one part-way without removing what it had not reached, and holds the rest', async () => {
+  const dir = path.join(ROOT, 'pause-lib');
+  fs.mkdirSync(dir, { recursive: true });
+  for (let i = 0; i < 40; i++) fs.writeFileSync(path.join(dir, `Film ${i} (2000).mp4`), 'not really a video');
+  const store = {
+    data: { libraries: [{ id: 'L', name: 'Films', type: 'movie', paths: [dir] }], items: { gone: { id: 'gone', libraryId: 'L', file: path.join(dir, 'gone.mp4') } }, shows: {} },
+    library(id) { return this.data.libraries.find((l) => l.id === id); }, save() {},
+  };
+  const scanner = new Scanner(store, path.join(ROOT, 'pause-data'));
+  scanner.enqueue('L');
+  await until(async () => scanner.current?.phase === 'probing' && scanner.current.done > 0);
+  await scanner.pause();
+  assert.equal(scanner.status().scanning, false);
+  assert.ok(store.data.items.gone, 'a stopped scan removes nothing');
+  scanner.enqueue('L');
+  assert.equal(scanner.status().scanning, false, 'held while paused');
+  scanner.resume();
+  await until(async () => !scanner.status().scanning && !store.data.items.gone);
+  assert.equal(Object.keys(store.data.items).length, 40, 'scanned in full afterwards');
 });

@@ -47,4 +47,11 @@ test('finds offline folders, stopped backups and failing copies, and tells admin
   assert.equal(r2.checks.find((c) => c.id === 'folders').level, 'ok');
   assert.equal(r2.checks.find((c) => c.id === 'backup-age').level, 'ok');
   assert.equal(r2.checks.find((c) => c.id === 'backup-copy').level, 'ok');
+  // Last night's automatic backup failed: said so (with why) until one works again.
+  store.data.backupFailed = { at: Date.now() + 1000, error: 'The backup written to D:/Backups didn’t read back correctly (ENOSPC)' };
+  const r3 = h.run().checks.find((c) => c.id === 'backup-age');
+  assert.deepEqual([r3.level, r3.title], ['bad', 'The last automatic backup failed']);
+  assert.match(r3.detail, /ENOSPC/);
+  backups = [{ name: 'z', createdAt: Date.now() + 2000 }];
+  assert.equal(h.run().checks.find((c) => c.id === 'backup-age').level, 'ok', 'a newer backup worked');
 });

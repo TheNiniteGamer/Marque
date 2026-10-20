@@ -183,6 +183,18 @@ module.exports = function register(app) {
     json(res, 200, afterMetaChange(id, user));
   }, 'admin');
 
+  // Fix episode: the show's episodes to pick from, and setting which one a file really is.
+  const getEpisode = (id, user) => {
+    const { target, kind } = getTarget(id, user);
+    if (kind !== 'episode') throw new HttpError(400, 'Only episodes can be fixed this way');
+    return target;
+  };
+  route('GET', '/api/meta/:id/episodes', async (req, res, { id }, url, user) => json(res, 200, await matcher.episodeChoices(getEpisode(id, user))), 'admin');
+  route('PUT', '/api/meta/:id/episode', async (req, res, { id }, url, user) => {
+    await matcher.setEpisode(getEpisode(id, user), await readBody(req));
+    json(res, 200, afterMetaChange(id, user));
+  }, 'admin');
+
   route('GET', '/api/meta/:id/images', async (req, res, { id }, url, user) => {
     const { target, kind } = getTarget(id, user);
     json(res, 200, await matcher.providerImages(target, kind).catch((err) => { throw new HttpError(502, err.message); }));

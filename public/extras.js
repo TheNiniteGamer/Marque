@@ -84,6 +84,8 @@ function itemMenu(anchor, x, { ctx } = {}) {
     { label: '💬  Find subtitles…', hidden: !state.status?.subtitleSearch || !['movie', 'episode'].includes(x.type), onClick: () => openSubtitleSearch(x.id, () => router()) },
     { label: '⏭  Edit intro & credits…', hidden: !admin || x.type !== 'episode', onClick: () => openIntroEditor(x.id) },
     { label: '⌕  Fix match…', hidden: !admin || x.type === 'episode' || x.type === 'extra', onClick: () => openMatcher(x.id) },
+    { label: '⌕  Fix episode…', hidden: !admin || x.type !== 'episode', onClick: () => openEpisodeFixer(x.id) },
+    { label: '⌕  Fix show match…', hidden: !admin || x.type !== 'episode' || !x.showId, onClick: () => openMatcher(x.showId) },
     { label: '↻  Refresh metadata', hidden: !admin || x.type === 'extra', onClick: () => refreshMetadata(x.type === 'episode' ? x.showId : x.id) },
   ]);
 }
@@ -309,6 +311,61 @@ async function openMatcher(id) {
     }
   };
   search();
+}
+
+// ---------- fix episode ----------
+// A file whose name has the wrong numbers (DVD order, specials, a double episode named as one) shows
+// another episode's title and picture. Pick the episode it really is from the show's list; the
+// choice is kept when files are rescanned.
+async function openEpisodeFixer(id) {
+  const d = await api(`/api/meta/${id}/episodes`);
+  const label = (s, e) => `S${String(s ?? 0).padStart(2, '0')}E${String(e ?? 0).padStart(2, '0')}`;
+  const seasons = [...new Set(d.choices.map((c) => c.season))];
+  let season = seasons.includes(d.current.season) ? d.current.season : seasons[0];
+  const m = openModal({
+    title: 'Fix episode',
+    wide: true,
+    body: html`
+      <p class="muted" style="margin-top:0"><code>${d.file}</code> is now <b>${label(d.current.season, d.current.episode)}</b> of ${d.show.title}${d.current.byHand ? ' (set by hand)' : ' (from its file name)'}.
+        Pick the episode it really is.</p>
+      ${d.show.matched ? (seasons.length ? html`<div class="row" style="margin-bottom:10px"><label>Season <select id="ef-season">${seasons.map((s) => html`<option value="${s}" ${s === season ? 'selected' : ''}>${s === 0 ? 'Specials' : `Season ${s}`}</option>`)}</select></label></div>
+        <div id="ef-list" class="match-results"></div>` : html`<p class="muted">The show's source has no episode list.</p>`)
+        : html`<div class="filter-note">${d.show.title} isn't matched online, so there's no episode list. Set the numbers below, or match the show first (⋯ → Fix show match…).</div>`}
+      <form class="row" id="ef-form" style="margin-top:14px;align-items:center;gap:8px">
+        <span class="muted">Or by number:</span>
+        <label>Season <input class="input" name="season" type="number" min="0" max="999" value="${d.current.season ?? ''}" style="width:80px" required></label>
+        <label>Episode <input class="input" name="episode" type="number" min="0" max="9999" value="${d.current.episode ?? ''}" style="width:90px" required></label>
+        <button class="btn" type="submit">Set</button>
+      </form>`.s,
+    footer: html`${d.current.byHand ? html`<button class="btn" id="ef-reset" style="margin-right:auto">Use the file name's numbers</button>` : ''}<button class="btn" data-close>Close</button>`.s,
+  });
+  const el = m.el;
+  $$('[data-close]', el).forEach((b) => { b.onclick = m.close; });
+  const save = async (body, msg) => {
+    try { await api(`/api/meta/${id}/episode`, { method: 'PUT', body }); toast(msg); m.close(); router(); } catch (err) { toast(err.message, true); }
+  };
+  const render = () => {
+    if (!$('#ef-list', el)) return;
+    $('#ef-list', el).innerHTML = d.choices.filter((c) => c.season === season).map((c) => html`
+      <button class="match-row ${c.season === d.current.season && c.episode === d.current.episode ? 'current' : ''}" data-s="${c.season}" data-e="${c.episode}">
+        <span class="match-thumb wide">${c.thumb ? html`<img loading="lazy" src="${c.thumb}" alt="">` : ''}</span>
+        <span class="match-info"><span class="match-line"><b>${c.episode}. ${c.title || `Episode ${c.episode}`}</b> ${c.airDate ? html`<span class="muted">${c.airDate}</span>` : ''}
+          ${c.season === d.current.season && c.episode === d.current.episode ? html`<span class="chip current">Now</span>` : ''}</span>
+          ${c.takenBy ? html`<span class="match-overview">Already: <code>${c.takenBy}</code></span>` : ''}</span>
+      </button>`.s).join('');
+  };
+  render();
+  if ($('#ef-season', el)) $('#ef-season', el).onchange = (e) => { season = Number(e.target.value); render(); };
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('.match-row[data-s]');
+    if (b) save({ season: Number(b.dataset.s), episode: Number(b.dataset.e) }, `Now ${label(b.dataset.s, b.dataset.e)}`);
+  });
+  $('#ef-form', el).onsubmit = (e) => {
+    e.preventDefault();
+    const f = e.target.elements;
+    save({ season: Number(f.season.value), episode: Number(f.episode.value) }, `Now ${label(f.season.value, f.episode.value)}`);
+  };
+  if ($('#ef-reset', el)) $('#ef-reset', el).onclick = () => save({ season: null, episode: null }, 'Back to the file name’s numbers');
 }
 
 // ---------- Settings → Metadata ----------

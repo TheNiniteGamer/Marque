@@ -120,6 +120,10 @@ another drive or a synced folder (OneDrive/Dropbox) for extra safety.
   e.g. to move Marquee to a new PC.
 - **Safety copy:** before restoring, Marquee saves a backup of how things are now, so a restore can
   be undone.
+- **Checked:** each backup is read back as soon as it's written, so a full or failing drive shows
+  up straight away (the health check says so) rather than on the day you need the backup.
+- **Restoring any time:** a restore stops a library scan that's running and scans again after,
+  and damaged files are refused before anything changes.
 - **Kept forever:** backups you make yourself are never deleted automatically.
 - **A second copy somewhere else:** *Settings → Backups → Also keep a copy somewhere else* copies
   every backup to another folder as well (another drive, a network share, or a OneDrive / Google
@@ -215,7 +219,8 @@ never gets access to Docker itself.
 | **Scanning** | Probes new or changed files with `ffprobe`, removes deleted ones, and rescans periodically. If a drive is offline, its items and watch history are kept. |
 | **Filename matching** | `Movie (Year).ext`, release-style names like `Movie.2019.1080p.BluRay.x264`, `Show/Season 01/Show - S01E02 - Title.ext`, `1x02`, `S01E01-E02`, Specials folders. |
 | **Online metadata** | Posters, backgrounds, summaries, genres, ratings, cast and episode titles. TV shows use **TVmaze** (no key needed). Movies and TV can also use **TMDB**: paste a free API key in *Settings → Metadata & subtitles*. Pick the metadata language there too. New items are matched automatically. |
-| **Fix match / refresh** | When a title is matched wrong: *⋯ → Fix match…*, search, and pick the right result from a list with posters. *Refresh metadata* and *Unmatch* are in the same menu. |
+| **Fix match / refresh** | When a title is matched wrong: *⋯ → Fix match…*, search, and pick the right result from a list with posters. *Refresh metadata* and *Unmatch* are in the same menu. For a show, use the show's ⋯ menu (or *Fix show match…* on any of its episodes). |
+| **Fix episode** | When a file's name has the wrong numbers (DVD order, specials, a double episode named as one) and it shows another episode's title and picture: *⋯ → Fix episode…* on the episode, and pick the episode it really is from the show's list (which also shows which file each episode is now), or type the season and episode. It's kept when files are rescanned; *Use the file name's numbers* undoes it. |
 | **Edit anything** | Change the title, sort title, year, tagline, summary and genres of a movie, show or episode. Set a poster or background by **uploading an image**, pasting a URL, or choosing from the matched source's alternatives. Your edits always win: refreshes and rescans never overwrite them, and each field can be reset to automatic. |
 | **Artwork** | Local `poster.jpg` / `fanart.jpg` / `<name>-poster.jpg`, online artwork, your own uploads, or a frame grabbed from the video. |
 | **Browsing** | Home screen with Continue Watching, My List and Recently Added. Library grids with sort, genre filter, title filter, an Unwatched filter, adjustable poster size, an A–Z jump bar and **Shuffle**. Show pages with seasons, cast lists, clickable genres, and live search (press `/`). The scroll position is kept when you go back. |
