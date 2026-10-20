@@ -15,7 +15,7 @@ module.exports = function register(app) {
   route('GET', '/api/status', async (req, res, p, url, user) => json(res, 200, {
     name: 'Marquee', version: require('../package.json').version, hostname: os.hostname(),
     metadataProviders: metadata.available(), ...scanner.status(), activeTranscodes: transcodes.size + hls.active,
-    downloader: downloader.status(), subtitleSearch: opensubs.configured(),
+    downloader: downloader.status(), subtitleSearch: opensubs.configured(), previewClips: store.data.settings.previewClips !== false,
     // Your own downloads: how many are in progress, and which finished lately (for the "done" notice).
     myDownloads: canDownload(user) ? {
       active: downloader.jobs.filter((j) => j.userId === user.id && ['queued', 'running'].includes(j.status)).length,

@@ -7,7 +7,7 @@ module.exports = function register(app) {
     logs, fs, os, pipeline, lib, metadata, hlsLib, findProblems,
     ENCODER_NAMES, store, matcher, updater, hwaccel, hls, opensubs, activity,
     maintenance, intro, backups, auth, transcodes, HttpError, json, readBody,
-    readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary, path, fromHostPath, health, isRemote,
+    readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary, path, fromHostPath, health, isRemote, previews,
   } = app;
 
   // --- activity (admin): who is watching what right now ---
@@ -56,6 +56,7 @@ module.exports = function register(app) {
       updateCheck: st.updateCheck !== false,
       introDetection: st.introDetection !== false,
       home: lib.homeSettings(store),
+      previewClips: st.previewClips !== false,
       providers: metadata.available(),
       opensubtitles: { keySet: !!st.opensubtitles?.apiKey, keyHint: st.opensubtitles?.apiKey ? `••••${st.opensubtitles.apiKey.slice(-4)}` : null, username: st.opensubtitles?.username || '' },
     };
@@ -93,6 +94,10 @@ module.exports = function register(app) {
         st.opensubtitles = next;
         try { await opensubs.test(); } catch (err) { st.opensubtitles = prev.apiKey ? prev : undefined; if (!prev.apiKey) delete st.opensubtitles; throw err; }
       }
+    }
+    if (body.previewClips !== undefined) {
+      st.previewClips = !!body.previewClips;
+      if (!st.previewClips) setImmediate(() => previews.cleanup()); // turned off: the clips go
     }
     if (body.home !== undefined) {
       try { st.home = lib.cleanHome(body.home, lib.homeSettings(store)); } catch (err) { throw new HttpError(400, err.message); }

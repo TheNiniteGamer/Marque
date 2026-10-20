@@ -7,8 +7,8 @@ const { playerPrefs } = require('../lib/auth');
 module.exports = function register(app) {
   const {
     fs, crypto, path, pipeline, media, subs, lib, hlsLib,
-    SUB_DOWNLOADS, store, hwaccel, hls, offline, offlineLib, tokens, opensubs, parties, trickplay,
-    transcodes, HttpError, json, readBody, sendFile, getItem, resolveArt,
+    SUB_DOWNLOADS, store, hwaccel, hls, offline, offlineLib, previews, tokens, opensubs, parties, trickplay,
+    transcodes, HttpError, json, readBody, sendFile, getItem, getShow, resolveArt,
     subtitleVtt, castAddresses, remoteLimit, route,
   } = app;
 
@@ -26,6 +26,16 @@ module.exports = function register(app) {
     const limit = remoteLimit(req, item);
     if (limit && !limit.originalAllowed) throw new HttpError(403, `Away from home, videos play at up to ${limit.quality} (set by the server's admin)`);
   }
+
+  // --- preview clips (hovering over a title, the home page's banner): see lib/previews.js ---
+  // 404 until the clip is made (asking starts that), so the page just shows the picture meanwhile.
+  route('GET', '/api/previews/:id', async (req, res, { id }, url, user) => {
+    const isShow = Object.hasOwn(store.data.shows, id);
+    if (isShow) getShow(id, user); else getItem(id, user);
+    const file = previews.get(id);
+    if (!file) throw new HttpError(404, 'No preview yet');
+    sendFile(req, res, file, { type: 'video/mp4', headers: { 'Cache-Control': 'private, max-age=86400' } });
+  }, 'media');
 
   // --- downloads for watching offline (the phone app) ---
   // What can be downloaded: the original file (when allowed), and the sizes a copy can be made at.

@@ -365,12 +365,13 @@ function showPreview(card) {
   const watched = isShow ? x.episodeCount > 0 && !x.unwatchedCount : !!x.progress?.watched;
   const title = isEp ? x.showTitle : x.title;
   const ribbon = ribbonFor(x);
+  const clip = previewSrc(x);
   const el = document.createElement('div');
   el.className = 'hover-preview';
   el.style.cssText = `left:${left}px;top:${top}px;width:${w}px;transform-origin:${((art.left + art.width / 2 - left) / w) * 100}% 30%`;
   el.innerHTML = html`
     <a class="hp-art" href="${hrefFor(x)}" aria-label="${title}"><img src="${artUrl(isEp ? 'thumb' : 'backdrop', x)}" alt="">
-      ${x.trailerId ? html`<video muted loop playsinline preload="none"></video>` : ''}<span class="art-title">${title}</span></a>
+      ${clip ? html`<video muted loop playsinline preload="none"></video>` : ''}<span class="art-title">${title}</span></a>
     <div class="hp-body">
       <div class="hp-actions">
         <button class="round white" data-play="${isShow ? `show:${x.id}` : x.id}" aria-label="Play ${title}">${icon('play')}</button>
@@ -403,7 +404,7 @@ function showPreview(card) {
   if (v && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     setTimeout(() => {
       if (previewEl !== el) return;
-      v.src = `/api/items/${x.trailerId}/stream`;
+      v.src = clip;
       v.play().then(() => v.classList.add('playing')).catch(() => {});
     }, 700);
   }
@@ -438,15 +439,26 @@ document.addEventListener('click', async (e) => {
   location.hash = `#/play/${id}${t != null ? `?t=${t}` : ''}`;
 });
 
+// What plays behind a title: its trailer, else (when the server makes them) a preview clip from the
+// title itself (an episode: its show's). The clip 404s until it's been made, and then nothing plays.
+function previewSrc(x) {
+  if (x.trailerId) return `/api/items/${x.trailerId}/stream`;
+  if (state.status?.previewClips === false) return null;
+  if (x.type === 'movie' || x.type === 'show') return `/api/previews/${x.id}`;
+  if (x.type === 'episode' && x.showId) return `/api/previews/${x.showId}`;
+  return null;
+}
+
 // ---------- views ----------
-// The banner: a featured title, with its trailer playing quietly behind it when there is one.
+// The banner: a featured title, with its trailer (or a preview clip) playing quietly behind it.
 function heroBanner(h) {
   knownItems.set(h.id, h);
+  const clip = previewSrc(h);
   const isShow = h.type === 'show';
   const lib = state.libraries.find((l) => l.id === h.libraryId);
   return html`<section class="hero" aria-label="Featured: ${h.title}">
     <div class="hero-art"><img src="${artUrl('backdrop', h)}" alt="">
-      ${h.trailerId ? html`<video id="hero-video" muted playsinline loop preload="none" data-src="/api/items/${h.trailerId}/stream"></video>` : ''}</div>
+      ${clip ? html`<video id="hero-video" muted playsinline loop preload="none" data-src="${clip}"></video>` : ''}</div>
     <div class="hero-body">
       <div class="hero-kind"><span class="m-badge" aria-hidden="true">M</span>${isShow ? 'SERIES' : /youtube/i.test(lib?.name || '') ? 'VIDEO' : 'FILM'}</div>
       <h1 class="hero-title${h.title.length > 18 ? ' long' : ''}"><a href="${hrefFor(h)}">${h.title}</a></h1>
@@ -462,7 +474,7 @@ function heroBanner(h) {
         <a class="btn ghost" href="${hrefFor(h)}">${icon('info')}More info</a>
       </div>
     </div>
-    ${h.trailerId ? html`<button class="hero-mute" id="hero-mute" aria-label="Turn the trailer's sound on" hidden>${icon('mute')}</button>` : ''}
+    ${clip ? html`<button class="hero-mute" id="hero-mute" aria-label="Turn the sound on" hidden>${icon('mute')}</button>` : ''}
   </section>`;
 }
 function startHeroTrailer() {
@@ -478,7 +490,7 @@ function startHeroTrailer() {
   $('#hero-mute').onclick = () => {
     v.muted = !v.muted;
     $('#hero-mute').innerHTML = icon(v.muted ? 'mute' : 'sound').s;
-    $('#hero-mute').setAttribute('aria-label', v.muted ? "Turn the trailer's sound on" : "Turn the trailer's sound off");
+    $('#hero-mute').setAttribute('aria-label', v.muted ? 'Turn the sound on' : 'Turn the sound off');
   };
 }
 const pauseHero = () => $('#hero-video')?.pause();
@@ -729,6 +741,32 @@ function similarSection(list) {
   })}</div></section>`;
 }
 
+// Admins: where a show's files are on disk, season by season.
+function showFilesBox(f) {
+  const bySeason = new Map();
+  for (const e of f.episodes) {
+    const k = e.season ?? -1;
+    if (!bySeason.has(k)) bySeason.set(k, []);
+    bySeason.get(k).push(e);
+  }
+  const label = (e) => (e.episode == null ? '' : `E${String(e.episode).padStart(2, '0')}${e.episodeEnd ? `–E${String(e.episodeEnd).padStart(2, '0')}` : ''}`);
+  return html`<details class="tech-box"><summary>Files (${f.episodes.length})</summary>
+    ${f.folder ? html`<div class="file-path" style="margin:8px 0 12px">📁 <code>${f.folder}</code> <button class="btn small" data-copy="${f.folder}">Copy</button></div>` : ''}
+    ${[...bySeason].map(([s, eps]) => html`
+      <div class="files-season">${s === -1 ? 'Unsorted' : s === 0 ? 'Specials' : `Season ${s}`}</div>
+      ${eps.map((e) => html`<div class="file-row"><a href="#/item/${e.id}">${label(e) || 'Episode'}</a>
+        <code title="${e.file}">${e.file.split(/[\\/]/).pop()}</code><span class="muted">${[e.video, e.size ? fmtSize(e.size) : ''].filter(Boolean).join(' · ')}</span>
+        <button class="btn small" data-copy="${e.file}" aria-label="Copy the path of ${label(e)}">Copy</button></div>`)}`)}
+  </details>`;
+}
+
+// "Copy" next to a file path (admins).
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-copy]');
+  if (!b) return;
+  navigator.clipboard?.writeText(b.dataset.copy).then(() => toast('Path copied'), () => toast(b.dataset.copy));
+});
+
 async function viewShow({ params: [id], query, seq }) {
   const show = await api(`/api/shows/${id}`);
   const seasonKey = (s) => String(s.season);
@@ -811,7 +849,8 @@ async function viewShow({ params: [id], query, seq }) {
     </section>` : ''}
     ${extrasSection(show.extras)}
     ${castSection(show.cast)}
-    ${similarSection(show.similar)}`)) return;
+    ${similarSection(show.similar)}
+    ${show.files ? showFilesBox(show.files) : ''}`)) return;
 
   bindDetailActions(show);
   if (current != null && show.seasons.length) renderSeason();
@@ -883,10 +922,11 @@ async function viewItem({ params: [id], seq }) {
     ${extrasSection(it.extras)}
     ${it.type !== 'episode' ? castSection(it.cast) : ''}
     ${similarSection(it.similar)}
-    <details class="tech-box"><summary>File and playback details</summary>
+    <details class="tech-box" ${it.file ? raw('open') : ''}><summary>${it.file ? 'File' : 'File and playback details'}</summary>
       <dl class="tech">
+        ${it.file ? html`<dt>File</dt><dd class="file-path"><code>${it.file}</code> <button class="btn small" data-copy="${it.file}">Copy</button></dd>` : ''}
         <dt>Plays</dt><dd>${it.directPlay ? 'Directly in this browser' : 'Converted on the fly by the server'}</dd>
-        <dt>File</dt><dd>${it.file || it.fileName}</dd>
+        ${it.file ? '' : html`<dt>File</dt><dd>${it.fileName}</dd>`}
         <dt>Size</dt><dd>${fmtSize(it.size)}</dd>
         ${it.media ? html`
           <dt>Container</dt><dd>${it.media.container}</dd>
@@ -927,7 +967,7 @@ async function viewSearch({ query, seq }) {
 // ---------- settings ----------
 function cacheSummary(m) {
   const labels = { database: 'Database', artwork: 'Artwork', thumbs: 'Thumbnails', trickplay: 'Seek previews', fingerprints: 'Intro detection',
-    subtitles: 'Subtitle copies', downloadedSubtitles: 'Downloaded subtitles', conversions: 'Converting now', offline: 'Copies for phone downloads' };
+    subtitles: 'Subtitle copies', downloadedSubtitles: 'Downloaded subtitles', conversions: 'Converting now', offline: 'Copies for phone downloads', previews: 'Preview clips' };
   const parts = Object.entries(labels).filter(([k]) => m.sizes[k] > 0).map(([k, l]) => `${l} ${fmtSize(m.sizes[k])}`);
   return parts.length ? parts.join(' · ') : 'Nothing yet';
 }

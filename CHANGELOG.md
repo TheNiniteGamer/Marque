@@ -4,6 +4,18 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.12.0
+
+- **Previews for every title.** Resting the pointer on a film or show (and the home page's banner)
+  now plays a preview even without a trailer: a 30-second clip from a little way into the film, or
+  from a show's first episode past its intro. Each clip is made the first time it's wanted (so it
+  plays from the next hover on), small (480p, a few MB), in the background and never while
+  someone is watching; unused ones are removed after two months. Switch it off under
+  Settings → Playback → Previews.
+- **Admins see where files are.** A film's pop-up shows its file's full path (with Copy) at the
+  bottom; a show's has a **Files** box with its folder and every episode's file, size and quality,
+  season by season.
+
 ## 0.11.0
 
 **A calmer Settings, and a choice of what the home page shows.**

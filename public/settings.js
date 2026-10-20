@@ -149,8 +149,21 @@ const SETTINGS_PAGES = [
   {
     id: 'playback', label: 'Playback',
     load: () => Promise.all([api('/api/transcoding'), api('/api/intro'), api('/api/settings')]),
-    render: ([t, intro, settings]) => transcodingSection(t, intro, settings),
-    bind: () => bindTranscodingSection(),
+    render: ([t, intro, settings]) => html`
+      <h2 style="margin:0 0 12px">Previews</h2>
+      <div class="st-card">
+        <label class="st-row st-toggle"><span class="st-row-label">Play a preview when the pointer rests on a title
+          <span class="st-row-note">Its trailer, or a 30-second clip from the film or show itself (also behind the home page’s banner). Clips are made the first time they’re wanted, never while someone is watching, and take a few MB each.</span></span>
+          <input type="checkbox" class="switch" id="pv-on" ${settings.previewClips ? 'checked' : ''}></label>
+      </div>
+      ${transcodingSection(t, intro, settings)}`,
+    bind: () => {
+      bindTranscodingSection();
+      $('#pv-on').onchange = async (e) => {
+        try { await api('/api/settings', { method: 'PATCH', body: { previewClips: e.target.checked } }); toast(e.target.checked ? 'Previews on' : 'Previews off (the clips made so far are removed)'); } catch (err) { toast(err.message, true); }
+        if (state.status) state.status.previewClips = e.target.checked;
+      };
+    },
   },
   {
     id: 'metadata', label: 'Metadata & subtitles',

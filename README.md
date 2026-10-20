@@ -197,7 +197,7 @@ never gets access to Docker itself.
 | --- | --- |
 | **Look** | A red-and-black design: a top bar, a featured banner on the home page (with its trailer playing quietly when there is one), rows that scroll sideways (Continue Watching, My List, New in each library, collections, "Because you watched …", genres), wide cards with titles on the artwork, and a **More info** pop-up with episodes, extras and **More like this**. Works on phones (with a bar along the bottom) and in the Android app. |
 | **TV apps** | A **Roku** channel and an **Android TV** app, signed in by typing the code the TV shows into your phone. Both have profiles; Android TV also has voice search and puts Continue Watching on the TV's home screen. TV mode in the web interface: bigger highlights, the remote's arrows move between titles, Back closes pop-ups. |
-| **Hover previews** | On a computer, resting the pointer on a title opens a larger card with its trailer playing quietly (when there is one), Play, My List and More info. |
+| **Hover previews** | On a computer, resting the pointer on a title opens a larger card playing its trailer quietly, or (without a trailer) a 30-second clip from the title itself that the server makes the first time it's wanted, with Play, My List and More info. The home page's banner plays one too. On/off in *Settings → Playback*. |
 | **Accounts** | Sign-in screen, with an admin account created on first run. Admins add users, choose which libraries each one can see, and decide who can use the downloader. Each user has their own watch history, Continue Watching and resume points. Admins can **reset a password** (a temporary one they must change when they sign in) and **unlock** someone locked out by wrong passwords or PINs. |
 | **Libraries** | Movie and TV Show libraries, each combining one or more folders, which can be on different drives. Everything inside the folders is found, including shows in folders of their own (`Kids/Bluey/…`). Add, edit and remove them in Settings with a built-in folder picker that lists your drives, accepts typed paths and shows how many videos a folder holds; whole drives can be shared with Docker (see *Other drives*). |
 | **Scanning** | Probes new or changed files with `ffprobe`, removes deleted ones, and rescans periodically. If a drive is offline, its items and watch history are kept. |
@@ -359,6 +359,7 @@ lib/hls.js          adaptive streaming: VOD playlists, on-demand segment convers
 lib/requests.js     requests ("can we get …?"): asking, the admin's list, noticing when a title arrives
 lib/notifications.js  each person's notifications (new episodes, requests, health)
 lib/health.js       the health check (disk space, folders, backups, updates, errors)
+lib/previews.js     preview clips for hovering over titles (made on first use, in the background)
 lib/offline.js      copies for the phone app's downloads (MP4s made in the background, kept a week)
 lib/ratings.js      maturity ratings as ages, and what each profile is allowed to see
 lib/intro.js        intro and credits detection (Chromaprint audio fingerprints compared across a season)
