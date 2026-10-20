@@ -436,7 +436,12 @@ document.addEventListener('click', async (e) => {
     id = show.upNext.id;
   }
   const t = btn.dataset.t;
-  location.hash = `#/play/${id}${t != null ? `?t=${t}` : ''}`;
+  // A version picked on the film's page (else the player picks the best for this device).
+  const v = btn.closest('.dlg-actions')?.querySelector('[data-version]')?.value;
+  const q = new URLSearchParams();
+  if (t != null) q.set('t', t);
+  if (v) q.set('v', v);
+  location.hash = `#/play/${id}${q.size ? `?${q}` : ''}`;
 });
 
 // What plays behind a title: its trailer, else (when the server makes them) a preview clip from the
@@ -889,6 +894,8 @@ async function viewItem({ params: [id], seq }) {
           ${it.media ? html`
             <button class="btn play" data-play="${id}" ${resumable ? '' : raw('data-t="0"')}>${icon('play')}${resumable ? 'Resume' : 'Play'}</button>
             ${resumable ? html`<button class="btn ghost" data-play="${id}" data-t="0">From the start</button>` : ''}` : ''}
+          ${it.versions?.length > 1 ? html`<select class="version-pick" data-version title="Which version to play" aria-label="Version">
+            <option value="">Best for this device</option>${it.versions.map((v) => html`<option value="${v.id}">${v.label}</option>`)}</select>` : ''}
           ${listButton(it)}
           <button class="round" id="item-watch" aria-label="${p?.watched ? 'Mark unwatched' : 'Mark watched'}" title="${p?.watched ? 'Mark unwatched' : 'Mark watched'}">${p?.watched ? '↺' : icon('check')}</button>
           ${phoneDownloads() ? html`<button class="round" data-offline="${id}" aria-label="Download to watch offline" title="Download to watch offline">${icon('download')}</button>`
@@ -1112,9 +1119,33 @@ let player = null;
 const serverUp = () => fetch('/api/health', { cache: 'no-store' }).then((r) => r.ok).catch(() => false);
 function closePlayer() { if (player) { player.destroy(); player = null; } }
 
+// HEVC (x265) this browser decodes itself (Safari; Chrome and Edge with a graphics card that can).
+let probeVideo = null;
+function browserHevc(v) {
+  if (v?.codec !== 'hevc' && v?.videoCodec !== 'hevc') return false;
+  const ten = /10/.test(v.profile || '') || /10/.test(v.pixFmt || '');
+  const type = `video/mp4; codecs="${ten ? 'hvc1.2.4.L153.B0' : 'hvc1.1.6.L153.B0'}"`;
+  probeVideo ||= document.createElement('video');
+  return !!window.MediaSource?.isTypeSupported?.(type) || probeVideo.canPlayType(type) === 'probably';
+}
+
+// Which copy of a film this browser plays: the best one it plays as it is, else the best whose
+// picture it takes unconverted, else the smallest (the least work for the server). Away from
+// home, the smallest of those instead.
+function chooseVersion(list) {
+  const away = defaultQuality() !== 'original';
+  const best = (l) => { const s = [...l].sort((a, b) => (b.height || 0) - (a.height || 0)); return away ? s[s.length - 1] : s[0]; };
+  const asIs = (v) => v.directPlay || (browserHevc(v) && /\.(mp4|m4v|mov)$/i.test(v.fileName || '') && ['aac', 'mp3', 'opus', 'flac', null].includes(v.audioCodec));
+  const direct = list.filter(asIs);
+  if (direct.length) return best(direct);
+  const remux = list.filter((v) => v.remux);
+  if (remux.length) return best(remux);
+  return [...list].sort((a, b) => (a.height || 0) - (b.height || 0))[0];
+}
+
 async function viewPlay({ params: [id], query }) {
   closePlayer();
-  const item = await api(`/api/items/${id}`);
+  let item = await api(`/api/items/${id}`);
   if (!item.media) { toast('This file cannot be played', true); return history.back(); }
   let start = query.has('t') ? Number(query.get('t')) || 0 : 0;
   if (!query.has('t') && item.progress && !item.progress.watched && item.progress.position > 15) start = item.progress.position;
@@ -1127,9 +1158,15 @@ async function viewPlay({ params: [id], query }) {
   // Inside the Android app, videos open in the phone's native player (watch parties stay in the web player).
   if (window.MarqueeAndroid?.play && !partyId) {
     window.MarqueeAndroid.play(JSON.stringify({ id: item.id, start, autoplayNext: playerPref('autoplayNext'), subsOn: store.get('subsOn', false),
-      autoSkipIntro: playerPref('autoSkipIntro'), skipFade: playerPref('skipFade'), nightMode: playerPref('nightMode'), quality: store.get('quality', '') }));
+      autoSkipIntro: playerPref('autoSkipIntro'), skipFade: playerPref('skipFade'), nightMode: playerPref('nightMode'), quality: store.get('quality', ''),
+      ...(query.get('v') ? { version: query.get('v') } : {}) }));
     if (state.inAppNav) history.back(); else location.replace(`#/item/${item.id}`);
     return;
+  }
+  // A film with several versions: the one picked on its page, or the best for this browser.
+  if (item.versions?.length > 1) {
+    const chosen = item.versions.find((v) => v.id === query.get('v')) || chooseVersion(item.versions);
+    if (chosen && chosen.id !== item.id) item = { ...(await api(`/api/items/${chosen.id}`)), progress: item.progress };
   }
   player = new Player(item, start, { partyId });
 }
@@ -1339,13 +1376,7 @@ class Player {
   }
 
   // HEVC (x265) this browser decodes itself (Safari; Chrome and Edge with a graphics card that can).
-  hevcOk() {
-    const v = this.item.media?.video;
-    if (v?.codec !== 'hevc' || this.hevcFailed) return false;
-    const ten = /10/.test(v.profile || '') || /10/.test(v.pixFmt || '');
-    const type = `video/mp4; codecs="${ten ? 'hvc1.2.4.L153.B0' : 'hvc1.1.6.L153.B0'}"`;
-    return !!window.MediaSource?.isTypeSupported?.(type) || this.v.canPlayType(type) === 'probably';
-  }
+  hevcOk() { return !this.hevcFailed && browserHevc(this.item.media?.video); }
   // …in an MP4 with sound the browser plays too: played as it is.
   hevcFile() {
     const ext = (this.item.fileName || '').toLowerCase().split('.').pop();

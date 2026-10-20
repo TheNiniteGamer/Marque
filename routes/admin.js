@@ -256,6 +256,9 @@ module.exports = function register(app) {
     store.save();
     json(res, 200, lib.itemDetail(store, user, item));
   }, 'admin');
+  // Formats & space: which titles need converting for which players (see lib/report.js).
+  route('GET', '/api/library-report', async (req, res) => json(res, 200, require('../lib/report').libraryReport(store)), 'admin');
+
   route('GET', '/api/problems', async (req, res) => json(res, 200, {
     ...findProblems(store, metadata), recheck: matcher.rechecking, lastRecheck: matcher.lastRecheck || null,
   }), 'admin');

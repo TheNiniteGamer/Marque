@@ -942,3 +942,26 @@ input.switch:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .file-row a { color: var(--text); }
 @media (max-width: 640px) { .file-row { grid-template-columns: 56px minmax(0, 1fr) auto; } .file-row .muted { display: none; } }
 .p-reconnect .spinner { margin: 0 auto 12px; }
+.version-pick { height: 44px; padding: 0 10px; border-radius: 6px; border: 0; background: rgba(109,109,110,.7); color: #fff; font: inherit; font-size: 14px; max-width: 220px; }
+/* Settings → Formats & space */
+.rep-bar { display: flex; height: 10px; margin: 16px 20px 6px; border-radius: 5px; overflow: hidden; background: var(--bg-3); }
+.rep-bar span, .rep-dot { background: #666; }
+.rep-4K { background: #e31b23 !important; } .rep-1440p { background: #f08c2e !important; } .rep-1080p { background: #46a758 !important; }
+.rep-720p { background: #3e8ed0 !important; } .rep-SD { background: #8a8f98 !important; } .rep-x { background: #444 !important; }
+.rep-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: transparent; }
+.rep-line { padding-top: 10px; padding-bottom: 10px; }
+.rep-players { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 8px; }
+.rep-player { display: grid; gap: 2px; text-align: left; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-2); color: var(--text); cursor: pointer; font: inherit; }
+.rep-player:hover, .rep-player:focus-visible { border-color: #888; }
+.rep-player b { font-size: 26px; }
+.rep-filter { gap: 16px; flex-wrap: wrap; align-items: center; margin: 14px 0 10px; }
+.rep-item { padding: 14px 20px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.rep-item:first-child { border-top: 0; }
+.rep-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rep-title a { font-weight: 600; color: var(--text); }
+.rep-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.rep-size { margin-left: auto; }
+.rep-fates { display: flex; flex-wrap: wrap; gap: 6px; }
+.rep-fate { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--bg-3); }
+.rep-fate small { opacity: .8; }
+.rep-fate.direct { color: #8fd19e; } .rep-fate.light { color: #f0c05a; } .rep-fate.convert { color: #ff8a8a; }

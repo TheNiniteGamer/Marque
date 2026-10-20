@@ -64,7 +64,11 @@ test.before(async () => {
   const libs = Object.fromEntries((await admin('GET', '/api/libraries')).data.map((l) => [l.name, l.id]));
   lib = libs.Movies;
   // By file name (titles change once matched).
-  for (const it of (await admin('GET', `/api/libraries/${lib}/items`)).data.items) titles[(await admin('GET', `/api/items/${it.id}`)).data.fileName.replace(/\.mp4$/, '')] = it.id;
+  for (const it of (await admin('GET', `/api/libraries/${lib}/items`)).data.items) {
+    const d = (await admin('GET', `/api/items/${it.id}`)).data;
+    titles[d.fileName.replace(/\.mp4$/, '')] = it.id;
+    for (const v of d.versions || []) titles[v.fileName.replace(/\.mp4$/, '')] = v.id; // (copies of one film are listed once)
+  }
   titles.office = (await admin('GET', `/api/libraries/${libs.TV}/items`)).data.items[0].id;
 });
 test.after(async () => { await srv?.stop(); mock.close(); fs.rmSync(ROOT, { recursive: true, force: true }); });
@@ -118,6 +122,7 @@ test('ids in file and folder names match exactly', async () => {
   // "Heat Wave" would be the obvious search result, but the IMDb id says it's Heat.
   const wave = await meta('Heat Wave [imdbid-tt0113277]');
   assert.equal(wave.match.providerId, '949');
+  assert.equal(wave.versionOf || heat.versionOf, wave.versionOf ? heat.id : wave.id, 'two copies of the same film: one title, two versions');
   assert.ok(requests.includes('/3/find/tt0113277?language=en-US&external_source=imdb_id&api_key=k'));
   const office = (await admin('GET', `/api/shows/${titles.office}`)).data;
   assert.deepEqual([office.title, office.match.providerId], ['The Office', '2316']);

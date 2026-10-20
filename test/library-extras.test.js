@@ -94,7 +94,7 @@ test('problem finder: offline folders, unreadable, unmatched, duplicates, missin
   assert.deepEqual(p.offline, [{ library: 'Movies', path: path.join(ROOT, 'nope') }]);
   assert.deepEqual(p.unreadable.map((x) => x.id), ['c']);
   assert.deepEqual(p.unmatched.map((x) => x.id).sort(), ['c', 's2']);
-  assert.deepEqual(p.duplicates.map((g) => g.copies.map((x) => x.id).sort()), [['a', 'b'], ['e5', 'e5b']]);
+  assert.deepEqual(p.duplicates.map((g) => g.copies.map((x) => x.id).sort()), [['e5', 'e5b']], 'two copies of a film are its versions, not a problem');
   assert.deepEqual(p.missingEpisodes, [{ showId: 's1', show: 'Show', season: 1, missing: [4] }], 'S01E02-E03 covers 3; specials are ignored');
   assert.deepEqual(findProblems(store, { providersFor: () => [] }).unmatched, [], 'nothing is "unmatched" without a metadata source');
 });

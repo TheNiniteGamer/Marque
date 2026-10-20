@@ -15,6 +15,7 @@ const ST_ICON = {
   backups: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   server: '<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>',
   requests: '<path d="M4 5h16v11H8l-4 4z"/>',
+  report: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
 };
 const stIcon = (k) => raw(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ST_ICON[k] || ''}</svg>`);
@@ -106,6 +107,60 @@ const SETTINGS_PAGES = [
           }
         } catch (err) { toast(err.message, true); }
       };
+    },
+  },
+  {
+    // Which titles need converting for which players, and what the space goes on (lib/report.js).
+    id: 'report', label: 'Formats & space',
+    load: () => api('/api/library-report'),
+    render: (r) => {
+      const order = ['4K', '1440p', '1080p', '720p', 'SD', '?'];
+      const res = order.filter((k) => r.byRes[k]);
+      return html`
+        <h2 class="st-sub" style="margin-top:0">Space</h2>
+        <div class="st-card rep-space">
+          <div class="rep-bar">${res.map((k) => html`<span class="rep-${k.replace('?', 'x')}" style="width:${(r.byRes[k].bytes / (r.total || 1)) * 100}%" title="${k}"></span>`)}</div>
+          ${res.map((k) => html`<div class="st-row rep-line"><span class="rep-dot rep-${k.replace('?', 'x')}"></span><span class="st-row-label">${k === '?' ? 'Unknown' : k}</span>
+            <span class="st-row-value">${r.byRes[k].count} file${r.byRes[k].count === 1 ? '' : 's'} · ${fmtSize(r.byRes[k].bytes)}</span></div>`)}
+          <div class="st-row rep-line"><span class="rep-dot"></span><span class="st-row-label">HDR</span><span class="st-row-value">${r.hdr.count} file${r.hdr.count === 1 ? '' : 's'} · ${fmtSize(r.hdr.bytes)}</span></div>
+          <div class="st-row rep-line"><span class="rep-dot"></span><span class="st-row-label">Altogether</span><span class="st-row-value">${r.files} files · ${fmtSize(r.total)}</span></div>
+        </div>
+        <h2 class="st-sub">Converted for each kind of player</h2>
+        <div class="rep-players">${r.players.map((p) => html`<button class="rep-player" data-player="${p.id}">
+          <b>${r.counts[p.id].convert}</b><span>${p.label}</span><small class="muted">picture converted${r.counts[p.id].light ? ` · ${r.counts[p.id].light} sound only` : ''}</small></button>`)}</div>
+        ${helpText(html`Converting the picture is what keeps a server busy; converting only the sound (or the file type) is cheap.
+          A <b>1080p H.264 MP4 with AAC sound</b> plays as it is everywhere. To keep a 4K copy for a big TV as well, put both in the film’s folder,
+          e.g. <code>Dune (2021) - 4K.mkv</code> and <code>Dune (2021) - 1080p.mp4</code>: they show as one film, and each device plays the copy it can.`, 'What should I replace?')}
+        <div class="row rep-filter">
+          <label>Player <select id="rep-player"><option value="">Any</option>${r.players.map((p) => html`<option value="${p.id}">${p.label}</option>`)}</select></label>
+          <label class="check"><input type="checkbox" id="rep-light"> Include sound-only conversions</label>
+          <span class="muted" id="rep-count"></span>
+        </div>
+        <div class="st-card rep-list" id="rep-list"></div>`;
+    },
+    bind: (r) => {
+      const icon = { direct: '✓', light: '◐', convert: '✕' };
+      const word = { direct: 'plays as it is', light: 'sound converted', convert: 'picture converted' };
+      let limit = 60;
+      const draw = () => {
+        const only = $('#rep-player').value;
+        const light = $('#rep-light').checked;
+        const bad = (t, id) => t.players[id].how === 'convert' || (light && t.players[id].how === 'light');
+        const list = r.titles.filter((t) => (only ? bad(t, only) : r.players.some((p) => bad(t, p.id))));
+        $('#rep-count').textContent = `${list.length} title${list.length === 1 ? '' : 's'}`;
+        $('#rep-list').innerHTML = list.length ? html`${list.slice(0, limit).map((t) => html`<div class="rep-item">
+          <div class="rep-title"><a href="#/item/${t.id}">${t.title}</a>
+            <span class="rep-tags"><span class="tag">${t.res}</span>${t.hdr ? html`<span class="tag">${t.hdr}</span>` : ''}<span class="tag">${t.codec}</span>${t.audio ? html`<span class="tag">${t.audio}</span>` : ''}<span class="tag">${t.container}</span>${t.versions > 1 ? html`<span class="tag">${t.versions} versions</span>` : ''}</span>
+            <span class="muted rep-size">${fmtSize(t.size)}</span></div>
+          <div class="rep-fates">${r.players.map((p) => { const f = t.players[p.id]; return html`<span class="rep-fate ${f.how}" title="${p.label}: ${word[f.how]}${f.why.length ? ` (${f.why.join(', ')})` : ''}">${icon[f.how]} ${p.label}${f.how !== 'direct' && f.why.length ? html` <small>· ${f.why.join(', ')}</small>` : ''}</span>`; })}</div>
+        </div>`)}${list.length > limit ? html`<button class="btn small" id="rep-more" style="margin:12px 20px">Show more</button>` : ''}`.s
+          : html`<div class="st-row muted">Everything here plays as it is${only ? ' on that player' : ''}.</div>`.s;
+        $('#rep-more')?.addEventListener('click', () => { limit += 100; draw(); });
+      };
+      $('#rep-player').onchange = () => { limit = 60; draw(); };
+      $('#rep-light').onchange = () => { limit = 60; draw(); };
+      for (const b of $$('.rep-player')) b.onclick = () => { $('#rep-player').value = b.dataset.player; limit = 60; draw(); };
+      draw();
     },
   },
   {

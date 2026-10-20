@@ -79,6 +79,8 @@ sub init()
     m.spin.control = "start"
     ' Riding out a server restart (an update): checks every 2 s for up to 90 s, then carries on.
     m.lastGood = -1
+    m.versionPicked = false
+    m.playId = ""
     m.sourceFailed = false
     m.reconnecting = false
     m.reconnectTimer = CreateObject("roSGNode", "Timer")
@@ -96,24 +98,63 @@ sub onFocusChange()
 end sub
 
 sub onParams()
-    id = m.top.params.id
-    mqApi("/api/items/" + id, "onItem")
-    mqApi("/api/items/" + id + "/playback", "onPlayback")
-    mqApi("/api/items/" + id + "/trickplay", "onTrickplay")
+    requestItem(m.top.params.id)
+end sub
+
+' Answers are tagged with the id they're for: a film with several versions switches to another.
+sub requestItem(id as String)
+    m.playId = id
+    mqApi("/api/items/" + id, "onItem", "GET", invalid, id)
+    mqApi("/api/items/" + id + "/playback", "onPlayback", "GET", invalid, id)
+    mqApi("/api/items/" + id + "/trickplay", "onTrickplay", "GET", invalid, id)
 end sub
 
 sub onItem(event as Object)
     r = event.getData()
+    if mqStr(r.tag) <> m.playId then return
     if r.status <> 200 or r.data = invalid then
         fail("Can't play this: " + r.error)
         return
+    end if
+    if not m.versionPicked then
+        m.versionPicked = true
+        v = pickVersion(r.data)
+        if v <> "" and v <> mqStr(r.data.id) then
+            m.pb = invalid
+            m.tp = invalid
+            requestItem(v)
+            return
+        end if
     end if
     m.item = r.data
     start()
 end sub
 
+' A film with several versions: the best one the Roku plays as it is that fits the TV (4K on a
+' 4K TV), else the smallest it plays as it is, else the smallest.
+function pickVersion(x as Object) as String
+    vs = x.versions
+    if vs = invalid or vs.Count() < 2 then return ""
+    screenH = Val(CreateObject("roDeviceInfo").GetVideoMode())
+    if screenH <= 0 then screenH = 1080
+    fits = invalid
+    direct = invalid
+    smallest = invalid
+    for each v in vs
+        h = mqNum(v.height)
+        asIs = canPlayDirectly({ media: { container: v.container, video: { codec: v.videoCodec, profile: v.profile, pixFmt: v.pixFmt }, audio: [{ codec: v.audioCodec }] } })
+        if asIs and h <= screenH * 1.05 and (fits = invalid or h > mqNum(fits.height)) then fits = v
+        if asIs and (direct = invalid or h < mqNum(direct.height)) then direct = v
+        if smallest = invalid or h < mqNum(smallest.height) then smallest = v
+    end for
+    if fits <> invalid then return mqStr(fits.id)
+    if direct <> invalid then return mqStr(direct.id)
+    return mqStr(smallest.id)
+end function
+
 sub onPlayback(event as Object)
     r = event.getData()
+    if mqStr(r.tag) <> m.playId then return
     if r.status <> 200 or r.data = invalid then
         fail("Can't play this: " + r.error)
         return
@@ -132,6 +173,7 @@ end sub
 
 sub onTrickplay(event as Object)
     r = event.getData()
+    if r.tag <> invalid and mqStr(r.tag) <> "" and mqStr(r.tag) <> m.playId then return
     if r.status = 200 and r.data <> invalid and mqIsTrue(r.data.ready) then m.tp = r.data
 end sub
 

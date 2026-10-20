@@ -102,6 +102,8 @@ public class PlayerActivity extends Activity {
     boolean autoplayNext = true;
     private long lastReport;
     private boolean pipUsed;
+    private String askedVersion;   // a version picked on the film's page
+    private int screenHeight = 1080;
     // Riding out a server restart (an update): where it was, and whether it was playing.
     private boolean reconnecting, resumePaused, lastPlaying, stallChecked, sourceFailed;
     private double lastGood = -1;
@@ -162,6 +164,8 @@ public class PlayerActivity extends Activity {
             nightMode = req.optBoolean("nightMode", false);
             offline = req.optBoolean("offline", false);
             qualityPref = req.optString("quality", "");
+            askedVersion = req.isNull("version") ? null : req.optString("version", null);
+            screenHeight = maxScreenHeight();
             load(req.getString("id"), req.optDouble("start", 0));
         } catch (Exception e) {
             finish();
@@ -189,9 +193,12 @@ public class PlayerActivity extends Activity {
         spinner.setVisibility(View.VISIBLE);
         io.execute(() -> {
             try {
-                JSONObject it = Net.getJson(base + "/api/items/" + id);
+                JSONObject first = Net.getJson(base + "/api/items/" + id);
+                // A film with several versions: the one asked for, else the best this device plays.
+                String vid = pickVersion(first);
+                final JSONObject it = vid != null && !vid.equals(first.optString("id")) ? Net.getJson(base + "/api/items/" + vid) : first;
                 JSONObject pb = null;
-                try { pb = Net.getJson(base + "/api/items/" + id + "/playback"); } catch (Exception ignored) { } // older servers
+                try { pb = Net.getJson(base + "/api/items/" + it.optString("id") + "/playback"); } catch (Exception ignored) { } // older servers
                 final JSONObject p = pb;
                 runOnUiThread(() -> begin(it, p, start));
             } catch (Exception e) {
@@ -364,6 +371,44 @@ public class PlayerActivity extends Activity {
                 });
             });
         }
+    }
+
+    private static String str(JSONObject o, String key) { return o.isNull(key) ? null : o.optString(key, null); }
+
+    /**
+     * Which copy of a film to play (null: it has only one): the one picked on its page; else the
+     * best this device plays as it is that isn't bigger than its screen (a 4K one on a 4K TV, the
+     * 1080p one on a phone or a 1080p TV); else the smallest it plays as it is; else the smallest.
+     * Away from home, the smallest it plays as it is.
+     */
+    private String pickVersion(JSONObject it) {
+        JSONArray vs = it.optJSONArray("versions");
+        if (vs == null || vs.length() < 2) return null;
+        String asked = askedVersion;
+        askedVersion = null; // (only for the first film; the next one is chosen afresh)
+        for (int i = 0; asked != null && i < vs.length(); i++) if (asked.equals(vs.optJSONObject(i).optString("id"))) return asked;
+        boolean away = !"original".equals(PlaybackPlan.defaultQuality(qualityPref, Uri.parse(base).getHost()));
+        Set<String> dec = decoders();
+        JSONObject fits = null, direct = null, smallest = null;
+        for (int i = 0; i < vs.length(); i++) {
+            JSONObject v = vs.optJSONObject(i);
+            int h = v.optInt("height", 0);
+            boolean asIs = PlaybackPlan.canDirectPlay(str(v, "fileName"), str(v, "videoCodec"), str(v, "profile"), str(v, "audioCodec"), dec);
+            if (asIs && h <= screenHeight * 1.05 && (fits == null || h > fits.optInt("height", 0))) fits = v;
+            if (asIs && (direct == null || h < direct.optInt("height", 0))) direct = v;
+            if (smallest == null || h < smallest.optInt("height", 0)) smallest = v;
+        }
+        JSONObject pick = away ? (direct != null ? direct : smallest) : fits != null ? fits : direct != null ? direct : smallest;
+        return pick.optString("id");
+    }
+
+    /** The tallest picture this screen (or the TV it's plugged into) shows. */
+    private int maxScreenHeight() {
+        int h = 0;
+        try {
+            for (android.view.Display.Mode m : getWindowManager().getDefaultDisplay().getSupportedModes()) h = Math.max(h, Math.min(m.getPhysicalWidth(), m.getPhysicalHeight()));
+        } catch (Exception ignored) { }
+        return h > 0 ? h : 1080;
     }
 
     private String burnQuery() { return burn >= 0 ? "&burn=" + burn : ""; }

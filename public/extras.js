@@ -973,7 +973,7 @@ function problemsSection(p) {
       help: 'No poster or details were found. Renaming the file as “Title (Year)”, or Find a match, usually fixes it.' },
     { key: 'duplicates', title: 'Duplicates', items: p.duplicates,
       row: (g) => html`<li><b>${g.title}</b> — ${g.copies.length} copies<ul>${g.copies.map((x) => html`<li>${link(x)} <span class="muted">(${x.library})</span>${where(x)}</li>`)}</ul></li>`,
-      help: 'The same movie or episode more than once (fine if you keep several versions on purpose).' },
+      help: 'The same episode more than once. (Several copies of a film are fine: they show as one title with a choice of versions.)' },
     { key: 'missing', title: 'Missing episodes', items: p.missingEpisodes,
       row: (s) => html`<li><a href="#/show/${s.showId}?season=${s.season}">${s.show}</a>, season ${s.season}: episode${s.missing.length === 1 ? '' : 's'} ${s.missing.join(', ')}</li>`,
       help: 'Gaps in episode numbers, up to the last episode you have.' },

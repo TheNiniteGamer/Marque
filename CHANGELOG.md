@@ -4,6 +4,25 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.17.0
+
+- **Several versions of a film.** Put two copies of a film in its folder, e.g.
+  `Dune (2021) - 4K.mkv` and `Dune (2021) - 1080p.mp4` (or any two copies matched to the same
+  film): they show as one title, and each device plays the copy it can play as it is. The
+  Shield (or another 4K Android TV / Roku) on a 4K TV gets the 4K one; phones, 1080p TVs and
+  browsers get the 1080p one; away from home, the smaller one. The film's page has a version
+  picker next to Play ("Best for this device" by default). Watch progress, My List and
+  thumbs are shared between the copies, and they no longer show up as duplicates.
+- **Discs ripped with MakeMKV** ("Men In Black_t00.mkv", "_t01"… in one folder) are one film:
+  the longest title is the film, named after the disc (or its folder), and titles under half its
+  length become its extras ("Disc extra 1", "Disc extra 2"…). Longer ones (another cut) become
+  versions of it.
+- **Settings → Formats & space**: what the library's space goes on (4K, 1080p, 720p, SD, HDR),
+  and which films and episodes need their picture converted for web browsers, a 4K Roku,
+  Android TV / the Shield and 1080p TVs, with the reason (HEVC, 10-bit H.264, DTS sound, 4K…),
+  biggest first. A film with a version that plays as it is doesn't count.
+- Android app 1.12.0, Android TV 1.7.0 and Roku 1.9 choose between versions.
+
 ## 0.16.1
 
 **Less CPU while converting, with or without a graphics card.**
