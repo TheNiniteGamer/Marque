@@ -120,7 +120,7 @@ const hls = new hlsLib.HlsManager(TRANSCODE_DIR, hwaccel);
 const tokens = new MediaTokens(store);
 const opensubs = new OpenSubtitles(() => store.data.settings);
 const parties = new Parties();
-const trickplay = new Trickplay(DATA_DIR);
+const trickplay = new Trickplay(DATA_DIR, { hwaccel });
 const keyframes = new Keyframes(path.join(DATA_DIR, 'keyframes'));
 const activity = new Activity();
 const maintenance = new Maintenance(store, DATA_DIR, { transcodeDir: TRANSCODE_DIR });

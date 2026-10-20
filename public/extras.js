@@ -1375,6 +1375,9 @@ async function viewActivity({ seq }) {
             <div class="muted" style="font-size:12px">${fmtClock(s.position)} / ${fmtClock(s.item.duration)}</div>` : ''}
         </div>
       </div>`) : html`<div class="panel muted">Nobody is watching right now.</div>`}
+    ${a.background?.length ? html`<h2 style="margin:24px 0 12px">Background work</h2>
+      <p class="muted" style="margin:-6px 0 10px;font-size:13px">What the server is doing by itself (it also uses the CPU or the graphics card).</p>
+      ${a.background.map((b) => html`<div class="panel" style="padding:10px 14px">${b.what}${b.title ? html` <span class="muted">· ${b.title}</span>` : ''}${b.gpu ? html` <span class="muted">· on the graphics card</span>` : ''}</div>`)}` : ''}
     ${a.others.length ? html`<h2 style="margin:24px 0 12px">Other conversions</h2>
       <p class="muted" style="margin:-6px 0 10px;font-size:13px">Streams with no player reporting back, for example a Chromecast fetching the video itself.</p>
       ${a.others.map((o) => html`<div class="panel" style="padding:10px 14px">${title(o.item)} <span class="muted">· ${o.user || 'someone'} · ${o.kind === 'hls' ? `adaptive ${o.quality}` : 'converting'}${o.encoderName ? ` on ${o.encoderName}` : ''}</span></div>`)}` : ''}`;

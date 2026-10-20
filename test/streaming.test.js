@@ -191,6 +191,19 @@ test('HLS falls back from NVIDIA decoding to the CPU when the card cannot start'
   } finally { mgr.stopAll(); }
 });
 
+test('conversion pauses a short way ahead of the player instead of racing to the end', { skip: process.platform === 'win32' }, async () => {
+  const file = path.join(ROOT, 'long.mp4');
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=10:d=160', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', file]);
+  const mgr = new hls.HlsManager(path.join(ROOT, 'hls-pace'), { active: 'software', reportFailure() {} });
+  const item = { id: 'pace', file, media: { duration: 160, bitrate: 3e5, video: { codec: 'h264', pixFmt: 'yuv420p', width: 320, height: 180 }, audio: [] } };
+  try {
+    await mgr.segment(item, { quality: '360p', sid: 'unit-test-pace' }, 0);
+    await until(() => mgr.status()[0]?.paused, 20000);
+    const made = mgr.lastProduced([...mgr.sessions.values()][0]);
+    assert.ok(made >= 10 && made <= 16, `paused about 12 segments ahead, not at the end of 40 (made ${made})`);
+  } finally { mgr.stopAll(); }
+});
+
 test('a graphics card that keeps failing is dropped for the CPU', () => {
   const hw = new HwAccel(memStore());
   hw.active = 'nvenc';

@@ -4,6 +4,20 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.16.1
+
+**Less CPU while converting, with or without a graphics card.**
+- **Seek-bar previews on the graphics card.** The first time a film is opened, its seek-bar
+  pictures are made from all of its keyframes, which for a 4K HEVC film kept every CPU core busy
+  for minutes, right as playback started. With an NVIDIA card this is now done on the card; without
+  one, it uses two CPU threads instead of all of them.
+- **Conversion no longer races ahead.** It used to run flat out until 1½ minutes ahead of the
+  player, pause, then race again; with HDR films (whose colours are mapped on the CPU) that pinned
+  the CPU for the whole race. It now stays about 45 seconds ahead in short steps, pausing the moment
+  each new piece is ready.
+- **Activity → Background work** lists what the server is doing by itself (seek-bar previews,
+  preview clips, finding keyframes or intros, phone download copies), so a busy CPU can be traced.
+
 ## 0.16.0
 
 - **NVIDIA cards now decode too, not just encode.** With an NVIDIA card, the card also decodes and

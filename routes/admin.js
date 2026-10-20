@@ -6,7 +6,7 @@ module.exports = function register(app) {
   const {
     logs, fs, os, pipeline, lib, metadata, hlsLib, findProblems,
     ENCODER_NAMES, store, matcher, updater, hwaccel, hls, opensubs, activity,
-    maintenance, intro, backups, auth, transcodes, HttpError, json, readBody,
+    maintenance, intro, backups, auth, transcodes, HttpError, json, readBody, trickplay, keyframes, offline,
     readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary, path, fromHostPath, health, isRemote, previews,
   } = app;
 
@@ -32,8 +32,17 @@ module.exports = function register(app) {
     const others = conversions.filter((c, i) => !used.has(i)).map((c) => ({
       ...c, encoderName: c.encoder ? ENCODER_NAMES[c.encoder] : null, item: describe(c.itemId), user: auth.byId(c.userId)?.username || null,
     }));
+    // Work the server does by itself, which also uses the CPU (or the graphics card).
+    const titleOf = (id) => { const d = describe(id) || (store.data.shows[id] && { title: store.data.shows[id].title }); return d ? (d.showTitle ? `${d.showTitle} · S${d.season}E${d.episode}` : d.title) : null; };
+    const background = [
+      trickplay.running && { what: 'Making seek-bar previews', title: titleOf(trickplay.running.id), gpu: trickplay.onGpu },
+      previews.running && { what: 'Making a hover preview clip', title: titleOf(previews.running) },
+      keyframes.current && { what: 'Finding keyframes (reading the file)', title: titleOf(keyframes.current.id) },
+      intro.current && { what: 'Finding intros', title: `${intro.current.show}, season ${intro.current.season}` },
+      offline.running && { what: 'Making a copy for a phone download', title: titleOf(offline.running.item?.id) },
+    ].filter(Boolean);
     json(res, 200, {
-      streams, others, cpu: activity.cpu(), memory: { total: os.totalmem(), free: os.freemem() },
+      streams, others, background, cpu: activity.cpu(), memory: { total: os.totalmem(), free: os.freemem() },
       encoder: { active: hwaccel.active, name: ENCODER_NAMES[hwaccel.active] },
     });
   }, 'admin');
