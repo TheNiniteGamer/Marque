@@ -38,7 +38,7 @@ module.exports = function register(app) {
       trickplay.running && { what: 'Making seek-bar previews', title: titleOf(trickplay.running.id), gpu: trickplay.onGpu },
       previews.running && { what: 'Making a hover preview clip', title: titleOf(previews.running) },
       keyframes.current && { what: 'Finding keyframes (reading the file)', title: titleOf(keyframes.current.id) },
-      intro.current && { what: 'Finding intros', title: `${intro.current.show}, season ${intro.current.season}` },
+      intro.current && { what: activity.watching().length ? 'Finding intros (paused while someone watches)' : 'Finding intros', title: `${intro.current.show}, season ${intro.current.season}` },
       offline.running && { what: 'Making a copy for a phone download', title: titleOf(offline.running.item?.id) },
     ].filter(Boolean);
     json(res, 200, {

@@ -15,6 +15,10 @@ installing one.
   player, pause, then race again; with HDR films (whose colours are mapped on the CPU) that pinned
   the CPU for the whole race. It now stays about 45 seconds ahead in short steps, pausing the moment
   each new piece is ready.
+- **Intro finding, preview clips and phone download copies wait while anyone is watching**, not
+  only while something is being converted, so a film playing as it is gets a quiet machine too.
+  An intro check already under way is paused and carries on afterwards, and it uses one CPU
+  thread (decoding lossless Dolby TrueHD / DTS-HD soundtracks is real work).
 - **Activity → Background work** lists what the server is doing by itself (seek-bar previews,
   preview clips, finding keyframes or intros, phone download copies), so a busy CPU can be traced.
 

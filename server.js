@@ -124,9 +124,12 @@ const trickplay = new Trickplay(DATA_DIR, { hwaccel });
 const keyframes = new Keyframes(path.join(DATA_DIR, 'keyframes'));
 const activity = new Activity();
 const maintenance = new Maintenance(store, DATA_DIR, { transcodeDir: TRANSCODE_DIR });
-const offline = new offlineLib.Offline(path.join(DATA_DIR, 'offline'), hwaccel, { isBusy: () => transcodes.size > 0 || hls.active > 0 });
-const previews = new Previews(store, path.join(DATA_DIR, 'previews'), { isBusy: () => transcodes.size > 0 || hls.active > 0, episodesOf: lib.episodesOf });
-const intro = new IntroDetector(store, DATA_DIR, { isBusy: () => transcodes.size > 0 || hls.active > 0 });
+// Background work (phone download copies, preview clips, intro finding) waits while anyone is
+// watching, converted or not (a film playing as it is still needs the disk and a calm machine).
+const someoneWatching = () => transcodes.size > 0 || hls.active > 0 || activity.watching().length > 0;
+const offline = new offlineLib.Offline(path.join(DATA_DIR, 'offline'), hwaccel, { isBusy: someoneWatching });
+const previews = new Previews(store, path.join(DATA_DIR, 'previews'), { isBusy: someoneWatching, episodesOf: lib.episodesOf });
+const intro = new IntroDetector(store, DATA_DIR, { isBusy: someoneWatching });
 scanner.on('done', (libraryId) => intro.enqueue({ libraryId }));
 // New episodes for the people who watch those shows, and requests that have arrived.
 scanner.on('done', () => {
