@@ -147,13 +147,13 @@ test('an NVIDIA card decodes and resizes too, when it can', async () => {
     const sdr = videoArgs('nvdec', { maxHeight: 720, bitrate: 4e6, video: { codec: 'hevc', pixFmt: 'yuv420p10le' } });
     assert.equal(sdr.kind, 'nvdec');
     assert.deepEqual(sdr.input, ['-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda']);
-    assert.equal(sdr.output[sdr.output.indexOf('-vf') + 1], "scale_cuda=-2:'min(720,ih)':format=nv12", 'stays on the card all the way to the encoder');
+    assert.equal(sdr.output[sdr.output.indexOf('-vf') + 1], "scale_cuda=w='round(min(720,ih)*dar/2)*2':h='min(720,ih)':format=nv12,setsar=1", 'stays on the card all the way to the encoder');
     assert.ok(sdr.output.includes('h264_nvenc'));
 
     // HDR: shrunk on the card, then brought back for tone mapping on the CPU.
     const h = videoArgs('nvdec', { maxHeight: 1080, video: { codec: 'hevc', pixFmt: 'yuv420p10le', colorTransfer: 'smpte2084' } });
     const vf = h.output[h.output.indexOf('-vf') + 1];
-    if (hdr.toneMapping()) assert.match(vf, /^scale_cuda=-2:'min\(1080,ih\)':format=p010le,hwdownload,format=p010le,zscale.*tonemap.*format=yuv420p$/);
+    if (hdr.toneMapping()) assert.match(vf, /^scale_cuda=w='round\(min\(1080,ih\)\*dar\/2\)\*2':h='min\(1080,ih\)':format=p010le,setsar=1,hwdownload,format=p010le,zscale.*tonemap.*format=yuv420p$/);
 
     // What the card can't decode (10-bit H.264, 4:2:2, codecs it wasn't seen decoding) and drawn-in
     // subtitles are decoded on the CPU, and only encoded on the card.

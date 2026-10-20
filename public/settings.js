@@ -150,7 +150,7 @@ const SETTINGS_PAGES = [
         $('#rep-count').textContent = `${list.length} title${list.length === 1 ? '' : 's'}`;
         $('#rep-list').innerHTML = list.length ? html`${list.slice(0, limit).map((t) => html`<div class="rep-item">
           <div class="rep-title"><a href="#/item/${t.id}">${t.title}</a>
-            <span class="rep-tags"><span class="tag">${t.res}</span>${t.hdr ? html`<span class="tag">${t.hdr}</span>` : ''}<span class="tag">${t.codec}</span>${t.audio ? html`<span class="tag">${t.audio}</span>` : ''}<span class="tag">${t.container}</span>${t.versions > 1 ? html`<span class="tag">${t.versions} versions</span>` : ''}</span>
+            <span class="rep-tags"><span class="tag">${t.res}</span>${t.hdr ? html`<span class="tag">${t.hdr}</span>` : ''}<span class="tag">${t.codec}</span>${t.audio ? html`<span class="tag">${t.audio}</span>` : ''}<span class="tag">${t.container}</span>${t.interlaced ? html`<span class="tag" title="Deinterlaced when converted">Interlaced</span>` : ''}${t.versions > 1 ? html`<span class="tag">${t.versions} versions</span>` : ''}</span>
             <span class="muted rep-size">${fmtSize(t.size)}</span></div>
           <div class="rep-fates">${r.players.map((p) => { const f = t.players[p.id]; return html`<span class="rep-fate ${f.how}" title="${p.label}: ${word[f.how]}${f.why.length ? ` (${f.why.join(', ')})` : ''}">${icon[f.how]} ${p.label}${f.how !== 'direct' && f.why.length ? html` <small>· ${f.why.join(', ')}</small>` : ''}</span>`; })}</div>
         </div>`)}${list.length > limit ? html`<button class="btn small" id="rep-more" style="margin:12px 20px">Show more</button>` : ''}`.s

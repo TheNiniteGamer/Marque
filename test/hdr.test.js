@@ -68,13 +68,15 @@ test('titles scanned before get their colours checked, once', async () => {
   const items = {
     a: { id: 'a', file: HDR, media: { video: { codec: 'hevc' } } },
     b: { id: 'b', file: SDR, media: { video: { codec: 'h264' } } },
-    c: { id: 'c', file: SDR, media: { video: { codec: 'h264', colorTransfer: null } } }, // already checked
+    c: { id: 'c', file: SDR, media: { video: { codec: 'h264', colorTransfer: null } } }, // colours checked, not interlacing yet
+    d: { id: 'd', file: SDR, media: { video: { codec: 'h264', colorTransfer: null, fieldOrder: 'progressive' } } }, // all checked
   };
   let saves = 0;
   const store = { data: { items }, save() { saves++; } };
   const found = [];
   const r = await hdr.backfill(store, (it) => found.push(it.id));
-  assert.deepEqual(r, { checked: 2, hdr: 1 });
+  assert.deepEqual(r, { checked: 3, hdr: 1 });
+  assert.equal(items.c.media.video.fieldOrder, 'progressive');
   assert.deepEqual(found, ['a'], 'pictures made from the HDR one are made again');
   assert.equal(items.a.media.video.colorTransfer, 'smpte2084');
   assert.ok(saves >= 1);

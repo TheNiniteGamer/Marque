@@ -662,8 +662,8 @@ async function main() {
   offline.start();
   health.start();
   previews.start();
-  // Titles from before HDR was noted: their colours are checked once, and pictures made from
-  // HDR ones (washed out) are made again.
+  // Titles from before HDR, interlacing and DVD pixel shapes were noted: checked once, and
+  // pictures made from those (washed out, combed or squashed) are made again.
   setTimeout(() => hdr.backfill(store, (it) => {
     fs.rmSync(path.join(THUMB_DIR, `${it.id}.jpg`), { force: true });
     fs.rmSync(trickplay.dir(it), { recursive: true, force: true });

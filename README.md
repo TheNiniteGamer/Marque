@@ -370,6 +370,7 @@ lib/scanner.js      folder walking, ffprobe, show grouping, TMDB enrichment
 lib/media.js        ffprobe/ffmpeg: probe, thumbnails, direct-play check, live transcode, seek points
 lib/keyframes.js    where each file's keyframes are (for streaming the original picture in segments)
 lib/hdr.js          HDR detection and tone mapping to ordinary colours when converting
+lib/picture.js      deinterlacing and square pixels (DVDs) when converting
 lib/report.js       Formats & space: which titles each kind of player has to convert, and why
 lib/hwaccel.js      encoder choice (NVDEC+NVENC / NVENC / QSV / VAAPI / x264), start-up tests, fallback
 lib/hls.js          adaptive streaming: VOD playlists, on-demand segment conversion per session

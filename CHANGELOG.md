@@ -4,6 +4,22 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.17.1
+
+**DVDs (MPEG-2) look right when converted.**
+- **Deinterlacing.** Most DVD video is interlaced: converted without care, anything moving gets
+  thin horizontal "comb" lines (on the Roku, in browsers and on 1080p TVs; the Shield, playing
+  the file as it is, was fine). Interlaced video is now deinterlaced whenever it's converted, on an
+  NVIDIA card when it decodes the video, otherwise on the CPU. Film-based DVDs whose frames are
+  whole pass through as they are; broadcast recordings (4:2:2) are handled too. Interlaced H.264
+  (TV recordings) is converted rather than sent as it is to browsers, which don't deinterlace.
+- **The right shape.** DVD pixels aren't square (720×480 shown at 16:9 or 4:3). Converted
+  video, thumbnails, seek previews and preview clips now come out with square pixels at the real
+  shape (854×480 for a 16:9 DVD), which every player shows correctly.
+- Titles already in the library are checked once in the background (with the HDR check), and
+  thumbnails and seek previews made from interlaced or DVD-shaped ones are made again.
+  Formats & space tags interlaced titles.
+
 ## 0.17.0
 
 - **Several versions of a film.** Put two copies of a film in its folder, e.g.
