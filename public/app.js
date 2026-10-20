@@ -662,7 +662,9 @@ function listButton(x) {
 }
 function dlgTop(x) {
   knownItems.set(x.id, x);
-  return html`<div class="dlg-top">
+  const prev = detailTrail.at(-1);
+  return html`${prev ? html`<button class="dlg-back" id="dlg-back" title="Back to ${prev.title}" aria-label="Back to ${prev.title}">${icon('left')}<span>${prev.title}</span></button>` : ''}
+  <div class="dlg-top">
     <button class="round solid" data-menu="${x.id}" aria-label="More options" title="More options">${icon('dots')}</button>
     <button class="round solid" id="dlg-close" aria-label="Close" title="Close">${icon('close')}</button>
   </div>`;
@@ -681,6 +683,7 @@ function bindDetailActions(x) {
     };
   }
   $('#dlg-close').onclick = closeDetail;
+  if ($('#dlg-back')) $('#dlg-back').onclick = detailBack;
 }
 // Genres, cast, collections and library, on the right of the pop-up.
 function sideInfo(x) {
@@ -947,8 +950,8 @@ async function viewItem({ params: [id], seq }) {
         ${it.overview ? html`<p class="overview">${it.overview}</p>` : ''}
         ${matchNote(it)}
         ${isEp && (it.prev || it.next) ? html`<div class="ep-links">
-          ${it.prev ? html`<a class="btn small" href="#/item/${it.prev.id}">‹ ${epLabel(it.prev).replace(' · ', ':')}</a>` : ''}
-          ${it.next ? html`<a class="btn small" href="#/item/${it.next.id}">${epLabel(it.next).replace(' · ', ':')} ›</a>` : ''}</div>` : ''}
+          ${it.prev ? html`<a class="btn small" data-swap href="#/item/${it.prev.id}">‹ ${epLabel(it.prev).replace(' · ', ':')}</a>` : ''}
+          ${it.next ? html`<a class="btn small" data-swap href="#/item/${it.next.id}">${epLabel(it.next).replace(' · ', ':')} ›</a>` : ''}</div>` : ''}
       </div>
       ${sideInfo(it)}
     </div>
@@ -2303,8 +2306,22 @@ let lastPath = null;
 // The pop-up layer for movie, show and episode pages. `openedFromPage`: it was opened from a page in
 // the app (so closing goes back to it); otherwise (a link opened directly) closing goes home.
 let openedFromPage = false;
+// Titles opened from inside the pop-up (an episode from its show, a film from "More like this"):
+// where you came from, so ‹ Back returns there, scrolled to where you were. Moving to the next or
+// previous episode (data-swap) doesn't add a step: Back from any of them goes to the show.
+let detailTrail = [];
+let detailScroll = null;
+const hashPath = (h) => h.replace(/^#/, '').split('?')[0];
+function detailBack() {
+  const prev = detailTrail.pop();
+  if (!prev) return false;
+  detailScroll = prev.scroll;
+  location.replace(prev.hash);
+  return true;
+}
 function openDetailLayer() {
   if (!$('#detail-layer')) {
+    detailTrail = [];
     openedFromPage = !firstRoute && !!view.dataset.path;
     tv.returnHref = document.activeElement?.getAttribute?.('href') || null;
     $('#detail-root').innerHTML = '<div class="detail-layer" id="detail-layer"><div class="dlg" id="detail-panel" role="dialog" aria-modal="true" aria-label="Details"></div></div>';
@@ -2314,7 +2331,15 @@ function openDetailLayer() {
       const a = e.target.closest('a[href^="#/show/"], a[href^="#/item/"]');
       if (!a || e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey) return;
       e.preventDefault();
-      location.replace(a.getAttribute('href'));
+      const to = a.getAttribute('href');
+      if (hashPath(to) === hashPath(location.hash)) return;
+      // Going back to where you came from (an episode's link to its show) is the same as ‹ Back.
+      if (detailTrail.length && hashPath(detailTrail.at(-1).hash) === hashPath(to)) { detailBack(); return; }
+      if (!a.hasAttribute('data-swap')) {
+        const title = $('#detail-panel .dlg-title')?.textContent.trim() || 'Back';
+        detailTrail.push({ hash: location.hash, scroll: $('#detail-layer').scrollTop, title: title.length > 28 ? `${title.slice(0, 27)}…` : title });
+      }
+      location.replace(to);
     });
   }
   viewEl = $('#detail-panel');
@@ -2322,6 +2347,7 @@ function openDetailLayer() {
 }
 function closeDetailLayer() {
   viewEl = view;
+  detailTrail = [];
   if (!$('#detail-layer')) return;
   $('#detail-root').innerHTML = '';
   document.body.classList.remove('detail-open');
@@ -2374,6 +2400,11 @@ async function router() {
   }
   try {
     await match[1]({ params: match[0].exec(path).slice(1), query, seq });
+    if (isDetail && detailScroll != null && seq === renderSeq) {
+      const top = detailScroll;
+      detailScroll = null;
+      requestAnimationFrame(() => { if ($('#detail-layer')) $('#detail-layer').scrollTop = top; });
+    }
     if (seq === renderSeq && !isPlay) tvStart();
     if (!isPlay && changedPage && seq === renderSeq && scrollMemo.has(path)) {
       requestAnimationFrame(() => window.scrollTo(0, scrollMemo.get(path)));

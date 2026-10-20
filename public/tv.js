@@ -151,7 +151,7 @@ function marqueeBack() {
   const modal = [...document.querySelectorAll('.modal-backdrop')].pop();
   if (modal) { modal.querySelector('[data-close], #pick-cancel')?.click(); return true; }
   if (document.querySelector('.profile-picker')) { document.querySelector('.profile-picker [data-pp="close"]')?.click(); return true; }
-  if (document.querySelector('#detail-layer')) { closeDetail(); return true; }
+  if (document.querySelector('#detail-layer')) { if (!detailBack()) closeDetail(); return true; }
   if (typeof selecting !== 'undefined' && selecting.on) { endSelect(); return true; }
   if (location.hash && location.hash !== '#/' && location.hash !== '#') {
     if (state.inAppNav) history.back(); else location.hash = '#/';

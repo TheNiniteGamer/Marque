@@ -235,6 +235,11 @@ body.detail-open { overflow: hidden; }
 .dlg-hero > img { width: 100%; height: 100%; object-fit: cover; }
 .dlg-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(0deg, #181818 0%, rgba(24,24,24,0) 55%); }
 .dlg-top { position: absolute; z-index: 3; top: 14px; right: 14px; display: flex; gap: 8px; }
+.dlg-back { position: absolute; z-index: 3; top: 14px; left: 14px; height: 44px; max-width: calc(100% - 140px); display: flex; align-items: center; gap: 6px; padding: 0 16px 0 10px;
+  border-radius: 22px; border: 2px solid rgba(255,255,255,.55); background: rgba(24,24,24,.8); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.dlg-back:hover, .dlg-back:focus-visible { border-color: #fff; }
+.dlg-back svg { width: 20px; height: 20px; flex: none; }
+.dlg-back span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .round { width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255,255,255,.55); background: rgba(42,42,42,.65); color: #fff; display: grid; place-items: center; cursor: pointer; font-size: 18px; flex: none; }
 .round:hover { border-color: #fff; }
 .round svg { width: 20px; height: 20px; }

@@ -4,6 +4,15 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.19.1
+
+- **‹ Back in the More info pop-up.** Opening an episode from its show (or a film from "More like
+  this", "More from …" or the extras) now shows a **‹ Back** button with the name of where you came
+  from; it returns there, scrolled to where you were, instead of having to close the pop-up and
+  open the show again. Next / previous episode doesn't add steps, so Back from any episode goes to
+  the show. The Back button of a TV remote and of the Android apps does the same, then closes the
+  pop-up.
+
 ## 0.19.0
 
 **Franchises.**
