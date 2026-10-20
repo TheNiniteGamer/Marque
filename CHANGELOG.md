@@ -4,6 +4,27 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.23.1
+
+**Roku 1.13: the Roku channel catches up with the Android TV app.**
+- A title page like the web's: a row of buttons (play / resume / from the start, choose the
+  version, My List, rate, mark watched, previous / next episode, More seasons), then trailers &
+  extras, the cast (each opens the titles that actor is in), the rest of its franchise and More like
+  this.
+- **✱ options** on cards (details, remove from Continue Watching, My List, mark watched) and on
+  episodes (details, play from the start, mark the episode or the whole season watched).
+- Libraries can be sorted (title, date added, year, rating, length) and filtered (unwatched, a
+  genre); a **Collections** page and franchise cards on Home; actors' pages.
+- **Ask for it** from Search, **More seasons**, **My requests**, and the **bell** with unread
+  notifications in the top bar; a **Settings** screen (play next automatically, skip intros, night
+  mode, subtitles by default, how long the skip buttons stay); the opening animation with sound.
+- Player fixes: picks a film's version as the web does; another sound language no longer makes the
+  server convert the whole video; follows the away-from-home limit from the start; the subtitle
+  language is remembered per profile; the Up Next countdown waits while paused; with autoplay off
+  the Next Episode card waits at the end. Years and season counts show again.
+- Reaching an episode's end credits counts it as watched on every device (so "Next episode" at the
+  credits doesn't leave it half-watched).
+
 ## 0.23.0
 
 - **Overnight conversions make way:** a conversion pauses whenever anyone is watching anything (not
