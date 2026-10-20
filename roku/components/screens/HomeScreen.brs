@@ -8,6 +8,10 @@ sub init()
     m.rows = m.top.findNode("rows")
     m.topBar = m.top.findNode("topBar")
     m.status = m.top.findNode("status")
+    m.menu = m.top.findNode("menu")
+    m.menu.observeField("chosen", "onMenuChosen")
+    m.menu.observeField("closed", "onMenuClosed")
+    m.rowKeys = []
     m.hero = invalid
     m.focus = m.rows
     m.top.observeField("focusedChild", "onFocusChange")
@@ -28,7 +32,9 @@ sub onFocusChange()
 end sub
 
 sub onRefresh()
-    if m.top.refresh then load()
+    if not m.top.refresh then return
+    load()
+    m.topBar.reload = true
 end sub
 
 sub load()
@@ -48,13 +54,17 @@ sub onHome(event as Object)
     m.status.text = ""
     m.hero = r.data.hero
     root = CreateObject("roSGNode", "ContentNode")
+    m.rowKeys = []
     for each hub in r.data.hubs
         row = root.createChild("ContentNode")
         row.title = hub.title
+        m.rowKeys.Push(mqStr(hub.key))
         for each item in hub.items
             if item.type = "upcoming" then
                 row.appendChild(mqUpcomingCard(item))
-            else if item.type <> "collection" then
+            else if item.type = "collection" then
+                row.appendChild(mqCollectionCard(item))
+            else
                 row.appendChild(mqCard(item))
             end if
         end for
@@ -96,6 +106,14 @@ sub showInfo(item as Dynamic)
         m.overview.text = ""
         return
     end if
+    if kind = "collection" then
+        if item.cover <> invalid then m.backdrop.uri = mqArt("backdrop", item.cover)
+        if mqStr(item.kind) = "franchise" then m.kind.text = "F R A N C H I S E" else m.kind.text = "C O L L E C T I O N"
+        m.title.text = mqStr(item.name)
+        m.meta.text = mqStr(item.count) + " titles"
+        m.overview.text = mqStr(item.about)
+        return
+    end if
     art = "backdrop"
     if kind = "episode" then art = "thumb"
     m.backdrop.uri = mqArt(art, item)
@@ -110,7 +128,12 @@ sub showInfo(item as Dynamic)
     if kind = "episode" then m.title.text = mqStr(item.showTitle)
     parts = []
     if item.year <> invalid then parts.Push(mqStr(item.year))
-    if kind = "show" then parts.Push(mqStr(item.seasonCount) + " seasons") else parts.Push(mqDuration(item.duration))
+    if kind = "show" then
+        n = mqNum(item.seasonCount)
+        if n = 1 then parts.Push("1 season") else parts.Push(mqStr(item.seasonCount) + " seasons")
+    else
+        parts.Push(mqDuration(item.duration))
+    end if
     if item.contentRating <> invalid then parts.Push(mqStr(item.contentRating))
     if item.rating <> invalid then parts.Push("★ " + mqStr(item.rating))
     left = mqTimeLeft(item)
@@ -139,18 +162,41 @@ sub onRowSelected()
     open(c.data)
 end sub
 
-' Episodes (Continue Watching) play straight away; movies and shows open their details. Coming soon:
-' the show's details (a film that isn't here yet has none).
+' Episodes (Continue Watching) play straight away; movies and shows open their details,
+' franchises their titles (mqOpen).
 sub open(item as Object)
-    if item.type = "upcoming" then
-        if item.showId <> invalid then m.top.navigate = { screen: "DetailsScreen", params: { id: item.showId, kind: "show" } }
-        return
-    end if
-    if item.type = "episode" then
-        m.top.navigate = { screen: "PlayerScreen", params: { id: item.id, start: -1 } }
-    else
-        m.top.navigate = { screen: "DetailsScreen", params: { id: item.id, kind: item.type } }
-    end if
+    nav = mqOpen(item)
+    if nav <> invalid then m.top.navigate = nav
+end sub
+
+' ✱ on a card: Details, Remove from Continue Watching, My List, Mark watched.
+function openCardMenu() as Boolean
+    at = m.rows.rowItemFocused
+    c = contentAt(at)
+    if c = invalid then return false
+    m.menuItem = c.data
+    menu = mqCardMenu(c.data, m.rowKeys[at[0]] = "continue")
+    if menu = invalid then return false
+    m.menuActs = menu.acts
+    m.menu.title = menu.title
+    m.menu.options = menu.labels
+    m.menu.current = -1
+    m.menu.open = true
+    return true
+end function
+
+sub onMenuChosen()
+    m.rows.setFocus(true)
+    nav = mqCardAct(m.menuItem, m.menuActs[m.menu.chosen].act, "onChanged")
+    if nav <> invalid then m.top.navigate = nav
+end sub
+
+sub onMenuClosed()
+    m.rows.setFocus(true)
+end sub
+
+sub onChanged()
+    load()
 end sub
 
 sub setHeroButtons(labels as Object)
@@ -252,6 +298,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         end if
     end if
     if key = "options" then
+        if m.rows.hasFocus() and openCardMenu() then return true
         m.top.navigate = { screen: "SearchScreen" }
         return true
     end if

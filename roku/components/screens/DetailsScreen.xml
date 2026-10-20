@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A movie, show or episode: artwork, details, and what you can do with it. -->
+<!-- A movie, show, episode or extra, as the web's "More info" page: artwork, details, a row of
+     buttons, then rows of trailers & extras, the cast, the rest of its franchise and more like it. -->
 <component name="DetailsScreen" extends="Group">
   <interface>
     <field id="params" type="assocarray" onChange="onParams" />
@@ -10,17 +11,19 @@
     <Poster id="backdrop" width="1920" height="1080" loadWidth="1920" loadHeight="1080" loadDisplayMode="scaleToZoom" />
     <Poster uri="pkg:/images/fade_left.png" width="1920" height="1080" />
     <Poster uri="pkg:/images/fade_bottom.png" translation="[0,560]" width="1920" height="520" />
-    <LayoutGroup translation="[96,100]" itemSpacings="[10,18,8,14]">
-      <Label id="eyebrow" color="0xE6E6E6FF" font="font:SmallBoldSystemFont" />
-      <Label id="title" width="1100" wrap="true" maxLines="2" color="0xFFFFFFFF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="72" /></Label>
-      <Label id="meta" width="1100" color="0xDEDEDEFF" font="font:MediumBoldSystemFont" />
+    <LayoutGroup id="info" translation="[96,90]" itemSpacings="[10,16,8,14,12]">
+      <Label id="eyebrow" width="1300" color="0xE6E6E6FF" font="font:SmallBoldSystemFont" />
+      <Label id="title" width="1150" wrap="true" maxLines="2" color="0xFFFFFFFF"><Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="68" /></Label>
+      <Label id="meta" width="1300" color="0xDEDEDEFF" font="font:MediumBoldSystemFont" />
       <Label id="progress" width="1100" color="0xBDBDBDFF" font="font:SmallSystemFont" />
-      <Label id="overview" width="1000" wrap="true" maxLines="3" color="0xE6E6E6FF" font="font:MediumSystemFont" />
+      <Label id="overview" width="1050" wrap="true" maxLines="3" color="0xE6E6E6FF" font="font:MediumSystemFont" />
+      <Label id="side" width="1300" wrap="true" maxLines="2" color="0xA8A8A8FF" font="font:SmallSystemFont" />
     </LayoutGroup>
-    <ButtonGroup id="buttons" translation="[96,640]" minWidth="460" buttonHeight="70" itemSpacings="[12]"
-      textColor="0xFFFFFFFF" focusedTextColor="0x000000FF" focusBitmapUri="pkg:/images/white.png" focusFootprintBitmapUri="pkg:/images/grey.png"
-      iconUri="" focusedIconUri="" textFont="font:MediumBoldSystemFont" focusedTextFont="font:MediumBoldSystemFont" />
-    <Label id="side" translation="[1240,660]" width="580" wrap="true" maxLines="8" color="0xA8A8A8FF" font="font:SmallSystemFont" />
+    <ButtonRow id="buttons" translation="[96,622]" />
+    <RowList id="rows" translation="[96,740]" itemComponentName="CardItem" itemSize="[1824,290]" numRows="2" itemSpacing="[0,30]"
+      rowItemSize="[[384,216]]" rowItemSpacing="[[16,0]]" showRowLabel="[true]" rowLabelOffset="[[0,14]]" rowLabelColor="0xFFFFFFFF"
+      rowLabelFont="font:MediumBoldSystemFont" rowFocusAnimationStyle="floatingFocus" vertFocusAnimationStyle="fixedFocus" drawFocusFeedback="true" />
+    <OptionsMenu id="menu" />
   </children>
   <script type="text/brightscript" uri="DetailsScreen.brs" />
   <script type="text/brightscript" uri="pkg:/components/common.brs" />

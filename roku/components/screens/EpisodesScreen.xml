@@ -12,6 +12,8 @@
       font="font:MediumBoldSystemFont" focusedFont="font:MediumBoldSystemFont" />
     <MarkupList id="episodes" translation="[520,180]" itemComponentName="EpisodeItem" itemSize="[1300,200]" itemSpacing="[0,16]" numRows="4"
       vertFocusAnimationStyle="floatingFocus" drawFocusFeedback="false" />
+    <Label id="hint" translation="[96,1000]" width="1728" color="0x8C8C8CFF" font="font:SmallSystemFont" text="Press * for more: details, play from the start, mark watched" />
+    <OptionsMenu id="menu" />
   </children>
   <script type="text/brightscript" uri="EpisodesScreen.brs" />
   <script type="text/brightscript" uri="pkg:/components/common.brs" />

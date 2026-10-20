@@ -57,3 +57,18 @@ test('changes show up at once; watch positions keep the tables', async () => {
   assert.deepEqual(lib.continueWatching(store, kid).map((x) => x.title), ['Alpha']);
   store.flush();
 });
+
+test('reaching the end credits counts as watched', () => {
+  const store = new Store(path.join(ROOT, 'credits.json'));
+  store.data.libraries = [{ id: 'L', name: 'Movies', type: 'movie', paths: [] }];
+  store.data.items = { e1: movie('e1', 'Episode', {}), e2: movie('e2', 'Early credits') };
+  store.data.items.e1.credits = { start: 3000 }; // 50 minutes into an hour: credits for the last 10
+  store.data.items.e2.credits = { start: 600 }; // too early to be the end credits: not used
+  store.data.users = [{ id: 'u', username: 'dad', role: 'admin' }];
+  const u = store.data.users[0];
+  assert.equal(lib.setProgress(store, u, store.data.items.e1, 2990).watched, false);
+  assert.equal(lib.setProgress(store, u, store.data.items.e1, 3005).watched, true, 'into the credits');
+  assert.equal(lib.setProgress(store, u, store.data.items.e2, 700).watched, false);
+  assert.equal(lib.setProgress(store, u, store.data.items.e2, 3300).watched, true, 'still 90% as before');
+  store.flush();
+});

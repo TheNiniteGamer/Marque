@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A list of choices over the screen (a title's version, sorting, the ✱ options of a card…).
+     Set `options` (and `current`, the one in use) then `open`; `chosen` is set to the index picked,
+     and Back closes it (`closed`). The screen puts the highlight back where it was. -->
+<component name="OptionsMenu" extends="Group">
+  <interface>
+    <field id="title" type="string" />
+    <field id="options" type="array" />
+    <field id="current" type="integer" value="-1" />
+    <field id="open" type="boolean" alwaysNotify="true" onChange="onOpen" />
+    <field id="chosen" type="integer" alwaysNotify="true" />
+    <field id="closed" type="boolean" alwaysNotify="true" />
+  </interface>
+  <children>
+    <Rectangle id="dim" width="1920" height="1080" color="0x000000B0" />
+    <Rectangle id="panel" width="760" color="0x1C1C1CFF">
+      <Label id="heading" translation="[40,32]" width="680" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" />
+      <LabelList id="list" translation="[24,96]" itemSize="[712,72]" color="0xE6E6E6FF" focusedColor="0x000000FF"
+        focusBitmapUri="pkg:/images/pill.9.png" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" numRows="9" />
+    </Rectangle>
+  </children>
+  <script type="text/brightscript" uri="OptionsMenu.brs" />
+</component>

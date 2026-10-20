@@ -3,6 +3,8 @@ sub init()
     m.status = m.top.findNode("status")
     m.results = m.top.findNode("results")
     m.typing = m.top.findNode("typing")
+    m.ask = m.top.findNode("ask")
+    m.ask.observeField("selected", "onAsk")
     m.items = []
     m.focus = m.keyboard
     m.top.observeField("focusedChild", "onFocusChange")
@@ -22,10 +24,12 @@ end sub
 
 sub search()
     q = m.keyboard.text.Trim()
+    m.ask.visible = q <> ""
+    if q <> "" then m.ask.buttons = ["Not here? Ask for “" + q + "”"]
     if q = "" then
         m.results.content = invalid
         m.items = []
-        m.status.text = "Type a title, a genre or an episode name."
+        m.status.text = "Type a title or an episode name."
         return
     end if
     mqApi("/api/search?q=" + mqEscape(q), "onResults")
@@ -55,23 +59,39 @@ end sub
 sub onSelected()
     item = m.items[m.results.itemSelected]
     if item = invalid then return
-    if item.type = "episode" then
-        m.top.navigate = { screen: "DetailsScreen", params: { id: item.id, kind: "episode" } }
-    else
-        m.top.navigate = { screen: "DetailsScreen", params: { id: item.id, kind: item.type } }
-    end if
+    m.top.navigate = { screen: "DetailsScreen", params: { id: item.id, kind: item.type } }
+end sub
+
+sub onAsk()
+    m.top.navigate = { screen: "AskScreen", params: { q: m.keyboard.text.Trim() } }
 end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
-    if key = "right" and m.keyboard.isInFocusChain() and m.items.Count() > 0 then
-        m.focus = m.results
-        m.results.setFocus(true)
+    if key = "right" and m.keyboard.isInFocusChain() then
+        if m.items.Count() > 0 then
+            m.focus = m.results
+        else if m.ask.visible then
+            m.focus = m.ask
+        else
+            return false
+        end if
+        m.focus.setFocus(true)
         return true
     end if
-    if key = "left" and m.results.hasFocus() then
+    if key = "left" and (m.results.hasFocus() or m.ask.hasFocus()) then
         m.focus = m.keyboard
         m.keyboard.setFocus(true)
+        return true
+    end if
+    if key = "up" and m.results.hasFocus() and m.ask.visible then
+        m.focus = m.ask
+        m.ask.setFocus(true)
+        return true
+    end if
+    if key = "down" and m.ask.hasFocus() and m.items.Count() > 0 then
+        m.focus = m.results
+        m.results.setFocus(true)
         return true
     end if
     return false
