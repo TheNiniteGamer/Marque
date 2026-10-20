@@ -259,6 +259,9 @@ module.exports = function register(app) {
   route('GET', '/api/watchlist', async (req, res, p, url, user) => json(res, 200, lib.watchlist(store, user)));
   route('PUT', '/api/watchlist/:id', async (req, res, { id }, url, user) => { getTarget(id, user); lib.setWatchlist(store, user, id, true); json(res, 200, { ok: true }); });
   route('DELETE', '/api/watchlist/:id', async (req, res, { id }, url, user) => { lib.setWatchlist(store, user, id, false); json(res, 200, { ok: true }); });
+  // Viewing activity (Account → Viewing activity).
+  route('GET', '/api/history', async (req, res, p, url, user) => json(res, 200, lib.history(store, user)));
+  route('DELETE', '/api/history/:id', async (req, res, { id }, url, user) => { lib.forget(store, user, id); json(res, 200, { ok: true }); });
   route('POST', '/api/continue/:id/hide', async (req, res, { id }, url, user) => { getTarget(id, user); lib.hideFromContinue(store, user, id); json(res, 200, { ok: true }); });
 
   // --- folder picker for adding libraries (admin) ---

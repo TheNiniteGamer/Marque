@@ -4,6 +4,25 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.18.0
+
+**A new Account page.**
+- Redesigned in the style of Settings: your avatar and name at the top (with Switch profile and
+  Sign out), then cards of rows: **Playback** (follows you on every device), **On this browser /
+  app**, **Profile and security**, and **TVs and apps**. PIN, password and linking a TV open as
+  small pop-ups instead of forms always on the page; the Roku install steps show only to admins.
+- **Subtitle and sound languages:** pick a language and subtitles in it turn on whenever a title
+  has them; pick a sound language for titles with several. A show's own choice still wins. Works
+  in the web player, the Android apps and on the Roku.
+- **Subtitle appearance:** size (small to extra large) and look (white on a dark box, white with
+  an outline, yellow with an outline), with a preview. Web player and Android apps; a Roku uses
+  its own caption settings.
+- **Where you're signed in**, with **Sign out everywhere else** (browsers and phones; linked TVs
+  stay linked and are unlinked one by one).
+- **Viewing activity:** what you've watched, newest first, grouped by day, with how far you got;
+  remove anything (it forgets where you got to and whether you watched it).
+- Android app 1.13.0, Android TV 1.8.0, Roku 1.10.
+
 ## 0.17.1
 
 **DVDs (MPEG-2) look right when converted.**

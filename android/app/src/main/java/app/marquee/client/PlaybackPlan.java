@@ -15,6 +15,25 @@ public final class PlaybackPlan {
 
     private PlaybackPlan() {}
 
+    // The other codes files label languages with ("eng" for "en"…): see LANG_ALIASES in the web app.
+    private static final String[][] LANG_ALIASES = {
+        { "en", "eng" }, { "es", "spa" }, { "fr", "fre", "fra" }, { "de", "ger", "deu" }, { "it", "ita" }, { "pt", "por" },
+        { "nl", "dut", "nld" }, { "sv", "swe" }, { "pl", "pol" }, { "ru", "rus" }, { "tr", "tur" }, { "ar", "ara" },
+        { "hi", "hin" }, { "ja", "jpn" }, { "ko", "kor" }, { "zh", "chi", "zho" },
+    };
+
+    /** Whether a track's language ("eng", "en-US"…) is the account's `code` ("en"). */
+    public static boolean sameLang(String lang, String code) {
+        if (lang == null || code == null || lang.isEmpty() || code.isEmpty()) return false;
+        String l = lang.toLowerCase(Locale.ROOT).split("[-_]")[0];
+        if (l.equals(code)) return true;
+        for (String[] a : LANG_ALIASES) {
+            if (!a[0].equals(code)) continue;
+            for (int i = 1; i < a.length; i++) if (a[i].equals(l)) return true;
+        }
+        return false;
+    }
+
     public static String videoMime(String codec) {
         if (codec == null) return null;
         switch (codec) {

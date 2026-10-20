@@ -118,7 +118,18 @@ const store = {
   set(k, v) { try { localStorage.setItem(`marquee:${k}`, JSON.stringify(v)); } catch { /* ignore */ } },
 };
 // Player settings saved with your account (Account → Player), so TVs and phones follow them too.
-const PLAYER_DEFAULTS = { autoplayNext: true, autoSkipIntro: false, skipFade: 10, nightMode: false };
+const PLAYER_DEFAULTS = { autoplayNext: true, autoSkipIntro: false, skipFade: 10, nightMode: false, subLang: '', audioLang: '', subSize: 'medium', subStyle: 'box' };
+// Languages offered for "subtitles / sound in…" (Account), and the other codes files label them with.
+const LANG_CHOICES = [['en', 'English'], ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['it', 'Italian'], ['pt', 'Portuguese'],
+  ['nl', 'Dutch'], ['sv', 'Swedish'], ['pl', 'Polish'], ['ru', 'Russian'], ['tr', 'Turkish'], ['ar', 'Arabic'], ['hi', 'Hindi'],
+  ['ja', 'Japanese'], ['ko', 'Korean'], ['zh', 'Chinese']];
+const LANG_ALIASES = { en: ['eng'], es: ['spa'], fr: ['fre', 'fra'], de: ['ger', 'deu'], it: ['ita'], pt: ['por'], nl: ['dut', 'nld'], sv: ['swe'],
+  pl: ['pol'], ru: ['rus'], tr: ['tur'], ar: ['ara'], hi: ['hin'], ja: ['jpn'], ko: ['kor'], zh: ['chi', 'zho'] };
+/** Whether a track's language ("eng", "en-US"…) is `code` ("en"). */
+function sameLang(lang, code) {
+  const l = String(lang || '').toLowerCase().split(/[-_]/)[0];
+  return !!l && !!code && (l === code || (LANG_ALIASES[code] || []).includes(l));
+}
 function playerPref(k) { return state.user?.prefs?.[k] ?? PLAYER_DEFAULTS[k]; }
 async function savePlayerPrefs(change) {
   const r = await api('/api/auth/prefs', { method: 'PUT', body: change });
@@ -1159,6 +1170,7 @@ async function viewPlay({ params: [id], query }) {
   if (window.MarqueeAndroid?.play && !partyId) {
     window.MarqueeAndroid.play(JSON.stringify({ id: item.id, start, autoplayNext: playerPref('autoplayNext'), subsOn: store.get('subsOn', false),
       autoSkipIntro: playerPref('autoSkipIntro'), skipFade: playerPref('skipFade'), nightMode: playerPref('nightMode'), quality: store.get('quality', ''),
+      subLang: playerPref('subLang'), audioLang: playerPref('audioLang'), subSize: playerPref('subSize'), subStyle: playerPref('subStyle'),
       ...(query.get('v') ? { version: query.get('v') } : {}) }));
     if (state.inAppNav) history.back(); else location.replace(`#/item/${item.id}`);
     return;
@@ -1228,6 +1240,15 @@ class Player {
       const subs = [...item.subtitles].sort((a, b) => (a.burn != null) - (b.burn != null));
       this.subId = subs.find((s) => s.lang === pref.subs)?.id || this.subId;
     }
+    // Otherwise the account's languages (Account → Playback), when the title has them.
+    if (!pref?.audio && playerPref('audioLang')) {
+      const i = (item.audioTracks || []).findIndex((t) => sameLang(t.lang, playerPref('audioLang')));
+      if (i >= 0) this.audio = i;
+    }
+    if (!pref?.subs && playerPref('subLang')) {
+      const s = [...item.subtitles].sort((a, b) => (a.burn != null) - (b.burn != null)).find((x) => sameLang(x.lang, playerPref('subLang')));
+      if (s) this.subId = s.id;
+    }
     this.lastReported = -1;
     this.dragging = false;
     this.pb = null;          // signed links + streaming session from /playback
@@ -1238,7 +1259,7 @@ class Player {
     const it = item;
     const subtitle = it.type === 'episode' ? [it.showTitle, epLabel(it)].filter(Boolean).join(' · ') : it.year;
     this.root = document.createElement('div');
-    this.root.className = 'player';
+    this.root.className = `player subs-${playerPref('subSize')} subs-${playerPref('subStyle')}`;
     this.root.innerHTML = html`
       <video playsinline preload="auto" crossorigin="anonymous" x-webkit-airplay="allow"></video>
       <div class="p-subs" aria-live="off"></div>
@@ -2248,6 +2269,7 @@ const routes = [
   [/^\/search$/, viewSearch],
   [/^\/settings(?:\/(\w+))?$/, viewSettings],
   [/^\/account$/, viewAccount],
+  [/^\/account\/history$/, viewHistory],
   [/^\/link$/, viewAccount],
   [/^\/downloads$/, viewDownloads],
   [/^\/watchlist$/, viewWatchlist],

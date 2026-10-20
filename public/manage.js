@@ -205,136 +205,250 @@ async function viewTvSettings({ seq }) {
 }
 
 // ---------- account ----------
+// In the style of Settings (and Netflix's account pages): cards of rows, small pop-ups for the
+// things that need typing (PIN, password, a TV's code), about a screen tall.
+const SUB_SIZES = [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large'], ['xlarge', 'Extra large']];
+const SUB_STYLES = [['box', 'White on a dark box'], ['shadow', 'White with an outline'], ['yellow', 'Yellow with an outline']];
+const optionsOf = (list, current) => list.map(([v, l]) => html`<option value="${v}" ${String(current) === String(v) ? 'selected' : ''}>${l}</option>`);
+const stToggle = (label, note, attrs, on) => html`<label class="st-row st-toggle"><span class="st-row-label">${label}${note ? html`<span class="st-row-note">${note}</span>` : ''}</span>
+  <input type="checkbox" class="switch" ${raw(attrs)} ${on ? 'checked' : ''}></label>`;
+const stSelect = (label, note, attrs, options) => html`<label class="st-row"><span class="st-row-label">${label}${note ? html`<span class="st-row-note">${note}</span>` : ''}</span>
+  <select class="st-select" ${raw(attrs)}>${options}</select></label>`;
+const stButton = (label, value, id) => html`<button class="st-row st-btn" type="button" id="${id}"><span class="st-row-label">${label}</span><span class="st-row-value">${value}</span>${chevron()}</button>`;
+
 async function viewAccount({ query, seq }) {
   if (tv.on) return viewTvSettings({ seq });
   const u = state.user;
-  const devices = await api('/api/devices').catch(() => []);
-  const host = location.host;
+  const [devices, sessions] = await Promise.all([api('/api/devices').catch(() => []), api('/api/auth/sessions').catch(() => null)]);
+  const inApp = !!window.MarqueeAndroid;
+  const appVersion = inApp ? (() => { try { return window.MarqueeAndroid.version(); } catch { return ''; } })() : '';
+  const langs = (none) => [['', none], ...LANG_CHOICES];
   if (!setView(seq, html`
-    <div class="toolbar"><h1>Account</h1><button class="btn" id="acct-signout">Sign out</button></div>
-    <div class="panel">
-      <dl class="kv">
-        <dt>Username</dt><dd>${u.username}</dd>
-        <dt>Role</dt><dd>${u.role === 'admin' ? 'Administrator' : 'User'}</dd>
-        <dt>Libraries</dt><dd>${u.libraries === null ? 'All libraries' : `${u.libraries.length} shared with you`}</dd>
-        <dt>Downloads</dt><dd>${u.canDownload ? 'Allowed' : 'Not allowed'}</dd>
-      </dl>
-    </div>
-    <div class="panel form" id="player-prefs">
-      <h2>Player</h2>
-      <label class="check"><input type="checkbox" data-acct="autoplayNext" ${playerPref('autoplayNext') ? 'checked' : ''}> Play the next episode automatically (a 10-second countdown at the credits)</label>
-      <label class="check"><input type="checkbox" data-acct="autoSkipIntro" ${playerPref('autoSkipIntro') ? 'checked' : ''}> Skip intros automatically</label>
-      <label class="check"><input type="checkbox" data-acct="nightMode" ${playerPref('nightMode') ? 'checked' : ''}> Night mode: clearer dialogue and quieter loud scenes</label>
-      <label>Skip Intro / Skip Credits buttons
-        <select data-acct="skipFade">${[[5, 'Fade after 5 seconds'], [10, 'Fade after 10 seconds'], [15, 'Fade after 15 seconds'], [30, 'Fade after 30 seconds'], [0, 'Stay until the intro or credits end']]
-          .map(([v, l]) => html`<option value="${v}" ${playerPref('skipFade') === v ? 'selected' : ''}>${l}</option>`)}</select></label>
-      <p class="muted" style="margin:0;font-size:13px">Saved with your account: they apply on every device you watch on, TVs included. A faded button comes back when you bring up the controls.</p>
-    </div>
-    <div class="panel form" id="prefs">
-      <h2>This browser</h2>
-      <label class="check"><input type="checkbox" data-pref="subsOn" ${store.get('subsOn', false) ? 'checked' : ''}> Turn on subtitles by default</label>
-      <label>Streaming quality
-        <select data-pref="quality">${[['', 'Automatic (original at home, adaptive when away)'], ['original', 'Original'], ['auto', 'Adaptive (adjusts to your connection)'],
-          ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']].map(([v, l]) => html`<option value="${v}" ${(store.get('quality', '') || '') === v ? 'selected' : ''}>${l}</option>`)}</select></label>
-      <label class="check"><input type="checkbox" data-pref="groupCollections" ${store.get('groupCollections', true) ? 'checked' : ''}> Show movies that are in a collection as the collection (home page and libraries)</label>
-      <label class="check"><input type="checkbox" data-pref="askProfile" ${store.get('askProfile', false) ? 'checked' : ''}> Ask “Who's watching?” when Marquee opens (for a shared TV or tablet)</label>
-      <label class="check"><input type="checkbox" id="tv-mode" ${tv.on ? 'checked' : ''}> TV mode: bigger highlights, and the arrow keys or a remote move between titles</label>
-      <p class="muted" style="margin:0;font-size:13px">These are saved in this browser.</p>
-    </div>
-    ${window.MarqueeAndroid ? html`<div class="panel form" id="app-panel">
-      <h2>This app</h2>
-      <p class="muted" style="margin:0">Marquee for ${/MarqueeTV/.test(navigator.userAgent) ? 'Android TV' : 'Android'} ${(() => { try { return window.MarqueeAndroid.version(); } catch { return ''; } })()}</p>
-      ${typeof window.MarqueeAndroid.checkUpdates === 'function'
-        ? html`<div class="row"><button class="btn" type="button" id="app-update">Check for updates</button></div>
-          <p class="muted" style="margin:0;font-size:13px">The app also checks when it opens. Updates come from this server and keep you signed in.</p>`
-        : html`<p class="muted" style="margin:0;font-size:13px">This version can't update itself: install the new one once from the link below, and later versions can.</p>`}
-    </div>` : ''}
-    <form class="panel form" id="link-form">
-      <h2>Watch on a TV</h2>
-      <p class="muted" style="margin:0">Open Marquee on your Roku or Android TV (or the TV's web browser). It shows a code: type it here to sign that TV in as you.</p>
-      <div class="row"><input class="input code-input" name="code" maxlength="7" placeholder="ABC123" value="${query?.get('code') || ''}" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Code shown on the TV">
-        <button class="btn primary" type="submit">Link TV</button></div>
-      <div class="form-error" id="link-error"></div>
-      ${devices.length ? html`<div class="device-list">${devices.map((d) => html`<div class="device-row"><span><b>${d.name}</b> <span class="muted">· linked ${fmtDate(d.createdAt)}${d.lastSeenAt ? ` · last used ${fmtDate(d.lastSeenAt)}` : ''}</span></span>
-        <button class="btn small danger" type="button" data-unlink="${d.id}">Unlink</button></div>`)}</div>` : ''}
-      <p class="muted" style="margin:0;font-size:13px">The apps: <a class="link" href="/downloads/Marquee-TV.apk" download="Marquee-TV.apk">Android TV app</a> ·
-        <a class="link" href="/downloads/Marquee-Roku.zip" download="Marquee-Roku.zip">Roku channel</a> (added from a computer with the Roku in developer mode: see <code>roku/README.md</code>).
-        On a phone, <b>${host}/#/link</b> opens this box.</p>
-    </form>
-    <form class="panel form" id="pin-form">
-      <h2>Profile PIN</h2>
-      <p class="muted" style="margin:0">${u.hasPin ? 'You have a PIN.' : u.noPin ? 'Your profile can be picked on “Who\'s watching?” without a PIN (set by an admin).' : 'Set a PIN to appear on the “Who\'s watching?” screen, so people sharing a device can switch to your profile with it instead of your password.'}</p>
-      <div class="row" style="align-items:flex-end">
-        <label style="min-width:160px">Current password<input class="input" type="password" name="currentPassword" autocomplete="current-password" required></label>
-        <label style="min-width:120px">${u.hasPin ? 'New PIN' : 'PIN'}<input class="input" name="pin" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" placeholder="4–8 digits" autocomplete="off"></label>
-        <button class="btn primary" type="submit">${u.hasPin ? 'Change PIN' : 'Set PIN'}</button>
-        ${u.hasPin ? html`<button class="btn danger" type="button" id="pin-remove">Remove PIN</button>` : ''}
+    <div class="acct">
+      <div class="acct-head">
+        <span class="acct-avatar" style="background:${avatarColor(u.username)}">${u.username.slice(0, 1).toUpperCase()}</span>
+        <div class="acct-who"><h1>${u.username}</h1>
+          <span class="muted">${u.role === 'admin' ? 'Administrator' : u.maxAge != null ? 'Kids profile' : 'Member'}${u.libraries ? ` · ${u.libraries.length} librar${u.libraries.length === 1 ? 'y' : 'ies'}` : ''}</span></div>
+        <div class="row acct-actions"><button class="btn small" id="acct-switch">Switch profile</button><button class="btn small" id="acct-signout">Sign out</button></div>
       </div>
-      <div class="form-error" id="pin-error"></div>
-    </form>
-    ${window.MarqueeAndroid ? '' : html`<div class="panel">
-      <h2 style="margin-top:0">Android app</h2>
-      <p class="muted" style="margin:0 0 10px">Watch on your Android phone or tablet with the Marquee app. It plays videos in the phone's own player,
-        so more files play without converting. Open this page on your phone and tap the button; Android will ask you to allow
-        installing apps from your browser once.</p>
-      <a class="btn" href="/downloads/Marquee.apk" download="Marquee.apk">⤓ Get the Android app</a>
-    </div>`}
-    <form class="panel form" id="pw-form">
-      <h2>Change password</h2>
-      <label>Current password<input class="input" type="password" name="currentPassword" autocomplete="current-password" required></label>
-      <label>New password<input class="input" type="password" name="newPassword" autocomplete="new-password" minlength="8" required></label>
-      <label>Confirm new password<input class="input" type="password" name="confirm" autocomplete="new-password" required></label>
-      <div class="form-error" id="pw-error"></div>
-      <div><button class="btn primary" type="submit">Update password</button></div>
-      <p class="muted" style="margin:0;font-size:13px">Changing your password signs you out on your other devices.</p>
-    </form>`)) return;
+
+      <h2 class="st-sub">Playback <span class="acct-scope">· on every device you use</span></h2>
+      <div class="st-card" id="player-prefs">
+        ${stToggle('Play the next episode automatically', 'A 10-second countdown at the credits', 'data-acct="autoplayNext"', playerPref('autoplayNext'))}
+        ${stToggle('Skip intros automatically', '', 'data-acct="autoSkipIntro"', playerPref('autoSkipIntro'))}
+        ${stToggle('Night mode', 'Clearer dialogue, quieter loud scenes', 'data-acct="nightMode"', playerPref('nightMode'))}
+        ${stSelect('Skip Intro and Skip Credits buttons', 'A faded button comes back when you bring up the controls', 'data-acct="skipFade" data-num',
+    optionsOf([[5, 'Fade after 5 s'], [10, 'Fade after 10 s'], [15, 'Fade after 15 s'], [30, 'Fade after 30 s'], [0, 'Stay up']], playerPref('skipFade')))}
+        ${stSelect('Subtitles', 'Turned on when a title has them in this language (a show’s own choice still wins)', 'data-acct="subLang"', optionsOf(langs('Off unless I turn them on'), playerPref('subLang')))}
+        ${stSelect('Sound', 'Picked when a title has more than one language', 'data-acct="audioLang"', optionsOf(langs('The title’s own'), playerPref('audioLang')))}
+        ${stButton('Subtitle appearance', subLook(), 'acct-sublook')}
+      </div>
+
+      <h2 class="st-sub">On this ${inApp ? 'app' : 'browser'}</h2>
+      <div class="st-card" id="prefs">
+        ${stSelect('Streaming quality', '', 'data-pref="quality"', optionsOf([['', 'Automatic (original at home, adaptive away)'], ['original', 'Original'], ['auto', 'Adaptive'],
+    ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']], store.get('quality', '') || ''))}
+        ${stToggle('Subtitles on by default', 'In any language, when there’s no choice above', 'data-pref="subsOn"', store.get('subsOn', false))}
+        ${stToggle('Show films in a collection as the collection', 'On the home page and in libraries', 'data-pref="groupCollections"', store.get('groupCollections', true))}
+        ${stToggle('Ask “Who’s watching?” when Marquee opens', 'For a shared TV or tablet', 'data-pref="askProfile"', store.get('askProfile', false))}
+        ${stToggle('TV mode', 'Bigger highlights; the arrow keys or a remote move between titles', 'id="tv-mode"', tv.on)}
+        ${inApp ? (typeof window.MarqueeAndroid.checkUpdates === 'function'
+    ? stButton('Marquee app', `${appVersion} · Check for updates`, 'app-update')
+    : html`<div class="st-row"><span class="st-row-label">Marquee app</span><span class="st-row-value">${appVersion}</span></div>`) : ''}
+      </div>
+
+      <h2 class="st-sub">Profile and security</h2>
+      <div class="st-card">
+        <a class="st-row" href="#/account/history"><span class="st-row-label">Viewing activity<span class="st-row-note">What you’ve watched, newest first</span></span>${chevron()}</a>
+        ${stButton('Profile PIN', u.hasPin ? 'Set · Change' : u.noPin ? 'Not needed (set by an admin)' : 'Not set', 'acct-pin')}
+        ${stButton('Password', 'Change', 'acct-password')}
+        ${sessions ? stButton('Signed in', `${sessions.signIns.length} browser${sessions.signIns.length === 1 ? '' : 's'} or phone${sessions.signIns.length === 1 ? '' : 's'} · Manage`, 'acct-sessions') : ''}
+      </div>
+
+      <h2 class="st-sub" id="tvs">TVs and apps</h2>
+      <div class="st-card">
+        ${devices.map((d) => html`<div class="st-row"><span class="st-row-label">📺 ${d.name}<span class="st-row-note">Linked ${fmtDate(d.createdAt)}${d.lastSeenAt ? ` · last used ${fmtDate(d.lastSeenAt)}` : ''}</span></span>
+          <button class="btn small" type="button" data-unlink="${d.id}">Unlink</button></div>`)}
+        ${stButton('Link a TV', 'Type the code it shows', 'acct-link')}
+        ${inApp ? '' : html`<a class="st-row" href="/downloads/Marquee.apk" download="Marquee.apk"><span class="st-row-label">Android phone and tablet app<span class="st-row-note">Plays more files without converting. Open this page on the phone and tap here.</span></span>${chevron()}</a>`}
+        <a class="st-row" href="/downloads/Marquee-TV.apk" download="Marquee-TV.apk"><span class="st-row-label">Android TV app<span class="st-row-note">For Google TV, the NVIDIA Shield and other Android TV boxes</span></span>${chevron()}</a>
+        ${u.role === 'admin' ? html`<a class="st-row" href="/downloads/Marquee-Roku.zip" download="Marquee-Roku.zip"><span class="st-row-label">Roku channel<span class="st-row-note">Added from a computer with the Roku in developer mode: see roku/README.md</span></span>${chevron()}</a>` : ''}
+      </div>
+    </div>`)) return;
+
   $('#acct-signout').onclick = signOut;
+  $('#acct-switch').onclick = () => showProfilePicker();
   $('#tv-mode').onchange = (e) => { try { localStorage.setItem('marquee:tvMode', String(e.target.checked)); } catch { /* ignore */ } initTvMode(); toast(e.target.checked ? 'TV mode on' : 'TV mode off'); };
-  $('#link-form').onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const r = await api('/api/devices/link', { method: 'POST', body: { code: e.target.elements.code.value } });
-      toast(`${r.name} is signed in`);
-      history.replaceState(null, '', '#/account');
-      router();
-    } catch (err) { $('#link-error').textContent = err.message; }
+  $('#app-update')?.addEventListener('click', () => { try { window.MarqueeAndroid.checkUpdates(); } catch { toast('Update check failed', true); } });
+  $('#player-prefs').onchange = async (e) => {
+    const k = e.target.dataset.acct;
+    if (!k) return;
+    const v = e.target.type === 'checkbox' ? e.target.checked : 'num' in e.target.dataset ? Number(e.target.value) : e.target.value;
+    try { await savePlayerPrefs({ [k]: v }); toast('Saved for every device'); } catch (err) { toast(err.message, true); }
   };
-  $('#link-form').onclick = async (e) => {
+  $('#acct-sublook').onclick = () => subtitleDialog(() => { $('#acct-sublook .st-row-value').textContent = subLook(); });
+  $('#prefs').onchange = (e) => { const k = e.target.dataset.pref; if (k) { store.set(k, e.target.type === 'checkbox' ? e.target.checked : e.target.value); toast('Saved'); } };
+  $('.acct').onclick = async (e) => {
     const id = e.target.closest('[data-unlink]')?.dataset.unlink;
     if (!id || !confirm('Unlink this TV? It will need a new code to sign in again.')) return;
     await api(`/api/devices/${id}`, { method: 'DELETE' });
     toast('TV unlinked');
     router();
   };
-  if (query?.get('code') || parseHash().path === '/link') $('#link-form').scrollIntoView({ block: 'center' });
-  $('#app-update')?.addEventListener('click', () => { try { window.MarqueeAndroid.checkUpdates(); } catch { toast('Update check failed', true); } });
-  $('#player-prefs').onchange = async (e) => {
-    const k = e.target.dataset.acct;
+  $('#acct-pin').onclick = () => pinDialog(u);
+  $('#acct-password').onclick = () => passwordDialog();
+  $('#acct-sessions')?.addEventListener('click', () => sessionsDialog(sessions));
+  $('#acct-link').onclick = () => linkDialog();
+  // "#/link" (what a TV tells you to open) and "?code=" (from its QR code) open the code box.
+  if (query?.get('code') || parseHash().path === '/link') linkDialog(query?.get('code') || '');
+}
+
+const subLook = () => `${SUB_SIZES.find(([v]) => v === playerPref('subSize'))?.[1]} · ${SUB_STYLES.find(([v]) => v === playerPref('subStyle'))?.[1]}`;
+
+// Subtitle size and look, with a sample that changes as you choose.
+function subtitleDialog(onSaved) {
+  const m = openModal({
+    title: 'Subtitle appearance',
+    body: html`<div style="display:grid;gap:14px" id="sublook">
+      <div class="acct-sub-sample"><span class="acct-sample subs-${playerPref('subSize')} subs-${playerPref('subStyle')}"><span>This is how subtitles look.</span></span></div>
+      <label>Size <select class="st-select" data-k="subSize">${optionsOf(SUB_SIZES, playerPref('subSize'))}</select></label>
+      <label>Look <select class="st-select" data-k="subStyle">${optionsOf(SUB_STYLES, playerPref('subStyle'))}</select></label>
+      <p class="muted" style="margin:0;font-size:13px">For the web player and the Android apps. A Roku shows subtitles in its own style (its Settings → Accessibility → Captions style).</p>
+    </div>`,
+  });
+  $('#sublook', m.body).onchange = async (e) => {
+    const k = e.target.dataset.k;
     if (!k) return;
-    const v = e.target.type === 'checkbox' ? e.target.checked : Number(e.target.value);
-    try { await savePlayerPrefs({ [k]: v }); toast('Saved for your account'); } catch (err) { toast(err.message, true); }
-  };
-  $('#prefs').onchange = (e) => { const k = e.target.dataset.pref; if (k) { store.set(k, e.target.type === 'checkbox' ? e.target.checked : e.target.value); toast('Saved'); } };
-  const savePin = async (pin) => {
-    const f = $('#pin-form').elements;
     try {
-      state.user = (await api('/api/auth/pin', { method: 'POST', body: { currentPassword: f.currentPassword.value, pin } })).user;
+      await savePlayerPrefs({ [k]: e.target.value });
+      $('.acct-sample', m.body).className = `acct-sample subs-${playerPref('subSize')} subs-${playerPref('subStyle')}`;
+      onSaved();
+      toast('Saved for every device');
+    } catch (err) { toast(err.message, true); }
+  };
+}
+
+function linkDialog(code = '') {
+  const m = openModal({
+    title: 'Link a TV',
+    body: html`<form class="form" id="link-form" style="display:grid;gap:12px">
+      <p class="muted" style="margin:0">Open Marquee on your Roku or Android TV (or the TV’s web browser). It shows a code: type it here to sign that TV in as you.</p>
+      <div class="row"><input class="input code-input" name="code" maxlength="7" placeholder="ABC123" value="${code}" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Code shown on the TV">
+        <button class="btn primary" type="submit">Link TV</button></div>
+      <div class="form-error"></div>
+      <p class="muted" style="margin:0;font-size:13px">On a phone, <b>${location.host}/#/link</b> opens this box.</p>
+    </form>`,
+  });
+  const form = $('form', m.body);
+  form.elements.code.focus();
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const r = await api('/api/devices/link', { method: 'POST', body: { code: form.elements.code.value } });
+      m.close();
+      toast(`${r.name} is signed in`);
+      history.replaceState(null, '', '#/account');
+      router();
+    } catch (err) { $('.form-error', form).textContent = err.message; }
+  };
+}
+
+function pinDialog(u) {
+  const m = openModal({
+    title: 'Profile PIN',
+    body: html`<form class="form" style="display:grid;gap:12px">
+      <p class="muted" style="margin:0">${u.hasPin ? 'You have a PIN. Change it, or remove it.' : 'A PIN lets people sharing a device switch to your profile on “Who’s watching?” with it instead of your password.'}</p>
+      <label>Current password<input class="input" type="password" name="currentPassword" autocomplete="current-password" required></label>
+      <label>${u.hasPin ? 'New PIN' : 'PIN'}<input class="input" name="pin" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" placeholder="4–8 digits" autocomplete="off"></label>
+      <div class="form-error"></div>
+      <div class="row"><button class="btn primary" type="submit">${u.hasPin ? 'Change PIN' : 'Set PIN'}</button>
+        ${u.hasPin ? html`<button class="btn danger" type="button" data-remove>Remove PIN</button>` : ''}</div>
+    </form>`,
+  });
+  const form = $('form', m.body);
+  const save = async (pin) => {
+    try {
+      state.user = (await api('/api/auth/pin', { method: 'POST', body: { currentPassword: form.elements.currentPassword.value, pin } })).user;
+      m.close();
       toast(pin ? 'PIN saved' : 'PIN removed');
       router();
-    } catch (err) { $('#pin-error').textContent = err.message; }
+    } catch (err) { $('.form-error', form).textContent = err.message; }
   };
-  $('#pin-form').onsubmit = (e) => { e.preventDefault(); savePin(e.target.elements.pin.value); };
-  if ($('#pin-remove')) $('#pin-remove').onclick = () => { if ($('#pin-form').elements.currentPassword.reportValidity()) savePin(''); };
-  $('#pw-form').onsubmit = async (e) => {
+  form.onsubmit = (e) => { e.preventDefault(); save(form.elements.pin.value); };
+  $('[data-remove]', form)?.addEventListener('click', () => { if (form.elements.currentPassword.reportValidity()) save(''); });
+}
+
+function passwordDialog() {
+  const m = openModal({
+    title: 'Change password',
+    body: html`<form class="form" style="display:grid;gap:12px">
+      <label>Current password<input class="input" type="password" name="currentPassword" autocomplete="current-password" required></label>
+      <label>New password<input class="input" type="password" name="newPassword" autocomplete="new-password" minlength="8" required></label>
+      <label>Confirm new password<input class="input" type="password" name="confirm" autocomplete="new-password" required></label>
+      <div class="form-error"></div>
+      <div><button class="btn primary" type="submit">Change password</button></div>
+      <p class="muted" style="margin:0;font-size:13px">This signs you out on your other browsers and phones.</p>
+    </form>`,
+  });
+  const form = $('form', m.body);
+  form.onsubmit = async (e) => {
     e.preventDefault();
-    const f = e.target.elements;
-    if (f.newPassword.value !== f.confirm.value) { $('#pw-error').textContent = 'Passwords do not match'; return; }
+    const f = form.elements;
+    if (f.newPassword.value !== f.confirm.value) { $('.form-error', form).textContent = 'Passwords do not match'; return; }
     try {
       await api('/api/auth/password', { method: 'POST', body: { currentPassword: f.currentPassword.value, newPassword: f.newPassword.value } });
-      e.target.reset();
-      $('#pw-error').textContent = '';
-      toast('Password updated');
-    } catch (err) { $('#pw-error').textContent = err.message; }
+      m.close();
+      toast('Password changed');
+    } catch (err) { $('.form-error', form).textContent = err.message; }
+  };
+}
+
+function sessionsDialog(sessions) {
+  const others = sessions.signIns.filter((s) => !s.current).length;
+  const m = openModal({
+    title: 'Where you’re signed in',
+    body: html`<div style="display:grid;gap:12px">
+      <div class="st-card" style="margin:0">${sessions.signIns.map((s) => html`<div class="st-row"><span class="st-row-label">${s.device}<span class="st-row-note">Since ${fmtDate(s.createdAt)}</span></span>
+        ${s.current ? html`<span class="st-row-value">This one</span>` : ''}</div>`)}</div>
+      ${sessions.tvs.length ? html`<p class="muted" style="margin:0;font-size:13px">Linked TVs (${sessions.tvs.length}) stay signed in: unlink them one by one under TVs and apps.</p>` : ''}
+      <div class="row"><button class="btn primary" type="button" data-out ${others ? '' : 'disabled'}>Sign out everywhere else</button></div>
+    </div>`,
+  });
+  $('[data-out]', m.body).onclick = async () => {
+    try {
+      const r = await api('/api/auth/signout-others', { method: 'POST' });
+      m.close();
+      toast(r.signedOut ? `Signed out of ${r.signedOut} other place${r.signedOut === 1 ? '' : 's'}` : 'Nowhere else to sign out of');
+      router();
+    } catch (err) { toast(err.message, true); }
+  };
+}
+
+// Account → Viewing activity: what this profile has watched, newest first.
+async function viewHistory({ seq }) {
+  const list = await api('/api/history');
+  const day = (t) => new Date(t).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: new Date(t).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+  const groups = [];
+  for (const x of list) {
+    const d = day(x.watchedAt);
+    if (groups[groups.length - 1]?.day !== d) groups.push({ day: d, items: [] });
+    groups[groups.length - 1].items.push(x);
+  }
+  const title = (x) => (x.type === 'episode' ? html`<b>${x.showTitle}</b> <span class="muted">· ${epLabel(x)} ${x.title}</span>` : html`<b>${x.title}</b>${x.year ? html` <span class="muted">· ${x.year}</span>` : ''}`);
+  if (!setView(seq, html`<div class="acct">
+    <div class="st-head"><h1>Viewing activity</h1><a class="btn small" href="#/account">‹ Account</a></div>
+    ${groups.length ? groups.map((g) => html`<h2 class="st-sub">${g.day}</h2><div class="st-card">${g.items.map((x) => html`<div class="st-row hist-row">
+      <a class="st-row-label" href="#/item/${x.id}"><span>${title(x)}</span><span class="st-row-note">${x.progress?.watched ? 'Watched' : x.duration ? `${fmtClock(x.progress?.position || 0)} of ${fmtClock(x.duration)}` : ''}</span></a>
+      <button class="icon-btn" type="button" data-forget="${x.id}" title="Remove from your activity" aria-label="Remove ${x.title} from your activity">✕</button></div>`)}</div>`)
+    : html`<div class="st-card"><div class="st-row muted">Nothing watched yet.</div></div>`}
+    <p class="muted acct-note">Removing something forgets where you got to and whether you’ve watched it.</p>
+  </div>`)) return;
+  $('.acct').onclick = async (e) => {
+    const id = e.target.closest('[data-forget]')?.dataset.forget;
+    if (!id) return;
+    await api(`/api/history/${id}`, { method: 'DELETE' });
+    e.target.closest('.hist-row').remove();
+    toast('Removed from your activity');
   };
 }
 

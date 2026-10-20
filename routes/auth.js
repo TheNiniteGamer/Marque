@@ -109,6 +109,13 @@ module.exports = function register(app) {
     json(res, 200, { user: publicUser(user) });
   });
 
+  // Where you're signed in (browsers and the phone app), and signing out of all of them but this one.
+  route('GET', '/api/auth/sessions', async (req, res, p, url, user) => {
+    const { deviceName } = require('../lib/activity');
+    json(res, 200, { signIns: auth.signIns(user, req.sessionKey).map(({ ua, ...s }) => ({ ...s, device: deviceName(ua) })), tvs: auth.devices(user) });
+  });
+  route('POST', '/api/auth/signout-others', async (req, res, p, url, user) => json(res, 200, { signedOut: auth.signOutOthers(user, req.sessionKey) }));
+
   // Player settings for your account (they apply on every device you watch on).
   route('PUT', '/api/auth/prefs', async (req, res, p, url, user) => {
     const body = await readBody(req);

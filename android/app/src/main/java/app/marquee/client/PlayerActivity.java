@@ -99,6 +99,7 @@ public class PlayerActivity extends Activity {
     private MediaPlayer mp;
     float speed = 1f;
     private boolean subsOn;
+    private String subLang = "", audioLang = "";   // the account's languages (Account → Playback)
     boolean autoplayNext = true;
     private long lastReport;
     private boolean pipUsed;
@@ -159,6 +160,9 @@ public class PlayerActivity extends Activity {
             JSONObject req = new JSONObject(getIntent().getStringExtra(EXTRA_REQUEST));
             autoplayNext = req.optBoolean("autoplayNext", true);
             subsOn = req.optBoolean("subsOn", false);
+            subLang = req.optString("subLang", "");
+            audioLang = req.optString("audioLang", "");
+            styleSubtitles(req.optString("subSize", "medium"), req.optString("subStyle", "box"));
             autoSkipIntro = req.optBoolean("autoSkipIntro", false);
             skipFade = req.optInt("skipFade", 10);
             nightMode = req.optBoolean("nightMode", false);
@@ -265,7 +269,20 @@ public class PlayerActivity extends Activity {
         for (int i = 0; prefAudio != null && tracks != null && i < tracks.length(); i++) {
             if (prefAudio.equals(tracks.optJSONObject(i).optString("lang"))) { audioIndex = i; break; }
         }
-        if (prefSubs != null && !"off".equals(prefSubs) && list != null) {
+        // Otherwise the account's languages (Account → Playback), when the title has them.
+        for (int i = 0; prefAudio == null && !audioLang.isEmpty() && tracks != null && i < tracks.length(); i++) {
+            if (PlaybackPlan.sameLang(tracks.optJSONObject(i).optString("lang"), audioLang)) { audioIndex = i; break; }
+        }
+        JSONObject langSub = null;
+        for (int pass = 0; prefSubs == null && !subLang.isEmpty() && list != null && pass < 2 && langSub == null; pass++) {
+            for (int i = 0; i < list.length() && langSub == null; i++) {
+                JSONObject c = list.optJSONObject(i);
+                if (c.has("burn") == (pass == 1) && PlaybackPlan.sameLang(c.optString("lang"), subLang)) langSub = c;
+            }
+        }
+        if (langSub != null) {
+            setSubtitles(langSub.optString("id"), false);
+        } else if (prefSubs != null && !"off".equals(prefSubs) && list != null) {
             JSONObject pick = null;
             for (int pass = 0; pass < 2 && pick == null; pass++) {
                 for (int i = 0; i < list.length() && pick == null; i++) {
@@ -371,6 +388,16 @@ public class PlayerActivity extends Activity {
                 });
             });
         }
+    }
+
+    /** Subtitle size and look (Account → Playback): a dark box (as before), an outline, or yellow. */
+    private void styleSubtitles(String size, String style) {
+        float scale = "small".equals(size) ? 0.8f : "large".equals(size) ? 1.3f : "xlarge".equals(size) ? 1.6f : 1f;
+        subs.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, getResources().getDimension(R.dimen.player_subs) * scale);
+        if ("box".equals(style)) return;
+        subs.setBackground(null);
+        subs.setShadowLayer(8f, 0f, 0f, 0xFF000000);
+        if ("yellow".equals(style)) subs.setTextColor(0xFFFFE14D);
     }
 
     private static String str(JSONObject o, String key) { return o.isNull(key) ? null : o.optString(key, null); }

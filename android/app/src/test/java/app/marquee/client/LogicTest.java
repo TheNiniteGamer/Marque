@@ -153,4 +153,16 @@ public class LogicTest {
         assertFalse("hidden in the last second", PlaybackPlan.inIntro(34.5, 5, 35));
         assertFalse("no intro", PlaybackPlan.inIntro(10, 0, 0));
     }
+
+    @Test
+    public void accountLanguagesMatchTheCodesFilesUse() {
+        assertTrue(PlaybackPlan.sameLang("eng", "en"));
+        assertTrue(PlaybackPlan.sameLang("en-US", "en"));
+        assertTrue(PlaybackPlan.sameLang("fre", "fr"));
+        assertTrue(PlaybackPlan.sameLang("fra", "fr"));
+        assertTrue(PlaybackPlan.sameLang("JPN", "ja"));
+        assertFalse(PlaybackPlan.sameLang("spa", "en"));
+        assertFalse(PlaybackPlan.sameLang("", "en"));
+        assertFalse(PlaybackPlan.sameLang("eng", ""));
+    }
 }

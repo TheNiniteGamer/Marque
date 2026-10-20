@@ -71,7 +71,7 @@ sub init()
     m.upNextIndex = 0
     m.tp = invalid
     m.tpAskedAt = -1000
-    m.prefs = { autoplayNext: true, autoSkipIntro: false, skipFade: 10, nightMode: false }
+    m.prefs = { autoplayNext: true, autoSkipIntro: false, skipFade: 10, nightMode: false, subLang: "", audioLang: "" }
     m.skipPart = ""
     m.skipSince = 0
     m.autoSkipped = false
@@ -167,6 +167,9 @@ sub onPlayback(event as Object)
         if p.autoSkipIntro <> invalid then m.prefs.autoSkipIntro = mqIsTrue(p.autoSkipIntro)
         if p.skipFade <> invalid then m.prefs.skipFade = mqNum(p.skipFade)
         if p.nightMode <> invalid then m.prefs.nightMode = mqIsTrue(p.nightMode)
+        ' The account's languages (Account → Playback); subtitle looks follow the Roku's caption settings.
+        if p.subLang <> invalid then m.prefs.subLang = LCase(mqStr(p.subLang))
+        if p.audioLang <> invalid then m.prefs.audioLang = LCase(mqStr(p.audioLang))
     end if
     start()
 end sub
@@ -205,6 +208,22 @@ function canPlayDirectly(x as Object) as Boolean
         if ac <> "aac" and ac <> "ac3" and ac <> "eac3" and ac <> "mp3" and ac <> "flac" then return false
     end if
     return true
+end function
+
+' Whether a track's language ("eng", "en-US"…) is the account's code ("en").
+function sameLang(lang as Dynamic, code as String) as Boolean
+    l = LCase(mqStr(lang))
+    dash = Instr(1, l, "-")
+    if dash > 0 then l = Left(l, dash - 1)
+    if l = "" or code = "" then return false
+    if l = code then return true
+    aliases = { en: "eng", es: "spa", fr: "fre fra", de: "ger deu", it: "ita", pt: "por", nl: "dut nld", sv: "swe", pl: "pol", ru: "rus", tr: "tur", ar: "ara", hi: "hin", ja: "jpn", ko: "kor", zh: "chi zho" }
+    a = aliases[code]
+    if a = invalid then return false
+    for each other in a.Split(" ")
+        if other = l then return true
+    end for
+    return false
 end function
 
 ' "mp4" or "mkv" for files the Roku opens itself, else "".
@@ -247,6 +266,14 @@ sub start()
             end if
         end for
         if m.audio > 0 then m.mode = "hls"
+    else if m.prefs.audioLang <> "" and x.audioTracks <> invalid then
+        for i = 0 to x.audioTracks.Count() - 1
+            if sameLang(x.audioTracks[i].lang, m.prefs.audioLang) then
+                m.audio = i
+                exit for
+            end if
+        end for
+        if m.audio > 0 then m.mode = "hls"
     end if
 
     startAt = mqNum(m.top.params.start)
@@ -275,7 +302,16 @@ sub start()
     m.reportTimer.control = "start"
     ' The subtitle language picked for this show, else the one picked last time anywhere.
     want = mqRead("subLang")
-    if pref <> invalid and pref.subs <> invalid then want = mqStr(pref.subs)
+    if pref <> invalid and pref.subs <> invalid then
+        want = mqStr(pref.subs)
+    else if m.prefs.subLang <> "" then
+        for i = 0 to m.subs.Count() - 1
+            if m.subs[i].burn = invalid and sameLang(m.subs[i].lang, m.prefs.subLang) then
+                want = mqStr(m.subs[i].lang)
+                exit for
+            end if
+        end for
+    end if
     if want <> "" and want <> "off" then
         for i = 0 to m.subs.Count() - 1
             if m.subs[i].burn = invalid and mqStr(m.subs[i].lang) = want then

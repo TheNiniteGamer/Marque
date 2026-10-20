@@ -75,14 +75,14 @@ test('movies say which trailer can be previewed', async () => {
 
 test('player settings follow the account to every device', async () => {
   const me = (await admin('GET', '/api/auth/me')).data.user;
-  assert.deepEqual(me.prefs, { autoplayNext: true, autoSkipIntro: false, skipFade: 10, nightMode: false });
+  assert.deepEqual(me.prefs, { autoplayNext: true, autoSkipIntro: false, skipFade: 10, nightMode: false, subLang: '', audioLang: '', subSize: 'medium', subStyle: 'box' });
   assert.equal(me.prefsSaved, false);
   const r = await admin('PUT', '/api/auth/prefs', { skipFade: 5, autoplayNext: false, nightMode: true, junk: 1 });
-  assert.deepEqual(r.data.prefs, { autoplayNext: false, autoSkipIntro: false, skipFade: 5, nightMode: true });
+  assert.deepEqual(r.data.prefs, { autoplayNext: false, autoSkipIntro: false, skipFade: 5, nightMode: true, subLang: '', audioLang: '', subSize: 'medium', subStyle: 'box' });
   assert.equal((await admin('PUT', '/api/auth/prefs', { skipFade: 7 })).status, 400);
   assert.equal((await admin('GET', '/api/auth/me')).data.user.prefsSaved, true);
   // Players (the Roku's included) get them with the playback details.
-  assert.deepEqual((await admin('GET', `/api/items/${movieId}/playback`)).data.prefs, { autoplayNext: false, autoSkipIntro: false, skipFade: 5, nightMode: true });
+  assert.deepEqual((await admin('GET', `/api/items/${movieId}/playback`)).data.prefs, { autoplayNext: false, autoSkipIntro: false, skipFade: 5, nightMode: true, subLang: '', audioLang: '', subSize: 'medium', subStyle: 'box' });
 });
 
 test('TVs looking for Marquee on the network see which PC it is', async () => {
