@@ -224,6 +224,11 @@ module.exports = function register(app) {
     remoteMaxQuality: store.data.settings.remoteMaxQuality || '' });
   route('GET', '/api/transcoding', async (req, res) => json(res, 200, transcodingView()), 'admin');
 
+  // --- automatic subtitles (admin; lib/autosubs.js) ---
+  route('GET', '/api/autosubs', async (req, res) => json(res, 200, app.autoSubs.status()), 'admin');
+  route('PATCH', '/api/autosubs', async (req, res) => json(res, 200, app.autoSubs.update(await readBody(req))), 'admin');
+  route('POST', '/api/autosubs/run', async (req, res) => { const got = await app.autoSubs.run(); json(res, 200, { ...app.autoSubs.status(), got }); }, 'admin');
+
   // --- overnight conversions (admin; lib/optimize.js) ---
   route('GET', '/api/optimize', async (req, res) => json(res, 200, app.optimizer.status()), 'admin');
   route('PATCH', '/api/optimize', async (req, res) => { app.optimizer.update(await readBody(req)); json(res, 200, app.optimizer.status()); }, 'admin');

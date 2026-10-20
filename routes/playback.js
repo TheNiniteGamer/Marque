@@ -3,6 +3,7 @@
 // Registered by server.js, which passes the shared helpers and services in `app`.
 
 const { playerPrefs } = require('../lib/auth');
+const { saveDownloaded } = require('../lib/autosubs');
 
 module.exports = function register(app) {
   const {
@@ -262,14 +263,10 @@ module.exports = function register(app) {
     const body = await readBody(req);
     if (!/^\d+$/.test(String(body.fileId || ''))) throw new HttpError(400, 'Pick a subtitle from the search results');
     const { text, remaining } = await opensubs.download(body.fileId);
-    fs.mkdirSync(SUB_DOWNLOADS, { recursive: true });
-    const file = `${item.id}-${body.fileId}.srt`;
-    fs.writeFileSync(path.join(SUB_DOWNLOADS, file), text);
     const lang = /^[a-z]{2}(-[a-z]{2})?$/i.test(body.language || '') ? body.language.toLowerCase() : null;
-    item.downloadedSubs = [...(item.downloadedSubs || []).filter((s) => s.file !== file), { file, lang, release: String(body.release || '').slice(0, 200), at: Date.now() }];
-    store.save();
+    const at = saveDownloaded(store, SUB_DOWNLOADS, item, { fileId: body.fileId, text, lang, release: body.release });
     const detail = lib.itemDetail(store, user, item);
-    json(res, 200, { ...detail, added: `dl${item.downloadedSubs.length - 1}`, remaining });
+    json(res, 200, { ...detail, added: `dl${at}`, remaining });
   });
   route('DELETE', '/api/items/:id/subtitles/:sub', async (req, res, { id, sub }, url, user) => {
     const item = getItem(id, user, { real: true });

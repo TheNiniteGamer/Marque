@@ -361,9 +361,9 @@ const SETTINGS_PAGES = [
   },
   {
     id: 'metadata', label: 'Metadata & subtitles',
-    load: () => api('/api/settings'),
-    render: (st) => metadataSection(st, { heading: false }),
-    bind: () => bindMetadataSection(),
+    load: () => Promise.all([api('/api/settings'), api('/api/autosubs')]),
+    render: ([st, a]) => html`${metadataSection(st, { heading: false })}${autoSubsSection(a)}`,
+    bind: ([, a]) => { bindMetadataSection(); bindAutoSubs(a); },
   },
   {
     id: 'remote', label: 'Remote access',
@@ -407,6 +407,32 @@ const SETTINGS_PAGES = [
     },
   },
 ];
+
+// Automatic subtitles (lib/autosubs.js), under the OpenSubtitles settings.
+function autoSubsSection(a) {
+  const names = (codes) => codes.map((c) => LANG_CHOICES.find(([k]) => k === c)?.[1] || c).join(', ');
+  return html`<h2 class="st-sub">Automatic subtitles</h2>
+    <div class="st-card" id="autosubs">
+      ${stToggle('Fetch missing subtitles by themselves', a.configured
+        ? `Films and episodes without subtitles in ${a.languages.length ? names(a.languages) : 'your family’s languages'} get them from OpenSubtitles, newest first, within its daily allowance. One made for the same video file is preferred.`
+        : 'Connect OpenSubtitles above first.', 'id="as-on"' + (a.configured ? '' : ' disabled'), a.settings.enabled)}
+      <label class="st-row"><span class="st-row-label">Languages<span class="st-row-note">${a.settings.languages.length ? 'Set here.' : a.languages.length
+        ? `The ones people picked on their Account pages (${names(a.languages)}). Type others to use those instead.` : 'Nobody has picked a subtitle language on their Account page yet; type them here.'}</span></span>
+        <input class="input" id="as-langs" value="${a.settings.languages.join(', ')}" placeholder="${a.languages.join(', ') || 'en'}" style="width:160px"></label>
+      ${a.settings.enabled ? html`<div class="st-row ${a.paused ? 'warn' : ''}"><span class="st-row-label">${a.today} fetched today · ${a.total} altogether
+          <span class="st-row-note">${a.paused ? `Paused until ${fmtDate(a.paused.until)}: ${a.paused.why}` : `${a.missing} still to look for`}${a.last ? ` · last: ${a.last.release}` : ''}</span></span>
+        <button class="btn small" id="as-run" ${a.paused ? 'disabled' : ''}>Look now</button></div>` : ''}
+    </div>`;
+}
+function bindAutoSubs() {
+  const patch = async (body, msg) => { try { await api('/api/autosubs', { method: 'PATCH', body }); toast(msg); router(); } catch (err) { toast(err.message, true); } };
+  if ($('#as-on')) $('#as-on').onchange = (e) => patch({ enabled: e.target.checked }, e.target.checked ? 'Automatic subtitles on' : 'Automatic subtitles off');
+  $('#as-langs').onchange = (e) => patch({ languages: e.target.value }, 'Saved');
+  if ($('#as-run')) $('#as-run').onclick = async (e) => {
+    e.target.disabled = true;
+    try { const r = await api('/api/autosubs/run', { method: 'POST' }); toast(r.got ? `Fetched ${r.got}` : 'Nothing new found this time'); router(); } catch (err) { toast(err.message, true); }
+  };
+}
 
 // One app's card on the Radarr & Sonarr page: connect, then pick the quality profile and folder.
 const arrRes = (r) => (!r ? 'any size' : r >= 2160 ? 'up to 4K' : `up to ${r}p`);

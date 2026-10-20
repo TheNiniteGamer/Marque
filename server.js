@@ -44,6 +44,7 @@ const notifications = require('./lib/notifications');
 const requests = require('./lib/requests');
 const { Arr } = require('./lib/arr');
 const { Optimizer } = require('./lib/optimize');
+const { AutoSubs } = require('./lib/autosubs');
 const { Health } = require('./lib/health');
 const { Previews } = require('./lib/previews');
 const { KINDS: ENCODER_NAMES } = require('./lib/hwaccel');
@@ -121,6 +122,7 @@ const TRANSCODE_DIR = path.resolve(process.env.TRANSCODE_DIR || path.join(os.tmp
 const hls = new hlsLib.HlsManager(TRANSCODE_DIR, hwaccel);
 const tokens = new MediaTokens(store);
 const opensubs = new OpenSubtitles(() => store.data.settings);
+const autoSubs = new AutoSubs(store, opensubs, SUB_DOWNLOADS, { isOtherVersion: (it) => lib.isOtherVersion(store, it) });
 const parties = new Parties();
 const trickplay = new Trickplay(DATA_DIR, { hwaccel });
 const keyframes = new Keyframes(path.join(DATA_DIR, 'keyframes'));
@@ -488,7 +490,7 @@ const app = {
   Activity, Maintenance, ENCODER_NAMES, PORT, HOST, DATA_DIR, MEDIA_ROOT, SCAN_INTERVAL_MIN,
   MEDIA_LABELS, hostLabel, fromHostPath, folderPlaces, PUBLIC_DIR, THUMB_DIR, SUB_CACHE, SUB_DOWNLOADS, store, matcher,
   scanner, updater, hwaccel, TRANSCODE_DIR, hls, offline, offlineLib, health, previews, tokens, opensubs, parties,
-  trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader, arr, optimizer,
+  trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader, arr, optimizer, autoSubs,
   transcodes, HttpError, json, readBody, readRaw, MIME, sendFile, getItem,
   getShow, getLibrary, getUser, librarySummary, validateLibraryInput, removeLibraryData, resolveArt, subtitleVtt,
   isPrivateIp, TRUST_PROXY, clientIp, viaHttpsProxy, noteRemoteOrigin, mediaTokenUser, castAddresses, isRemote,
@@ -679,6 +681,7 @@ async function main() {
   maintenance.start();
   offline.start();
   optimizer.start();
+  autoSubs.start();
   health.start();
   previews.start();
   // Titles from before HDR, interlacing and DVD pixel shapes were noted: checked once, and
