@@ -139,6 +139,40 @@ function mqCard(item as Object) as Object
     return c
 end function
 
+' "Coming soon" (a show's next episode, or a film on its way): its artwork and when.
+function mqUpcomingCard(item as Object) as Object
+    c = CreateObject("roSGNode", "ContentNode")
+    sub_ = mqStr(item.release)
+    if item.kind = "episode" then
+        sub_ = "S" + mqStr(item.season) + ":E" + mqStr(item.episode)
+        if item.episodeTitle <> invalid then sub_ = sub_ + " · " + mqStr(item.episodeTitle)
+    end if
+    c.addFields({ kind: "upcoming", progress: 0.0, badge: mqSoonDate(mqStr(item.airDate)), sub: sub_, data: item })
+    c.id = item.id
+    c.title = mqStr(item.title)
+    if item.kind = "episode" then
+        c.HDPosterUrl = mqArt("backdrop", { id: item.showId, artV: item.artV })
+    else if item.image <> invalid then
+        c.HDPosterUrl = mqStr(item.image)
+    end if
+    return c
+end function
+
+' "Today", "Tomorrow", "Fri", or "24 Oct" for an ISO date.
+function mqSoonDate(iso as String) as String
+    when = CreateObject("roDateTime")
+    when.FromISO8601String(Left(iso, 10) + " 12:00:00")
+    today = CreateObject("roDateTime")
+    today.ToLocalTime()
+    today.FromISO8601String(Left(today.ToISOString(), 10) + " 12:00:00")
+    days = Int((when.AsSeconds() - today.AsSeconds()) / 86400)
+    if days <= 0 then return "Today"
+    if days = 1 then return "Tomorrow"
+    if days < 7 then return Left(when.GetWeekday(), 3)
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    return when.GetDayOfMonth().ToStr() + " " + months[when.GetMonth() - 1]
+end function
+
 ' Starts a request to the server; `callback` (a function name in the caller) gets the response
 ' { status, data, error, tag } as the event's data.
 function mqApi(path as String, callback as String, method = "GET" as String, body = invalid as Dynamic, tag = "" as String) as Object

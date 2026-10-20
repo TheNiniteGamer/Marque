@@ -19,7 +19,7 @@ const PROFILES = [
 const BREAKING_BAD = { title: 'Breaking Bad', tvdbId: 81189, year: 2008, seasons: [1, 2, 3, 4, 5].map((n) => ({ seasonNumber: n, monitored: false })) };
 
 function fakeArr(app, { key, rootFolder }) {
-  const st = { sent: [], items: {}, queue: [], down: false, freeSpace: 500e9, nextId: app === 'radarr' ? 11 : 21 };
+  const st = { sent: [], items: {}, queue: [], calendar: [], down: false, freeSpace: 500e9, nextId: app === 'radarr' ? 11 : 21 };
   st.server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     const p = url.pathname.replace(/^\/api\/v3/, '');
@@ -35,6 +35,7 @@ function fakeArr(app, { key, rootFolder }) {
     if (p === '/rootfolder') return send(200, [{ id: 1, path: rootFolder, freeSpace: st.freeSpace, accessible: true }, { id: 2, path: 'E:\\Elsewhere', freeSpace: 1e12, accessible: true }]);
     if (p === '/queue') return send(200, { page: 1, totalRecords: st.queue.length, records: st.queue });
     if (p === '/command') return send(201, { id: 1, name: json.name, status: 'queued' });
+    if (p === '/calendar') { st.calendarQuery = Object.fromEntries(url.searchParams); return send(200, st.calendar); }
     // Radarr
     if (p === '/movie' && req.method === 'GET') return send(200, Object.values(st.items).filter((m) => m.tmdbId === Number(url.searchParams.get('tmdbId'))));
     if (p === '/movie/lookup/tmdb') {

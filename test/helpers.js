@@ -23,7 +23,14 @@ async function startServer(env) {
     if (await fetch(`${base}/api/health`).then((r) => r.ok).catch(() => false)) break;
     await new Promise((r) => setTimeout(r, 100));
   }
-  const stop = () => new Promise((r) => { proc.once('exit', r); proc.kill('SIGTERM'); });
+  // (Resolves at once for a server that has already exited; one that ignores SIGTERM is killed after
+  // 15 s, with a warning, since a real server must stop when Docker asks it to.)
+  const stop = () => new Promise((r) => {
+    if (proc.exitCode !== null || proc.signalCode !== null) return r();
+    const t = setTimeout(() => { console.error(`[helpers] server on port ${port} ignored SIGTERM; killing it`); proc.kill('SIGKILL'); }, 15_000);
+    proc.once('exit', () => { clearTimeout(t); r(); });
+    proc.kill('SIGTERM');
+  });
   return { base, stop, client: () => client(base) };
 }
 

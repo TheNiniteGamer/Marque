@@ -1047,3 +1047,5 @@ input.switch:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .ms-row > span:nth-child(2) { flex: 1; min-width: 0; }
 .ms-row.done { opacity: .6; }
 .ms-state { color: var(--muted); font-size: 13px; white-space: nowrap; }
+/* Coming soon */
+.card.soon .soon-date { position: absolute; z-index: 1; top: 10px; left: 10px; padding: 3px 9px; border-radius: 4px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 700; letter-spacing: .02em; }

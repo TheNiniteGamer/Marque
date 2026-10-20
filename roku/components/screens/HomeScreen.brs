@@ -52,7 +52,11 @@ sub onHome(event as Object)
         row = root.createChild("ContentNode")
         row.title = hub.title
         for each item in hub.items
-            if item.type <> "collection" then row.appendChild(mqCard(item))
+            if item.type = "upcoming" then
+                row.appendChild(mqUpcomingCard(item))
+            else if item.type <> "collection" then
+                row.appendChild(mqCard(item))
+            end if
         end for
     end for
     keep = m.rows.rowItemFocused
@@ -80,6 +84,18 @@ end sub
 sub showInfo(item as Dynamic)
     if item = invalid then return
     kind = mqStr(item.type)
+    if kind = "upcoming" then
+        if item.kind = "episode" then m.backdrop.uri = mqArt("backdrop", { id: item.showId, artV: item.artV }) else m.backdrop.uri = mqStr(item.image)
+        m.kind.text = "C O M I N G   S O O N  ·  " + UCase(mqSoonDate(mqStr(item.airDate)))
+        m.title.text = mqStr(item.title)
+        if item.kind = "episode" then
+            m.meta.text = "S" + mqStr(item.season) + ":E" + mqStr(item.episode) + "   " + mqStr(item.episodeTitle)
+        else
+            m.meta.text = mqStr(item.release) + "   " + mqStr(item.year)
+        end if
+        m.overview.text = ""
+        return
+    end if
     art = "backdrop"
     if kind = "episode" then art = "thumb"
     m.backdrop.uri = mqArt(art, item)
@@ -123,8 +139,13 @@ sub onRowSelected()
     open(c.data)
 end sub
 
-' Episodes (Continue Watching) play straight away; movies and shows open their details.
+' Episodes (Continue Watching) play straight away; movies and shows open their details. Coming soon:
+' the show's details (a film that isn't here yet has none).
 sub open(item as Object)
+    if item.type = "upcoming" then
+        if item.showId <> invalid then m.top.navigate = { screen: "DetailsScreen", params: { id: item.showId, kind: "show" } }
+        return
+    end if
     if item.type = "episode" then
         m.top.navigate = { screen: "PlayerScreen", params: { id: item.id, start: -1 } }
     else

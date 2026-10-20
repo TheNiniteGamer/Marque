@@ -84,9 +84,18 @@ module.exports = function register(app) {
       rows.unshift({ key: 'franchises', title: 'Franchises', note: 'Film worlds and studios in your libraries', link: '#/collections', style: 'poster',
         items: sagas.map((c) => ({ ...c, type: 'collection' })) });
     }
+    // New episodes and films on their way (upcoming.js), after the collections.
+    const soon = lib.homeSettings(store).upcoming ? app.upcoming.forUser(user) : [];
+    if (soon.length) rows.push({ key: 'upcoming', title: 'Coming soon', note: 'New episodes and films on their way', style: 'upcoming', items: soon });
     const at = h.hubs.findLastIndex((x) => x.key.startsWith('recent-')) + 1 || h.hubs.length;
     h.hubs.splice(at, 0, ...rows);
     json(res, 200, h);
+  });
+
+  // "Coming soon" on its own (admins can ask for it to be worked out again: ?refresh=1).
+  route('GET', '/api/upcoming', async (req, res, p, url, user) => {
+    if (url.searchParams.has('refresh') && user.role === 'admin') await app.upcoming.refresh();
+    json(res, 200, app.upcoming.forUser(user, 50));
   });
 
   // This person's bedtime and daily limit, and how much is left today (the Account page).

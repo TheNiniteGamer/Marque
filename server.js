@@ -45,6 +45,7 @@ const requests = require('./lib/requests');
 const { Arr } = require('./lib/arr');
 const { Optimizer } = require('./lib/optimize');
 const { AutoSubs } = require('./lib/autosubs');
+const { Upcoming } = require('./lib/upcoming');
 const { Health } = require('./lib/health');
 const { Previews } = require('./lib/previews');
 const { KINDS: ENCODER_NAMES } = require('./lib/hwaccel');
@@ -153,6 +154,7 @@ const arr = new Arr(store, {
     return lib ? lib.name : null;
   },
 });
+const upcoming = new Upcoming(store, arr, { nextEpisodeOf: metadata.nextEpisodeOf });
 const backups = new Backups(store, {
   dataDir: DATA_DIR,
   dir: path.resolve(process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups')),
@@ -490,7 +492,7 @@ const app = {
   Activity, Maintenance, ENCODER_NAMES, PORT, HOST, DATA_DIR, MEDIA_ROOT, SCAN_INTERVAL_MIN,
   MEDIA_LABELS, hostLabel, fromHostPath, folderPlaces, PUBLIC_DIR, THUMB_DIR, SUB_CACHE, SUB_DOWNLOADS, store, matcher,
   scanner, updater, hwaccel, TRANSCODE_DIR, hls, offline, offlineLib, health, previews, tokens, opensubs, parties,
-  trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader, arr, optimizer, autoSubs,
+  trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader, arr, optimizer, autoSubs, upcoming,
   transcodes, HttpError, json, readBody, readRaw, MIME, sendFile, getItem,
   getShow, getLibrary, getUser, librarySummary, validateLibraryInput, removeLibraryData, resolveArt, subtitleVtt,
   isPrivateIp, TRUST_PROXY, clientIp, viaHttpsProxy, noteRemoteOrigin, mediaTokenUser, castAddresses, isRemote,
@@ -682,6 +684,7 @@ async function main() {
   offline.start();
   optimizer.start();
   autoSubs.start();
+  upcoming.start();
   health.start();
   previews.start();
   // Titles from before HDR, interlacing and DVD pixel shapes were noted: checked once, and

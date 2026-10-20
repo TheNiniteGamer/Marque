@@ -327,6 +327,28 @@ function wideCard(x, ctx = '') {
     </div>`;
 }
 
+// "Coming soon": a show's next episode (its artwork) or a film on its way (Radarr's picture), with when.
+function soonDate(iso) {
+  const d = new Date(iso);
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(d) - day(new Date())) / 86400_000);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  if (diff < 7) return d.toLocaleDateString(undefined, { weekday: 'long' });
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+function upcomingCard(x) {
+  const ep = x.kind === 'episode';
+  const img = ep ? artUrl('backdrop', { id: x.showId, artV: x.artV }) : x.image;
+  const sub = ep ? [`S${x.season}:E${x.episode}`, x.episodeTitle].filter(Boolean).join(' · ') : [x.release, x.year].filter(Boolean).join(' · ');
+  return html`
+    <div class="card soon">
+      <div class="art"><a class="cover" href="${x.href}" aria-label="${x.title}">${img ? html`<img loading="lazy" src="${img}" alt="">` : html`<div class="collection-empty">🎬</div>`}</a>
+        <i class="scrim"></i><span class="art-title">${x.title}</span><span class="soon-date">${soonDate(x.airDate)}</span></div>
+      <a class="card-text" href="${x.href}" tabindex="-1"><span class="sub" title="${sub}">${sub}</span></a>
+    </div>`;
+}
+
 // A row that scrolls sideways, with arrows on hover.
 function rail(items, render) {
   return html`<div class="rail">
@@ -520,7 +542,7 @@ function hubSection(hub) {
   const link = hub.libraryId ? `#/library/${hub.libraryId}` : hub.link;
   return html`<section class="hub">
     <div class="hub-head"><h2>${hub.title}</h2>${hub.note ? html`<span class="hub-note">${hub.note}</span>` : ''}${link ? html`<a class="see-all" href="${link}">See all ›</a>` : ''}</div>
-    ${rail(hub.items, (x) => (hub.style === 'wide' ? wideCard(x, hub.key) : hub.style === 'top10' ? rankCard(x) : posterCard(x)))}
+    ${rail(hub.items, (x) => (hub.style === 'wide' ? wideCard(x, hub.key) : hub.style === 'top10' ? rankCard(x) : hub.style === 'upcoming' ? upcomingCard(x) : posterCard(x)))}
   </section>`;
 }
 
