@@ -1107,6 +1107,8 @@ function pickFolder(start) {
 
 // ---------- player ----------
 let player = null;
+// Whether the server answers (a player that loses its stream checks this before giving up on it).
+const serverUp = () => fetch('/api/health', { cache: 'no-store' }).then((r) => r.ok).catch(() => false);
 function closePlayer() { if (player) { player.destroy(); player = null; } }
 
 async function viewPlay({ params: [id], query }) {
@@ -1463,7 +1465,9 @@ class Player {
     this.v.play().catch(() => this.spinner(false));
   }
 
-  hlsFailed(why) {
+  async hlsFailed(why) {
+    if (!(await serverUp())) return this.reconnect();
+    if (!this.root.isConnected || this.reconnecting) return;
     console.warn('Adaptive streaming failed:', why);
     const t = this.time;
     this.destroyHls();
@@ -1613,8 +1617,8 @@ class Player {
   // Saves the resume position, and tells the admin's Activity page what's playing (every 10 s,
   // also while paused; `stopped` when the player closes).
   report(stopped = false) {
-    if (this.markedWatched) return;
-    const t = this.time;
+    if (this.markedWatched || (this.reconnecting && !stopped)) return;
+    const t = this.reconnecting ? this.lastGood ?? this.time : this.time;
     if (this.casting && t <= 0) return;
     this.lastReported = t;
     fetch(`/api/items/${this.item.id}/progress`, {
@@ -1849,6 +1853,14 @@ class Player {
   }
 
   onEnded() {
+    // A stream that stops well before the end may just be the server restarting.
+    if (this.mode !== 'direct' && this.duration && this.time < this.duration - 60) {
+      serverUp().then((up) => { if (!this.root.isConnected) return; if (up) this.finish(); else this.reconnect(); });
+      return;
+    }
+    this.finish();
+  }
+  finish() {
     this.report();
     if (!this.item.next) return setTimeout(() => this.close(), 800);
     this.showUpNext(false);
@@ -1915,9 +1927,10 @@ class Player {
     v.addEventListener('timeupdate', () => { if (!this.casting) this.updateTime(); });
     v.addEventListener('loadedmetadata', () => { if (this.mode === 'transcode') this.pendingStart = null; });
     v.addEventListener('seeked', () => { this.pendingStart = null; });
-    v.addEventListener('playing', () => { this.pendingStart = null; });
+    v.addEventListener('playing', () => { this.pendingStart = null; this.lastGood = this.time; });
+    v.addEventListener('timeupdate', () => { if (!v.paused && !this.reconnecting && v.readyState >= 3) this.lastGood = this.time; });
     v.addEventListener('progress', () => this.updateBuffer());
-    v.addEventListener('waiting', () => this.spinner(true));
+    v.addEventListener('waiting', () => { this.spinner(true); this.watchStall(); });
     v.addEventListener('seeking', () => this.spinner(true));
     for (const ev of ['playing', 'canplay', 'seeked', 'pause']) v.addEventListener(ev, () => { if (ev !== 'pause' || v.readyState >= 3) this.spinner(false); });
     // Paused for a moment: who's in it (each opens their page).
@@ -1936,8 +1949,10 @@ class Player {
       $('[data-a=mute]', this.root).textContent = v.muted || v.volume === 0 ? '🔇' : '🔊';
       $('.p-volume', this.root).value = v.muted ? 0 : v.volume;
     });
-    v.addEventListener('error', () => {
-      if (!v.error || !v.getAttribute('src') || this.casting) return;
+    v.addEventListener('error', async () => {
+      if (!v.error || !v.getAttribute('src') || this.casting || this.reconnecting) return;
+      if (!(await serverUp())) return this.reconnect();
+      if (!this.root.isConnected) return;
       if (this.mode === 'direct') {
         // Browser refused the original file: fall back to server-side transcoding.
         toast('Direct play failed — switching to transcoding');
@@ -2069,7 +2084,57 @@ class Player {
     document.addEventListener('keydown', this.onKey);
   }
 
+  // Stuck loading for a while: if the server has gone away, wait for it rather than spin forever.
+  watchStall() {
+    clearTimeout(this.stallTimer);
+    this.stallTimer = setTimeout(async () => {
+      if (!this.root.isConnected || this.casting || this.reconnecting || this.v.readyState >= 3 || this.v.paused) return;
+      if (!(await serverUp())) this.reconnect();
+    }, 10_000);
+  }
+
+  // The server went away mid-film (restarting into an update, the PC rebooting): wait for it to come
+  // back (up to a minute and a half), then carry on from the same moment.
+  reconnect() {
+    if (this.reconnecting || this.casting || !this.root.isConnected) return;
+    const t = this.v.seeking || this.lastGood == null ? this.time : this.lastGood; // (mid-seek: where it was going)
+    const paused = this.v.paused && this.v.readyState >= 2 && !this.v.ended;
+    this.reconnecting = true;
+    clearTimeout(this.stallTimer);
+    this.destroyHls();
+    this.v.pause();
+    this.spinner(false);
+    $('.p-center-msg', this.root)?.remove();
+    const box = document.createElement('div');
+    box.className = 'p-center-msg p-reconnect';
+    box.innerHTML = html`<div class="spinner"></div><h2>Reconnecting to Marquee…</h2><p class="muted">The server is restarting. This carries on where you were in a moment.</p>`.s;
+    this.root.append(box);
+    const started = Date.now();
+    const attempt = async () => {
+      if (!this.root.isConnected) return;
+      if (await serverUp()) {
+        // A restarted server has forgotten its streaming sessions: ask for fresh links.
+        try { this.pb = await api(`/api/items/${this.item.id}/playback`); } catch { /* the old ones may still do */ }
+        if (!this.root.isConnected) return;
+        box.remove();
+        this.reconnecting = false;
+        if (this.mode === 'direct') this.v.removeAttribute('src'); // load() only re-points a fresh element
+        this.load(t);
+        if (paused) this.v.addEventListener('playing', () => this.v.pause(), { once: true });
+        return;
+      }
+      if (Date.now() - started < 90_000) { this.reconnectTimer = setTimeout(attempt, 2000); return; }
+      this.reconnecting = false;
+      box.innerHTML = html`<h2>Can't reach Marquee</h2><p class="muted">The server hasn't come back yet. Check the PC it runs on.</p>
+        <div class="row" style="justify-content:center"><button class="btn primary" data-a="reconnect">Try again</button><button class="btn" data-a="close">Go back</button></div>`.s;
+      $('[data-a=reconnect]', box).onclick = () => { box.remove(); this.lastGood = t; this.reconnect(); };
+    };
+    this.reconnectTimer = setTimeout(attempt, 2000);
+  }
+
   destroy() {
+    clearTimeout(this.reconnectTimer);
+    clearTimeout(this.stallTimer);
     this.report(true);
     clearInterval(this.reportTimer);
     clearInterval(this.upNextTimer);

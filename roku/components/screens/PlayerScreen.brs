@@ -77,6 +77,17 @@ sub init()
     m.autoSkipped = false
     m.clock = CreateObject("roTimespan")
     m.spin.control = "start"
+    ' Riding out a server restart (an update): checks every 2 s for up to 90 s, then carries on.
+    m.lastGood = -1
+    m.reconnecting = false
+    m.reconnectTimer = CreateObject("roSGNode", "Timer")
+    m.reconnectTimer.duration = 2
+    m.reconnectTimer.repeat = false
+    m.reconnectTimer.observeField("fire", "checkServer")
+    m.stallTimer = CreateObject("roSGNode", "Timer")
+    m.stallTimer.duration = 12
+    m.stallTimer.repeat = false
+    m.stallTimer.observeField("fire", "onStall")
 end sub
 
 sub onFocusChange()
@@ -244,7 +255,9 @@ end sub
 
 sub onState()
     s = m.video.state
+    if m.reconnecting and s <> "playing" then return
     showSpinner(s = "buffering")
+    if s = "buffering" then m.stallTimer.control = "start" else m.stallTimer.control = "stop"
     if s = "playing" then
         m.message.text = ""
         m.ctlPlay.uri = "pkg:/images/pl_pause.png"
@@ -258,12 +271,84 @@ sub onState()
         report(false)
         m.idleTimer.control = "start"
     else if s = "finished" then
+        ' A stream that stops well before the end may just be the server restarting.
+        if m.duration > 0 and m.lastGood >= 0 and m.lastGood < m.duration - 60 then
+            startReconnect("finished")
+            return
+        end if
         report(true)
         finished()
     else if s = "error" then
-        fail("This video can't be played: " + mqStr(m.video.errorMsg))
-        report(true)
+        startReconnect("error")
     end if
+end sub
+
+' ---------- reconnecting after a server restart ----------
+
+' Something went wrong: first see whether the server is there at all. If it is, it's a real problem;
+' if not, wait for it (it's most likely restarting into an update) and carry on where it was.
+sub startReconnect(why as String)
+    if m.reconnecting then return
+    m.reconnecting = true
+    m.reconnectWhy = why
+    m.reconnectSeenDown = false
+    m.reconnectClock = CreateObject("roTimespan")
+    m.stallTimer.control = "stop"
+    checkServer()
+end sub
+
+sub checkServer()
+    if not m.reconnecting then return
+    mqApi("/api/health", "onServerCheck")
+end sub
+
+sub onServerCheck(event as Object)
+    if not m.reconnecting then return
+    r = event.getData()
+    if r.status = 200 then
+        if not m.reconnectSeenDown then
+            ' It's up: whatever went wrong wasn't a restart.
+            m.reconnecting = false
+            if m.reconnectWhy = "error" then
+                fail("This video can't be played: " + mqStr(m.video.errorMsg))
+                report(true, m.lastGood)
+            else if m.reconnectWhy = "finished" then
+                report(true)
+                finished()
+            end if
+            return
+        end if
+        ' Back: a restarted server has forgotten its streaming sessions, so ask for fresh links.
+        mqApi("/api/items/" + m.item.id + "/playback", "onReconnectPlayback")
+        return
+    end if
+    if not m.reconnectSeenDown then
+        m.reconnectSeenDown = true
+        m.video.control = "stop"
+        showSpinner(true)
+        m.message.text = "Reconnecting to Marquee…" + Chr(10) + "The server is restarting; this carries on where you were."
+    end if
+    if m.reconnectClock.TotalMilliseconds() < 90000 then
+        m.reconnectTimer.control = "start"
+    else
+        m.reconnecting = false
+        fail("Marquee hasn't come back yet. Check the PC it runs on, then try again.")
+    end if
+end sub
+
+sub onReconnectPlayback(event as Object)
+    r = event.getData()
+    if r.status = 200 and r.data <> invalid then m.pb = r.data
+    m.reconnecting = false
+    m.message.text = ""
+    at = m.lastGood
+    if at < 0 then at = 0
+    load(at)
+end sub
+
+' Loading for a long time: maybe the server went away.
+sub onStall()
+    if m.video.state = "buffering" and not m.reconnecting then startReconnect("stall")
 end sub
 
 sub showSpinner(on as Boolean)
@@ -273,6 +358,8 @@ end sub
 
 sub onPosition()
     at = m.video.position
+    if m.reconnecting then return
+    if m.video.state = "playing" then m.lastGood = at
     if not m.scrubbing then drawBar(at)
     updateSkip(at)
     ' The next episode's card at the credits (or 20 s before the end when no credits were found).
@@ -866,7 +953,9 @@ end sub
 
 sub report(stopped as Boolean, position = -1 as Float)
     if m.item = invalid or m.done then return
+    if m.reconnecting and not stopped then return
     at = m.video.position
+    if m.reconnecting and m.lastGood >= 0 then at = m.lastGood
     if position >= 0 then at = position
     if at <= 0 and not stopped then return
     if stopped then m.done = true

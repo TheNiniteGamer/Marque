@@ -104,6 +104,7 @@ test('"Update now" needs a live helper, then leaves a request for it', async () 
   assert.equal(r.data.helper.pending, true);
   const req = JSON.parse(fs.readFileSync(path.join(CONTROL, 'update-request.json'), 'utf8'));
   assert.equal(req.by, 'admin');
+  assert.equal(req.when, 'idle', 'restarts once nobody is watching');
 
   // The helper reports progress through status.json (written with a BOM by some Windows tools).
   fs.rmSync(path.join(CONTROL, 'update-request.json'));

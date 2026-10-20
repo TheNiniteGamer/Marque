@@ -42,6 +42,18 @@
         android:layout_gravity="center"
         android:indeterminateTint="@color/accent" />
 
+    <TextView
+        android:id="@+id/reconnect_msg"
+        android:visibility="gone"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="88dp"
+        android:gravity="center"
+        android:text="@string/reconnecting"
+        android:textColor="@android:color/white"
+        android:textSize="18sp" />
+
     <!-- Controls: shown on any key, hidden after a few seconds of playing -->
     <FrameLayout
         android:id="@+id/controls"

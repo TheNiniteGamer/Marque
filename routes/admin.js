@@ -54,6 +54,7 @@ module.exports = function register(app) {
       language: st.language || process.env.METADATA_LANGUAGE || 'en-US',
       autoMatch: st.autoMatch !== false,
       updateCheck: st.updateCheck !== false,
+      updateAutoInstall: st.updateAutoInstall === true,
       introDetection: st.introDetection !== false,
       home: lib.homeSettings(store),
       previewClips: st.previewClips !== false,
@@ -79,6 +80,7 @@ module.exports = function register(app) {
     }
     if (body.autoMatch !== undefined) st.autoMatch = !!body.autoMatch;
     if (body.updateCheck !== undefined) st.updateCheck = !!body.updateCheck;
+    if (body.updateAutoInstall !== undefined) st.updateAutoInstall = !!body.updateAutoInstall;
     if (body.opensubtitles !== undefined) {
       // { apiKey, username, password }: an empty apiKey removes the whole setup.
       const o = body.opensubtitles || {};
@@ -273,9 +275,17 @@ module.exports = function register(app) {
     json(res, 202, intro.status());
   }, 'admin');
 
-  route('GET', '/api/updates', async (req, res) => json(res, 200, updater.status()), 'admin');
+  // watching: how many are watching right now (a downloaded update waits for that to be 0).
+  const updatesView = () => ({ ...updater.status(), watching: activity.watching().length });
+  route('GET', '/api/updates', async (req, res) => json(res, 200, updatesView()), 'admin');
   route('POST', '/api/updates/check', async (req, res) => { await updater.check(); json(res, 200, updater.status()); }, 'admin');
-  route('POST', '/api/updates/apply', async (req, res, p, url, user) => { updater.requestUpdate(user); json(res, 202, updater.status()); }, 'admin');
+  // { when: 'idle' (default: restart once nobody is watching) | 'now' }
+  route('POST', '/api/updates/apply', async (req, res, p, url, user) => {
+    const body = await readBody(req);
+    updater.requestUpdate(user, { when: body?.when === 'now' ? 'now' : 'idle' });
+    json(res, 202, updatesView());
+  }, 'admin');
+  route('POST', '/api/updates/restart-now', async (req, res, p, url, user) => { updater.restartNow(user); json(res, 200, updatesView()); }, 'admin');
 
   // --- remote access (admin) ---
   route('GET', '/api/remote', async (req, res) => json(res, 200, {

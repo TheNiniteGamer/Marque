@@ -22,6 +22,8 @@
     <string name="switching_to_convert">This phone can\'t play the original file — converting it on the server instead.</string>
     <string name="playback_error">The server could not stream this video.</string>
     <string name="cant_play">Can\'t play this video</string>
+    <string name="reconnecting">Reconnecting to Marquee…\nThe server is restarting; this carries on where you were.</string>
+    <string name="server_gone">Marquee hasn\'t come back yet. Check the PC it runs on, then try again.</string>
     <string name="up_next">Up next</string>
     <string name="up_next_in">Up next in %1$d…</string>
     <string name="play_now">Play now</string>

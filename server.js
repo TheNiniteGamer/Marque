@@ -655,6 +655,8 @@ async function main() {
   offline.start();
   health.start();
   previews.start();
+  // A downloaded update restarts Marquee only once nobody is watching (see updater.tick).
+  setInterval(() => { try { updater.tick(activity.watching().length === 0 && transcodes.size === 0 && hls.active === 0); } catch (err) { console.warn(`[updates] ${err.message}`); } }, 10_000).unref();
   // Matching (which gives titles their TMDB / TVmaze ids) finishes after scans, so arrivals are
   // also checked every minute.
   setInterval(() => { try { requests.checkArrivals(store); } catch { /* next time */ } }, 60_000).unref();

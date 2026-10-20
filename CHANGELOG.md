@@ -4,6 +4,22 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.13.0
+
+- **Updates wait until nobody's watching.** Pressing **Update** downloads and builds the new version
+  while Marquee keeps running, then restarts into it once no one is playing anything (a player left
+  paused for over 15 minutes doesn't count). The page shows how many are watching, with **Restart
+  now anyway**; the dialog also offers **Update and restart now**.
+- **Automatic updates at night (optional).** Settings → Server & updates → *Install updates by
+  itself at night*: between 2 and 5 am, when there's an update and nobody's watching.
+- **Players ride out a restart.** If Marquee restarts mid-film, the web player, the phone app
+  (1.10.0), the Android TV app (1.5.0) and the Roku channel (1.7) show "Reconnecting to Marquee…",
+  wait for up to a minute and a half, and carry on from the same moment instead of showing an error.
+- The update helper now restarts itself when an update changes it. The helper already running on
+  the server PC is the old one, though: it installs this update straight away, and waits for
+  nobody watching from the next time it starts (sign out of Windows and back in, or restart the
+  PC, once after updating).
+
 ## 0.12.0
 
 - **Previews for every title.** Resting the pointer on a film or show (and the home page's banner)

@@ -102,6 +102,11 @@ public class PlayerActivity extends Activity {
     boolean autoplayNext = true;
     private long lastReport;
     private boolean pipUsed;
+    // Riding out a server restart (an update): where it was, and whether it was playing.
+    private boolean reconnecting, resumePaused, lastPlaying, stallChecked;
+    private double lastGood = -1;
+    private long reconnectStarted, bufferingSince;
+    private TextView reconnectMsg;
 
     // (Lambdas and static classes only: build-tools 34's dex tool crashes on anonymous classes from Java 21.)
     private final Runnable tick = this::tickLoop;
@@ -118,6 +123,7 @@ public class PlayerActivity extends Activity {
         video = findViewById(R.id.video);
         controls = findViewById(R.id.controls);
         spinner = findViewById(R.id.spinner);
+        reconnectMsg = findViewById(R.id.reconnect_msg);
         title = findViewById(R.id.title);
         subtitle = findViewById(R.id.subtitle);
         subs = findViewById(R.id.subs);
@@ -142,8 +148,8 @@ public class PlayerActivity extends Activity {
         video.setOnCompletionListener(m -> onEnded());
         video.setOnErrorListener((m, what, extra) -> onPlaybackError());
         video.setOnInfoListener((m, what, extra) -> {
-            if (what == MediaPlayer.MEDIA_INFO_BUFFERING_START) spinner.setVisibility(View.VISIBLE);
-            else if (what == MediaPlayer.MEDIA_INFO_BUFFERING_END || what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) spinner.setVisibility(View.GONE);
+            if (what == MediaPlayer.MEDIA_INFO_BUFFERING_START) { spinner.setVisibility(View.VISIBLE); bufferingSince = System.currentTimeMillis(); }
+            else if (what == MediaPlayer.MEDIA_INFO_BUFFERING_END || what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) { spinner.setVisibility(View.GONE); bufferingSince = 0; stallChecked = false; }
             return false;
         });
 
@@ -201,6 +207,8 @@ public class PlayerActivity extends Activity {
         credits = it.optJSONObject("credits");
         recap = it.optJSONObject("recap");
         autoSkipped = creditsShown = false;
+        lastGood = -1;
+        bufferingSince = 0;
         skipPart = null;
         skipIntro.setVisibility(View.GONE);
         duration = it.optDouble("duration", 0);
@@ -358,12 +366,69 @@ public class PlayerActivity extends Activity {
         if (seekable() && pendingSeek > 0) video.seekTo((int) (pendingSeek * 1000));
         if (direct && !hls && audioIndex > 0) selectDirectAudio(audioIndex);
         video.start();
+        if (resumePaused) { resumePaused = false; video.pause(); }
         spinner.setVisibility(View.GONE);
         updatePlayIcon();
         poke();
     }
 
     private boolean onPlaybackError() {
+        if (reconnecting) return true;
+        if (offlineFile != null || item == null) return playbackFailed();
+        // The server may just be restarting (into an update): then wait for it instead.
+        io.execute(() -> {
+            boolean up = serverUp();
+            runOnUiThread(() -> { if (isFinishing()) return; if (up) playbackFailed(); else reconnect(); });
+        });
+        return true;
+    }
+
+    private boolean serverUp() {
+        try { return Net.getJson(base + "/api/health").optBoolean("ok", false); } catch (Exception e) { return false; }
+    }
+
+    /** Waits (up to a minute and a half) for the server to come back, then carries on where it was. */
+    private void reconnect() {
+        if (reconnecting || isFinishing() || item == null) return;
+        reconnecting = true;
+        reconnectStarted = System.currentTimeMillis();
+        resumePaused = !lastPlaying;
+        if (lastGood < 0) lastGood = Math.max(0, now());
+        video.stopPlayback();
+        mp = null;
+        spinner.setVisibility(View.VISIBLE);
+        reconnectMsg.setVisibility(View.VISIBLE);
+        ui.postDelayed(this::reconnectAttempt, 2000);
+    }
+
+    private void reconnectAttempt() {
+        if (isFinishing()) return;
+        final String id = item.optString("id");
+        io.execute(() -> {
+            boolean up = serverUp();
+            JSONObject pb = null;
+            // A restarted server has forgotten its streaming sessions: ask for fresh links.
+            if (up) try { pb = Net.getJson(base + "/api/items/" + id + "/playback"); } catch (Exception ignored) { }
+            final JSONObject p = pb;
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                if (up) {
+                    if (p != null) playback = p;
+                    reconnecting = false;
+                    reconnectMsg.setVisibility(View.GONE);
+                    open(lastGood);
+                } else if (System.currentTimeMillis() - reconnectStarted < 90_000) {
+                    ui.postDelayed(this::reconnectAttempt, 2000);
+                } else {
+                    reconnecting = false;
+                    reconnectMsg.setVisibility(View.GONE);
+                    fail(getString(R.string.server_gone));
+                }
+            });
+        });
+    }
+
+    private boolean playbackFailed() {
         if (hls && item != null && originalAllowed()) {
             Toast.makeText(this, R.string.adaptive_failed, Toast.LENGTH_SHORT).show();
             double at = now();
@@ -416,8 +481,15 @@ public class PlayerActivity extends Activity {
     private void updatePlayIcon() { controlsUi.onPlayState(video.isPlaying()); }
 
     private void update() {
-        if (item == null) return;
+        if (item == null || reconnecting) return;
         double t = now();
+        if (video.isPlaying()) lastGood = t;
+        lastPlaying = video.isPlaying() || bufferingSince > 0;
+        // Stuck loading for a while: if the server has gone away, wait for it rather than spin forever.
+        if (bufferingSince > 0 && !stallChecked && offlineFile == null && System.currentTimeMillis() - bufferingSince > 10_000) {
+            stallChecked = true;
+            io.execute(() -> { boolean up = serverUp(); runOnUiThread(() -> { if (!up && !isFinishing()) reconnect(); }); });
+        }
         controlsUi.tick(t);
         mediaControls.update(video.isPlaying(), t);
         showSubtitle(cues.isEmpty() ? "" : Vtt.textAt(cues, (long) (t * 1000)));
@@ -488,7 +560,7 @@ public class PlayerActivity extends Activity {
 
     // Saves the resume position and tells the server's Activity page what's playing.
     private void report(boolean stopped) {
-        if (item == null) return;
+        if (item == null || reconnecting) return;
         lastReport = System.currentTimeMillis();
         if (offline) { OfflineStore.savePosition(this, item.optString("id"), now()); return; }
         final String url = base + "/api/items/" + item.optString("id") + "/progress";
@@ -505,7 +577,16 @@ public class PlayerActivity extends Activity {
     }
 
     private void onEnded() {
-        if (item == null) return;
+        if (item == null || reconnecting) return;
+        // A stream that stops well before the end may just be the server restarting.
+        if (offlineFile == null && duration > 0 && lastGood >= 0 && lastGood < duration - 60) {
+            io.execute(() -> { boolean up = serverUp(); runOnUiThread(() -> { if (isFinishing()) return; if (up) ended(); else reconnect(); }); });
+            return;
+        }
+        ended();
+    }
+
+    private void ended() {
         if (offline) { OfflineStore.savePosition(this, item.optString("id"), duration); controlsUi.onEnded(); return; }
         final String url = base + "/api/items/" + item.optString("id") + "/progress";
         io.execute(() -> {

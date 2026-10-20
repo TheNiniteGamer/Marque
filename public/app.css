@@ -935,3 +935,4 @@ input.switch:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .file-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); font-size: 13px; }
 .file-row a { color: var(--text); }
 @media (max-width: 640px) { .file-row { grid-template-columns: 56px minmax(0, 1fr) auto; } .file-row .muted { display: none; } }
+.p-reconnect .spinner { margin: 0 auto 12px; }

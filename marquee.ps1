@@ -29,6 +29,8 @@ Set-Location -LiteralPath $Root
 $ControlDir = Join-Path $Root 'control'
 $StatusFile = Join-Path $ControlDir 'status.json'
 $RequestFile = Join-Path $ControlDir 'update-request.json'
+# Written by Marquee when nobody is watching (or "Restart now"): the go-ahead to restart into a new version.
+$RestartOkFile = Join-Path $ControlDir 'restart-ok.json'
 $CommitFile = Join-Path $Root '.marquee-commit'
 $TaskName = 'Marquee Updater'
 $OnWindows = $env:OS -eq 'Windows_NT'
@@ -297,7 +299,34 @@ function Update-Code {
   return @{ before = $before; after = $after; changed = ($before -ne $after) }
 }
 
-function Update-Marquee {
+# The new version is built (Marquee kept running meanwhile); wait for Marquee to say nobody is
+# watching before restarting into it, so nobody's film stops. Gives up waiting after a day.
+function Wait-ForQuiet {
+  Remove-Item -LiteralPath $RestartOkFile -Force -ErrorAction SilentlyContinue
+  Say 'The new version is ready. Marquee restarts into it when nobody is watching.'
+  $deadline = (Get-Date).AddHours(24)
+  while ((Get-Date) -lt $deadline) {
+    Set-Status 'ready' 'Ready: restarts when nobody is watching' @{ readyAt = $script:ReadyAt }
+    if (Test-Path -LiteralPath $RestartOkFile) {
+      Remove-Item -LiteralPath $RestartOkFile -Force -ErrorAction SilentlyContinue
+      Say 'Restarting now.'
+      return
+    }
+    if (Test-Path -LiteralPath $RequestFile) {
+      # Asked again meanwhile; "now" means don't wait any longer.
+      $again = $null
+      try { $again = Get-Content -LiteralPath $RequestFile -Raw | ConvertFrom-Json } catch { }
+      Remove-Item -LiteralPath $RequestFile -Force -ErrorAction SilentlyContinue
+      if ($again -and $again.when -eq 'now') { Say 'Restarting now, as asked.'; return }
+    }
+    Start-Sleep -Seconds 5
+  }
+  Say 'Still busy after a day: restarting anyway.'
+}
+
+# when: 'idle' (restart once nobody is watching) or 'now'. Requests from versions before this
+# option have none and mean 'now'.
+function Update-Marquee([string]$when = 'now') {
   $script:Log.Clear()
   Set-Status 'updating' 'Downloading the latest version...' @{ startedAt = (Get-Date).ToUniversalTime().ToString('o'); finishedAt = $null }
   try {
@@ -309,6 +338,10 @@ function Update-Marquee {
     Wait-Docker
     Set-Status 'updating' 'Rebuilding Marquee (this can take a few minutes)...'
     Invoke-Compose @('build', '--pull') 'Rebuilding'
+    if ($when -ne 'now') {
+      $script:ReadyAt = (Get-Date).ToUniversalTime().ToString('o')
+      Wait-ForQuiet
+    }
     Set-Status 'updating' 'Restarting Marquee...'
     Invoke-Compose @('up', '-d') 'Restarting'
     Say 'Update complete.'
@@ -324,13 +357,22 @@ function Update-Marquee {
 function Watch-Updates {
   $mutex = New-Object System.Threading.Mutex($false, 'MarqueeUpdateHelper')
   if (-not $mutex.WaitOne(0)) { Write-Host 'The update helper is already running.'; return }
+  # An update that changes this script restarts the helper too, so it runs the new version's ways.
+  $selfHash = (Get-FileHash -LiteralPath $PSCommandPath).Hash
+  $relaunch = $false
   try {
     $st = Read-Status
-    if ($st.state -eq 'updating') { Set-Status 'failed' 'The previous update was interrupted.' } else { Set-Status $null $null }
+    if ($st.state -eq 'updating') { Set-Status 'failed' 'The previous update was interrupted.' }
+    elseif ($st.state -eq 'ready') { Set-Status 'failed' 'The update was ready but the helper stopped before restarting into it. Press Update again (it will be quick).' }
+    else { Set-Status $null $null }
     while ($true) {
       if (Test-Path -LiteralPath $RequestFile) {
+        $req = $null
+        try { $req = Get-Content -LiteralPath $RequestFile -Raw | ConvertFrom-Json } catch { }
         Remove-Item -LiteralPath $RequestFile -Force
-        try { Update-Marquee } catch { }
+        $when = if ($req -and $req.when) { [string]$req.when } else { 'now' }
+        try { Update-Marquee $when } catch { }
+        if (-not $Once -and (Get-FileHash -LiteralPath $PSCommandPath).Hash -ne $selfHash) { $relaunch = $true; break }
       } else {
         Set-Status $null $null
       }
@@ -338,6 +380,11 @@ function Watch-Updates {
       Start-Sleep -Seconds 15
     }
   } finally { $mutex.ReleaseMutex(); $mutex.Dispose() }
+  if ($relaunch) {
+    # (Run in this same process, so it stays the scheduled task's helper.)
+    Say 'The update helper was updated too: restarting it.'
+    & $PSCommandPath Watch -NoPrompt
+  }
 }
 
 function Install-Helper {

@@ -172,7 +172,19 @@ instead* is there if you need it). Linked TVs are listed on that page, where you
 
 Marquee checks GitHub for new versions twice a day. Admins see a green dot on their avatar when an
 update is available. **Settings → Server & updates** shows what's new, and has **Check now** and
-**Update now** buttons.
+**Update** buttons.
+
+Updating doesn't interrupt anyone. Pressing **Update** downloads and builds the new version while
+Marquee keeps running; it then restarts into it (about a minute) once nobody's watching: no one
+playing, and no one paused for less than 15 minutes. While it waits, the page says how many people
+are watching and offers **Restart now anyway**; **Update and restart now** skips the wait from the
+start. If a restart does happen mid-film, the web player, the phone and Android TV apps and the
+Roku channel show "Reconnecting to Marquee…", wait for it (up to a minute and a half), and carry on
+from the same moment.
+
+To have updates installed by themselves, tick **Install updates by itself at night**: between 2
+and 5 am (the server's time), when one is available and nobody's watching, Marquee updates itself,
+at most once a night.
 
 Big releases are labelled **Significant update** in Settings → Server & updates, and listed in
 [CHANGELOG.md](CHANGELOG.md). For maintainers: a commit is marked by an `Update-Type: significant`
@@ -182,9 +194,9 @@ line in its message, or a subject starting with `[Significant]`.
 inside Docker and can't rebuild itself, so the helper does it. The first time you run
 `start-marquee.bat`, it asks whether to turn the helper on; answer **Y**.
 - **What it is:** a Windows scheduled task named "Marquee Updater" that starts when you sign in.
-- **What it does:** it waits until you press *Update now*, then downloads the new version,
-  rebuilds and restarts Marquee. The web page shows progress and reloads by itself when the update
-  is done.
+- **What it does:** it waits until you press *Update*, then downloads the new version and
+  rebuilds it, waits for Marquee's go-ahead (nobody watching), and restarts Marquee into it. The web
+  page shows progress and reloads by itself when the update is done.
 - **Turning it off:** run `marquee.ps1 RemoveHelper`, or delete the task in Task Scheduler.
 - **Without the helper:** run `update-marquee.bat` on the server PC. It does exactly the same thing.
 

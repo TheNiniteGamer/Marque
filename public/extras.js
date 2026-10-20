@@ -441,9 +441,15 @@ function updatesSection(u) {
   const h = u.helper;
   const b = u.build;
   const updating = h.state === 'updating';
+  const ready = h.state === 'ready';
   const ago = (t) => (t ? fmtDate(t) : 'never');
   let summary;
   if (updating) summary = html`<div class="upd-state busy"><span class="spin"></span> ${h.message || 'Updating…'}</div>`;
+  else if (ready) {
+    summary = html`<div class="upd-state new">New version ready: Marquee restarts into it once nobody's watching</div>
+      <div class="muted" style="font-size:13px">${u.watching ? `${u.watching} ${u.watching === 1 ? 'person is' : 'people are'} watching right now.` : 'Nobody is watching: restarting in a moment.'}
+        Restarting takes about a minute; anyone watching then is reconnected where they were.</div>`;
+  }
   else if (!c) summary = html`<div class="upd-state">Not checked yet.</div>`;
   else if (c.status === 'current') summary = html`<div class="upd-state ok">✓ Marquee is up to date</div>`;
   else if (c.status === 'available') {
@@ -467,7 +473,7 @@ function updatesSection(u) {
   } else {
     how = html`<span class="muted">To update: download the latest version from GitHub and restart the server.</span>`;
   }
-  const canApply = b.install === 'docker' && h.alive && !updating && (c?.status === 'available' || c?.status === 'unknown');
+  const canApply = b.install === 'docker' && h.alive && !updating && !ready && (c?.status === 'available' || c?.status === 'unknown');
 
   return html`
     <h2 style="margin:28px 0 12px" id="updates">Updates</h2>
@@ -481,8 +487,9 @@ function updatesSection(u) {
           </div>
         </div>
         <div class="row">
-          <button class="btn small" id="upd-check" ${updating ? 'disabled' : ''}>↻ Check now</button>
-          ${canApply ? html`<button class="btn primary small" id="upd-apply">⤓ Update now</button>` : ''}
+          <button class="btn small" id="upd-check" ${updating || ready ? 'disabled' : ''}>↻ Check now</button>
+          ${canApply ? html`<button class="btn primary small" id="upd-apply">⤓ Update</button>` : ''}
+          ${ready ? html`<button class="btn primary small" id="upd-restart">Restart now anyway</button>` : ''}
         </div>
       </div>
       ${c?.status === 'available' && c.changes.length ? html`<div class="changes"><b>What's new</b>
@@ -492,6 +499,7 @@ function updatesSection(u) {
       ${h.state === 'done' && h.finishedAt ? html`<div class="muted" style="font-size:13px">Last update finished ${fmtDate(h.finishedAt)} — ${h.message}.</div>` : ''}
       <div>${how}</div>
       <label class="check"><input type="checkbox" id="upd-auto" ${u.autoCheck ? 'checked' : ''}> Check for updates automatically (twice a day)</label>
+      ${b.install === 'docker' ? html`<label class="check"><input type="checkbox" id="upd-auto-install" ${u.autoInstall ? 'checked' : ''}> Install updates by itself at night (2–5 am), when nobody's watching</label>` : ''}
     </div>`;
 }
 
@@ -506,15 +514,40 @@ function bindUpdatesSection(u) {
     router();
   };
   if ($('#upd-apply')) {
-    $('#upd-apply').onclick = async () => {
-      if (!confirm('Update Marquee now? It will be unavailable for a minute or two while it rebuilds and restarts. Anyone watching will be interrupted.')) return;
-      try { await api('/api/updates/apply', { method: 'POST' }); toast('Update requested — the helper will start in a few seconds'); watchUpdate(); router(); } catch (err) { toast(err.message, true); }
+    $('#upd-apply').onclick = () => {
+      const m = openModal({
+        title: 'Update Marquee?',
+        body: html`<p>The new version downloads and builds while Marquee keeps running. It then restarts into it (about a minute)
+          ${u.watching ? html`once nobody's watching — <b>${u.watching} ${u.watching === 1 ? 'person is' : 'people are'}</b> right now` : 'straight away, as nobody is watching'}.</p>
+        <p class="muted" style="font-size:13px">Restarting straight away pauses anyone watching instead; their player reconnects and carries on where it was.</p>
+        <div class="row" style="justify-content:flex-end;margin-top:16px">
+          <button class="btn" id="upd-go-now">Update and restart now</button>
+          <button class="btn primary" id="upd-go">Update</button>
+        </div>`,
+      });
+      const go = async (when) => {
+        m.close();
+        try { await api('/api/updates/apply', { method: 'POST', body: { when } }); toast('Update requested — the helper will start in a few seconds'); watchUpdate(); router(); } catch (err) { toast(err.message, true); }
+      };
+      $('#upd-go', m.el).onclick = () => go('idle');
+      $('#upd-go-now', m.el).onclick = () => go('now');
+    };
+  }
+  if ($('#upd-restart')) {
+    $('#upd-restart').onclick = async () => {
+      if (u.watching && !confirm(`Restart now? ${u.watching} ${u.watching === 1 ? 'person is' : 'people are'} watching; their player pauses for about a minute, then carries on.`)) return;
+      try { await api('/api/updates/restart-now', { method: 'POST' }); toast('Restarting into the new version…'); watchUpdate(); } catch (err) { toast(err.message, true); }
+    };
+  }
+  if ($('#upd-auto-install')) {
+    $('#upd-auto-install').onchange = async (e) => {
+      try { await api('/api/settings', { method: 'PATCH', body: { updateAutoInstall: e.target.checked } }); toast('Saved'); } catch (err) { toast(err.message, true); }
     };
   }
   $('#upd-auto').onchange = async (e) => {
     try { await api('/api/settings', { method: 'PATCH', body: { updateCheck: e.target.checked } }); toast('Saved'); } catch (err) { toast(err.message, true); }
   };
-  if (u.helper.state === 'updating' || u.helper.pending) watchUpdate();
+  if (u.helper.state === 'updating' || u.helper.state === 'ready' || u.helper.pending) watchUpdate();
 }
 
 // Follow an update: refresh the panel while it runs, then wait out the restart and reload into the new version.
@@ -525,12 +558,12 @@ function watchUpdate() {
   updateWatch = setInterval(async () => {
     try {
       const u = await fetch('/api/updates').then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))));
-      if (u.helper.state === 'updating') sawUpdating = true;
-      if (parseHash().path === '/settings' && !$('.modal-backdrop')) {
+      if (u.helper.state === 'updating' || u.helper.state === 'ready') sawUpdating = true;
+      if (parseHash().path.startsWith('/settings') && !$('.modal-backdrop')) {
         const panel = $('#updates-panel');
         if (panel) { const fresh = document.createElement('div'); fresh.innerHTML = updatesSection(u).s; panel.replaceWith(fresh.querySelector('#updates-panel')); bindUpdatesSection(u); }
       }
-      if (sawUpdating && u.helper.state !== 'updating') {
+      if (sawUpdating && u.helper.state !== 'updating' && u.helper.state !== 'ready') {
         clearInterval(updateWatch); updateWatch = null;
         if (u.helper.state === 'done') { showRestarting(); waitForRestart(); } else toast(`Update failed: ${u.helper.message}`, true);
       }
