@@ -43,6 +43,7 @@ const offlineLib = require('./lib/offline');
 const notifications = require('./lib/notifications');
 const requests = require('./lib/requests');
 const { Arr } = require('./lib/arr');
+const { Optimizer } = require('./lib/optimize');
 const { Health } = require('./lib/health');
 const { Previews } = require('./lib/previews');
 const { KINDS: ENCODER_NAMES } = require('./lib/hwaccel');
@@ -129,6 +130,10 @@ const maintenance = new Maintenance(store, DATA_DIR, { transcodeDir: TRANSCODE_D
 // watching, converted or not (a film playing as it is still needs the disk and a calm machine).
 const someoneWatching = () => transcodes.size > 0 || hls.active > 0 || activity.watching().length > 0;
 const offline = new offlineLib.Offline(path.join(DATA_DIR, 'offline'), hwaccel, { isBusy: someoneWatching });
+// Overnight conversions (optimize.js) wait only while the server is converting something for a viewer.
+const optimizer = new Optimizer(store, path.resolve(process.env.OPTIMIZED_DIR || path.join(DATA_DIR, 'optimized')), hwaccel, {
+  probe: (f) => media.probe(f), isBusy: () => transcodes.size > 0 || hls.active > 0, label: process.env.OPTIMIZED_LABEL || null,
+});
 const previews = new Previews(store, path.join(DATA_DIR, 'previews'), { isBusy: someoneWatching, episodesOf: lib.episodesOf });
 const intro = new IntroDetector(store, DATA_DIR, { isBusy: someoneWatching });
 scanner.on('done', (libraryId) => intro.enqueue({ libraryId }));
@@ -254,8 +259,10 @@ function sendFile(req, res, file, { type, headers = {} } = {}) {
 
 // Lookups that also enforce the user's library access (hidden items look like they don't exist).
 // (Object.hasOwn: an id like "__proto__" or "constructor" must not find something built into JavaScript.)
-function getItem(id, user) {
-  const it = Object.hasOwn(store.data.items, id) ? store.data.items[id] : null;
+// (Converted copies, "<id>~o", are found too; `real`: the original, for changing it.)
+function getItem(id, user, { real = false } = {}) {
+  let it = lib.resolveItem(store, id);
+  if (real) it = lib.realItem(store, it);
   if (!canSeeTitle(store, user, it)) throw new HttpError(404, 'Item not found');
   return it;
 }
@@ -429,7 +436,7 @@ function noteRemoteOrigin(req) {
 function mediaTokenUser(token, id) {
   const t = tokens.verify(token);
   if (!t) return null;
-  const item = store.data.items[t.itemId];
+  const item = lib.resolveItem(store, t.itemId); // (converted copies too)
   if (!item || (id !== t.itemId && id !== item.showId)) return null;
   return auth.byId(t.userId);
 }
@@ -481,7 +488,7 @@ const app = {
   Activity, Maintenance, ENCODER_NAMES, PORT, HOST, DATA_DIR, MEDIA_ROOT, SCAN_INTERVAL_MIN,
   MEDIA_LABELS, hostLabel, fromHostPath, folderPlaces, PUBLIC_DIR, THUMB_DIR, SUB_CACHE, SUB_DOWNLOADS, store, matcher,
   scanner, updater, hwaccel, TRANSCODE_DIR, hls, offline, offlineLib, health, previews, tokens, opensubs, parties,
-  trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader, arr,
+  trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader, arr, optimizer,
   transcodes, HttpError, json, readBody, readRaw, MIME, sendFile, getItem,
   getShow, getLibrary, getUser, librarySummary, validateLibraryInput, removeLibraryData, resolveArt, subtitleVtt,
   isPrivateIp, TRUST_PROXY, clientIp, viaHttpsProxy, noteRemoteOrigin, mediaTokenUser, castAddresses, isRemote,
@@ -671,6 +678,7 @@ async function main() {
   watcher.start();
   maintenance.start();
   offline.start();
+  optimizer.start();
   health.start();
   previews.start();
   // Titles from before HDR, interlacing and DVD pixel shapes were noted: checked once, and

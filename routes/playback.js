@@ -212,9 +212,9 @@ module.exports = function register(app) {
   route('DELETE', '/api/hls/:sid', async (req, res, { sid }) => { hls.end(sid); json(res, 200, { ok: true }); });
 
   // --- seek preview thumbnails ---
-  route('GET', '/api/items/:id/trickplay', async (req, res, { id }, url, user) => json(res, 200, trickplay.info(getItem(id, user))), 'media');
+  route('GET', '/api/items/:id/trickplay', async (req, res, { id }, url, user) => json(res, 200, trickplay.info(getItem(id, user, { real: true }))), 'media');
   route('GET', '/api/items/:id/trickplay/:n', async (req, res, { id, n }, url, user) => {
-    const file = trickplay.sheet(getItem(id, user), String(n).replace(/\.jpg$/, ''));
+    const file = trickplay.sheet(getItem(id, user, { real: true }), String(n).replace(/\.jpg$/, ''));
     if (!file) throw new HttpError(404, 'Not ready');
     sendFile(req, res, file, { type: 'image/jpeg', headers: { 'Cache-Control': 'private, max-age=86400' } });
   }, 'media');
@@ -243,7 +243,7 @@ module.exports = function register(app) {
 
   // --- subtitles from OpenSubtitles.com ---
   route('GET', '/api/items/:id/subtitle-search', async (req, res, { id }, url, user) => {
-    const item = getItem(id, user);
+    const item = getItem(id, user, { real: true });
     if (!['movie', 'episode'].includes(item.type)) throw new HttpError(400, 'Subtitles can be searched for movies and episodes');
     const languages = (url.searchParams.get('lang') || 'en').split(',').map((l) => l.trim().toLowerCase()).filter((l) => /^[a-z]{2}(-[a-z]{2})?$/.test(l)).join(',');
     if (!languages) throw new HttpError(400, 'Choose a language');
@@ -253,7 +253,7 @@ module.exports = function register(app) {
   // each person (admins aside) gets 20 a day.
   const subDownloads = new Map(); // userId -> [times]
   route('POST', '/api/items/:id/subtitle-download', async (req, res, { id }, url, user) => {
-    const item = getItem(id, user);
+    const item = getItem(id, user, { real: true });
     if (user.role !== 'admin') {
       const today = (subDownloads.get(user.id) || []).filter((t) => t > Date.now() - 86400_000);
       if (today.length >= 20) throw new HttpError(429, 'That’s 20 subtitle downloads today; try again tomorrow');
@@ -272,7 +272,7 @@ module.exports = function register(app) {
     json(res, 200, { ...detail, added: `dl${item.downloadedSubs.length - 1}`, remaining });
   });
   route('DELETE', '/api/items/:id/subtitles/:sub', async (req, res, { id, sub }, url, user) => {
-    const item = getItem(id, user);
+    const item = getItem(id, user, { real: true });
     const m = /^dl(\d+)$/.exec(sub);
     const s = m && item.downloadedSubs?.[Number(m[1])];
     if (!s) throw new HttpError(404, 'Only downloaded subtitles can be removed');

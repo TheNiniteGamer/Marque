@@ -39,6 +39,9 @@ services:
       # Nightly backups land in a folder you can see on your PC (BACKUP_DIR in .env).
       BACKUP_DIR: /backups
       BACKUP_LABEL: ${BACKUP_DIR:-./backups}
+      # Overnight conversions (Settings -> Overnight conversions) keep their copies here.
+      OPTIMIZED_DIR: /optimized
+      OPTIMIZED_LABEL: ${OPTIMIZED_DIR:-./optimized}
       # Which remote-access helpers are switched on (filled in by marquee.ps1 from your .env).
       REMOTE_ACCESS: ${COMPOSE_PROFILES:-}
       # Libraries built from the folders below. Extra drives (…_2, …_3, …_4) are only included when set
@@ -59,6 +62,7 @@ services:
       # Shared with the update helper on your PC (marquee.ps1 Watch).
       - ./control:/control
       - "${BACKUP_DIR:-./backups}:/backups"
+      - "${OPTIMIZED_DIR:-./optimized}:/optimized"
       # Your media. On Windows use forward slashes, e.g. MOVIES_DIR=D:/Movies
       - "${MOVIES_DIR:-./media/movies}:/media/movies"
       - "${MOVIES_DIR_2:-./media/unused/movies2}:/media/movies2"

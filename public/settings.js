@@ -17,6 +17,7 @@ const ST_ICON = {
   requests: '<path d="M4 5h16v11H8l-4 4z"/>',
   report: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  convert: '<path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/>',
   arr: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>',
 };
 const stIcon = (k) => raw(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ST_ICON[k] || ''}</svg>`);
@@ -220,6 +221,54 @@ const SETTINGS_PAGES = [
         try { await api('/api/settings', { method: 'PATCH', body: { previewClips: e.target.checked } }); toast(e.target.checked ? 'Previews on' : 'Previews off (the clips made so far are removed)'); } catch (err) { toast(err.message, true); }
         if (state.status) state.status.previewClips = e.target.checked;
       };
+    },
+  },
+  {
+    // Overnight conversions (lib/optimize.js): 1080p copies of files most TVs can't play as they are.
+    id: 'convert', label: 'Overnight conversions',
+    load: () => api('/api/optimize'),
+    render: (o) => {
+      const s = o.settings;
+      const times = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
+      const word = { off: 'Off', done: 'Everything chosen has a copy', full: 'Paused: the space allowed is used up', waiting: `Waiting for ${s.start}`, paused: 'Paused while someone watches', starting: 'Starting…', converting: 'Converting' };
+      return html`
+        <p class="muted st-intro">Files most of your TVs can't play as they are (DVD rips, 4K, HEVC) get a 1080p copy made at night on the graphics card.
+          Each TV then plays whichever copy it can play as it is: a 4K TV still gets the original, the others the copy, so the server isn't converting while you watch.
+          The originals are never changed.</p>
+        <div class="st-card">
+          ${stToggle('Make copies overnight', `${o.counts.done} made so far · ${fmtSize(o.used)} of ${s.maxGb >= 1000 ? `${s.maxGb / 1000} TB` : `${s.maxGb} GB`} used, in ${o.folder}`, 'id="opt-on"', s.enabled)}
+          ${s.enabled ? html`<div class="st-row ${['full'].includes(o.state) ? 'warn' : ''}"><span class="st-row-label">${word[o.state]}${o.running ? html`: ${o.running.title} · ${Math.round(o.running.progress * 100)}%` : ''}
+              <span class="st-row-note">${o.queue ? `${o.queue} to go` : 'Nothing waiting'}${o.runUntil ? ` · running until ${fmtDate(o.runUntil)}` : ''}${o.last ? ` · last: ${o.last.title} ${o.last.ok ? `(${Math.round(o.last.seconds / 60)} min)` : `failed: ${o.last.error}`}` : ''}</span></span>
+            ${o.queue && !o.running ? html`<button class="btn small" id="opt-now" title="Don't wait for the night: run for the next 6 hours">Start now</button>` : ''}</div>` : ''}
+        </div>
+        <h2 class="st-sub">Which files</h2>
+        <div class="st-card">${Object.entries(o.kinds).map(([k, label]) => stToggle(label, `${o.counts[k]} without a copy`, `data-kind="${k}"`, s.kinds[k]))}</div>
+        <h2 class="st-sub">When and how much</h2>
+        <div class="st-card">
+          ${stSelect('From', 'Conversions start at this time…', 'data-opt="start"', html`${times.map((t) => html`<option ${t === s.start ? 'selected' : ''}>${t}</option>`)}`)}
+          ${stSelect('Until', '…and none start after this one (one under way finishes).', 'data-opt="end"', html`${times.map((t) => html`<option ${t === s.end ? 'selected' : ''}>${t}</option>`)}`)}
+          ${stSelect('Space for copies', 'When the copies reach this, no more are made.', 'data-opt="maxGb"',
+            html`${[50, 100, 200, 500, 1000, 2000, 4000].map((g) => html`<option value="${g}" ${g === s.maxGb ? 'selected' : ''}>${g >= 1000 ? `${g / 1000} TB` : `${g} GB`}</option>`)}`)}
+        </div>
+        ${helpText(html`A DVD film's copy is about 1–2 GB and takes a few minutes on an NVIDIA card; a 4K film's 1080p copy is about 4–8 GB.
+          Copies keep every sound track (as stereo) and text subtitles; picture subtitles (DVD / Blu-ray) stay with the original, which is still there to pick.
+          In Docker, copies go to the <code>OPTIMIZED_DIR</code> folder in <code>.env</code> (pick a drive with room).`, 'How big, and where?')}
+        ${o.counts.done ? html`<p><button class="btn small danger" id="opt-clear">Remove all copies</button></p>` : ''}`;
+    },
+    bind: (o) => {
+      const patch = async (body, msg) => { try { await api('/api/optimize', { method: 'PATCH', body }); toast(msg); router(); } catch (err) { toast(err.message, true); } };
+      view.onchange = (e) => {
+        const el = e.target;
+        if (el.id === 'opt-on') return patch({ enabled: el.checked }, el.checked ? 'Overnight conversions on' : 'Overnight conversions off');
+        if (el.dataset.kind) return patch({ kinds: { [el.dataset.kind]: el.checked } }, 'Saved');
+        if (el.dataset.opt) return patch({ [el.dataset.opt]: el.dataset.opt === 'maxGb' ? Number(el.value) : el.value }, 'Saved');
+      };
+      if ($('#opt-now')) $('#opt-now').onclick = async () => { await api('/api/optimize/start-now', { method: 'POST' }); toast('Converting for the next 6 hours'); router(); };
+      if ($('#opt-clear')) $('#opt-clear').onclick = async () => {
+        if (!confirm(`Remove all ${o.counts.done} copies (${fmtSize(o.used)})? The originals stay; copies are made again if conversions are on.`)) return;
+        await api('/api/optimize', { method: 'DELETE' }); toast('Copies removed'); router();
+      };
+      if (o.running) setTimeout(() => { if (location.hash === '#/settings/convert') router(); }, 15000);
     },
   },
   {

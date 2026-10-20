@@ -223,6 +223,12 @@ module.exports = function register(app) {
   const transcodingView = () => ({ ...hwaccel.status(), checking: !!hwaccel.checking, sessions: hls.status(), castUrl: store.data.settings.castUrl || '', castUrlFromEnv: process.env.CAST_URL || null,
     remoteMaxQuality: store.data.settings.remoteMaxQuality || '' });
   route('GET', '/api/transcoding', async (req, res) => json(res, 200, transcodingView()), 'admin');
+
+  // --- overnight conversions (admin; lib/optimize.js) ---
+  route('GET', '/api/optimize', async (req, res) => json(res, 200, app.optimizer.status()), 'admin');
+  route('PATCH', '/api/optimize', async (req, res) => { app.optimizer.update(await readBody(req)); json(res, 200, app.optimizer.status()); }, 'admin');
+  route('POST', '/api/optimize/start-now', async (req, res) => { app.optimizer.startNow(); json(res, 200, app.optimizer.status()); }, 'admin');
+  route('DELETE', '/api/optimize', async (req, res) => { app.optimizer.removeAll(); json(res, 200, app.optimizer.status()); }, 'admin');
   route('PATCH', '/api/transcoding', async (req, res) => {
     const body = await readBody(req);
     const st = store.data.settings;
@@ -249,7 +255,7 @@ module.exports = function register(app) {
   // Set an episode's intro by hand ({ start, end } in seconds), mark it as having none ({ none: true }),
   // or go back to automatic detection ({ auto: true }).
   route('PUT', '/api/items/:id/intro', async (req, res, { id }, url, user) => {
-    const item = getItem(id, user);
+    const item = getItem(id, user, { real: true });
     if (item.type !== 'episode') throw new HttpError(400, 'Only TV episodes have intros');
     const body = await readBody(req);
     if (body.auto) {
@@ -276,7 +282,7 @@ module.exports = function register(app) {
   }), 'admin');
   // Same for where the end credits start: { start } | { none: true } | { auto: true }.
   route('PUT', '/api/items/:id/credits', async (req, res, { id }, url, user) => {
-    const item = getItem(id, user);
+    const item = getItem(id, user, { real: true });
     if (item.type !== 'episode') throw new HttpError(400, 'Only TV episodes have credits detection');
     const body = await readBody(req);
     if (body.auto) {
