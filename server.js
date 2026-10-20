@@ -42,6 +42,7 @@ const { Maintenance } = require('./lib/maintenance');
 const offlineLib = require('./lib/offline');
 const notifications = require('./lib/notifications');
 const requests = require('./lib/requests');
+const { Arr } = require('./lib/arr');
 const { Health } = require('./lib/health');
 const { Previews } = require('./lib/previews');
 const { KINDS: ENCODER_NAMES } = require('./lib/hwaccel');
@@ -136,6 +137,15 @@ scanner.on('done', () => {
   try { notifications.newEpisodes(store); requests.checkArrivals(store); } catch (err) { console.warn(`[notify] ${err.message}`); }
 });
 const watcher = new FolderWatcher(store, scanner, Number(process.env.WATCH_INTERVAL ?? 15) * 1000);
+// Radarr / Sonarr: Windows folders they report ("D:\Movies") are matched to Marquee's libraries.
+const arr = new Arr(store, {
+  tvdbIdOf: metadata.tvdbIdOf,
+  libraryFor: (hostPath) => {
+    const inner = fromHostPath(hostPath) || hostPath;
+    const lib = (store.data.libraries || []).find((l) => l.paths.some((p) => inner === p || inner.startsWith(p + path.sep) || p.startsWith(inner + path.sep)));
+    return lib ? lib.name : null;
+  },
+});
 const backups = new Backups(store, {
   dataDir: DATA_DIR,
   dir: path.resolve(process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups')),
@@ -146,7 +156,7 @@ const backups = new Backups(store, {
   onRestored: () => { auth.prune(); tokens.rotate(); scanner.enqueueAll(); },
 });
 const auth = new Auth(store);
-const health = new Health({ store, dataDir: DATA_DIR, transcodeDir: TRANSCODE_DIR, backups, updater, hwaccel, logs, labelFor: hostLabel });
+const health = new Health({ store, dataDir: DATA_DIR, transcodeDir: TRANSCODE_DIR, backups, updater, hwaccel, logs, arr, labelFor: hostLabel });
 const downloader = new Downloader(store, { dataDir: DATA_DIR, onFinished: (job) => scanner.enqueue(job.libraryId) });
 const transcodes = new Set();
 
@@ -471,7 +481,7 @@ const app = {
   Activity, Maintenance, ENCODER_NAMES, PORT, HOST, DATA_DIR, MEDIA_ROOT, SCAN_INTERVAL_MIN,
   MEDIA_LABELS, hostLabel, fromHostPath, folderPlaces, PUBLIC_DIR, THUMB_DIR, SUB_CACHE, SUB_DOWNLOADS, store, matcher,
   scanner, updater, hwaccel, TRANSCODE_DIR, hls, offline, offlineLib, health, previews, tokens, opensubs, parties,
-  trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader,
+  trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader, arr,
   transcodes, HttpError, json, readBody, readRaw, MIME, sendFile, getItem,
   getShow, getLibrary, getUser, librarySummary, validateLibraryInput, removeLibraryData, resolveArt, subtitleVtt,
   isPrivateIp, TRUST_PROXY, clientIp, viaHttpsProxy, noteRemoteOrigin, mediaTokenUser, castAddresses, isRemote,

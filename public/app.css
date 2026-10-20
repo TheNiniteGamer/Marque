@@ -1029,3 +1029,15 @@ input.switch:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   .saga-art::after { background: linear-gradient(0deg, var(--bg) 0%, rgba(11,11,11,.65) 55%, rgba(11,11,11,.25) 100%); }
   .saga-progress .bar { flex-basis: 140px; }
 }
+/* Settings → Radarr & Sonarr */
+.arr-form .input { width: min(340px, 52vw); }
+.arr-auto { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.arr-user { flex-wrap: wrap; }
+.req-arr { font-size: 13px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 2px; }
+.req-arr .bar { flex: 1 0 100%; max-width: 320px; margin-top: 4px; height: 5px; }
+.req-arr-state { font-weight: 600; }
+.req-arr.downloading .req-arr-state, .req-arr.importing .req-arr-state { color: #7fd18b; }
+.req-arr.notReleased .req-arr-state { color: #ffd479; }
+.req-arr.bad, .req-arr.gone .req-arr-state { color: #ff8a80; }
+.arr-conn { flex-wrap: wrap; }
+@media (max-width: 640px) { .arr-conn .st-row-label { flex-basis: 100%; } .arr-conn .st-row-value { margin-right: auto; text-align: left; } }

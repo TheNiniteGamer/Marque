@@ -55,7 +55,7 @@ function openRequestDialog(initial = '', kind = 'movie') {
   const send = async (body) => {
     try {
       const r = await api('/api/requests', { method: 'POST', body: { ...body, note: note() } });
-      toast(`Asked for ${r.title}. You'll get a notification when it's here.`);
+      toast(r.sent ? `${r.title} is on its way. You'll get a notification when it's here.` : `Asked for ${r.title}. You'll get a notification when it's here.`);
       m.close();
       if (parseHash().path === '/requests') router();
     } catch (err) { toast(err.message, true); }
@@ -82,8 +82,51 @@ function openRequestDialog(initial = '', kind = 'movie') {
 const REQUEST_STATUS = { pending: 'Waiting', approved: 'On its way', declined: 'Declined', available: 'Here' };
 
 // ---------- the list (#/requests): everyone's for admins, your own for everyone else ----------
+const ARR_NAME = { radarr: 'Radarr', sonarr: 'Sonarr' };
+// How a request sent to Radarr / Sonarr is getting on ("Downloading · 45% · 20 min left").
+function arrLine(r, admin) {
+  if (r.arr?.error) {
+    return admin ? html`<div class="req-arr bad">Couldn’t send it to ${ARR_NAME[r.arr.app]}: ${r.arr.error} <button class="btn small" data-retry>Try again</button></div>` : '';
+  }
+  if (!r.arr || r.status === 'available' || r.status === 'declined') return '';
+  const p = r.progress;
+  const sent = admin ? html`<span class="muted">${r.arr.existing ? 'Already in' : 'Sent to'} ${ARR_NAME[r.arr.app]}${r.arr.profile ? ` · ${r.arr.profile}` : ''}${r.arr.auto ? ' · automatically' : ''}</span>` : '';
+  return html`<div class="req-arr ${p?.state || ''}">
+    ${p?.label ? html`<span class="req-arr-state">${p.label}</span>` : ''}${p?.label && sent ? ' · ' : ''}${sent}
+    ${p?.percent != null && p.state !== 'downloaded' ? html`<div class="bar"><i style="width:${p.percent}%"></i></div>` : ''}</div>`;
+}
+
+// Approving with Radarr / Sonarr set up: which quality profile (and for a show, which seasons).
+async function approveDialog(r) {
+  const app = r.kind === 'show' ? 'sonarr' : 'radarr';
+  let o;
+  try { o = await api(`/api/arr/${app}/options`); } catch (err) { toast(err.message, true); return; }
+  const res = (x) => (!x ? 'any size' : x >= 2160 ? 'up to 4K' : `up to ${x}p`);
+  const m = openModal({
+    title: `Approve ${r.title}`,
+    body: html`<form class="form" id="ap-form">
+      <label>Quality <select name="profileId">${o.profiles.map((p) => html`<option value="${p.id}" ${p.id === o.defaults.profileId ? 'selected' : ''}>${p.name} · ${res(p.maxRes)}</option>`)}</select></label>
+      ${app === 'sonarr' ? html`<label>Seasons <select name="monitor">${Object.entries(o.monitorOptions).map(([k, l]) => html`<option value="${k}" ${k === o.defaults.monitor ? 'selected' : ''}>${l}</option>`)}</select></label>` : ''}
+      ${r.note ? html`<p class="muted" style="margin:0">They said: “${r.note}”</p>` : ''}
+      <p class="muted" style="margin:0;font-size:13px">It's added to ${ARR_NAME[app]}, which looks for it and downloads it. Whoever asked is told it's on its way, and again when it's here.</p>
+    </form>`.s,
+    footer: html`<button class="btn" id="ap-only" style="margin-right:auto" title="Mark it approved without sending it to ${ARR_NAME[app]} (you'll get it some other way)">Approve only</button>
+      <button class="btn" data-close>Cancel</button><button class="btn primary" id="ap-send">Approve &amp; send to ${ARR_NAME[app]}</button>`.s,
+  });
+  $$('[data-close]', m.el).forEach((b) => { b.onclick = m.close; });
+  const go = async (body, btn) => {
+    btn.disabled = true;
+    try { await api(`/api/requests/${r.id}`, { method: 'PATCH', body: { status: 'approved', ...body } }); m.close(); router(); } catch (err) { toast(err.message, true); btn.disabled = false; }
+  };
+  $('#ap-send', m.el).onclick = (e) => {
+    const f = $('#ap-form', m.el).elements;
+    go({ profileId: Number(f.profileId.value), monitor: f.monitor?.value }, e.target).then(() => toast(`Sent to ${ARR_NAME[app]}`));
+  };
+  $('#ap-only', m.el).onclick = (e) => go({ send: false }, e.target);
+}
+
 async function viewRequests({ seq }) {
-  const { requests } = await api('/api/requests');
+  const { requests, arr } = await api('/api/requests');
   const admin = state.user.role === 'admin';
   const row = (r) => html`
     <div class="panel req-item ${r.status}" data-rid="${r.id}">
@@ -95,6 +138,7 @@ async function viewRequests({ seq }) {
         ${r.note ? html`<div class="req-note-text">“${r.note}”</div>` : ''}
         ${r.adminNote ? html`<div class="req-note-text admin">${admin ? 'Your note' : 'From the server'}: ${r.adminNote}</div>` : ''}
         ${r.overview && !r.note ? html`<div class="muted req-overview">${r.overview}</div>` : ''}
+        ${arrLine(r, admin)}
       </div>
       <div class="req-actions">
         ${r.status === 'available' && r.availableId ? html`<a class="btn small primary" href="#/${r.kind === 'show' ? 'show' : 'item'}/${r.availableId}">Watch</a>` : ''}
@@ -117,13 +161,24 @@ async function viewRequests({ seq }) {
     ${open.length ? html`<h2 class="req-h">Open (${open.length})</h2>${open.map(row)}` : ''}
     ${done.length ? html`<h2 class="req-h">Done</h2>${done.map(row)}` : ''}`)) return;
   $('#new-request').onclick = () => openRequestDialog();
+  // While something is downloading, the page keeps itself up to date.
+  if (requests.some((r) => ['downloading', 'importing', 'searching', 'downloaded'].includes(r.progress?.state))) {
+    setTimeout(() => { if (seq === renderSeq && parseHash().path === '/requests' && !document.querySelector('.modal-backdrop')) router(); }, 20_000);
+  }
   view.onclick = async (e) => {
     const item = e.target.closest('[data-rid]');
     if (!item) return;
     const id = item.dataset.rid;
     const r = requests.find((x) => x.id === id);
     try {
-      if (e.target.closest('[data-set]')) {
+      if (e.target.closest('[data-retry]')) {
+        e.target.disabled = true;
+        await api(`/api/requests/${id}/send`, { method: 'POST', body: {} });
+        toast(`Sent to ${ARR_NAME[r.kind === 'show' ? 'sonarr' : 'radarr']}`);
+        router();
+      } else if (e.target.closest('[data-set="approved"]') && arr?.[r.kind]) {
+        approveDialog(r);
+      } else if (e.target.closest('[data-set]')) {
         await api(`/api/requests/${id}`, { method: 'PATCH', body: { status: e.target.closest('[data-set]').dataset.set } });
         router();
       } else if (e.target.closest('[data-note]')) {

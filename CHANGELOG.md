@@ -4,6 +4,25 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.20.0
+
+**Radarr and Sonarr.**
+- **Settings → Radarr & Sonarr:** connect each with its address and API key (on the same PC as
+  Docker: `http://host.docker.internal:7878` and `:8989`). Pick the **quality profile** requests are
+  added with (each shows the biggest picture it allows, e.g. "HD-1080p · up to 1080p"; profiles that
+  let in 4K are flagged, and a 1080p one is picked when you connect), the **folder** downloads go to
+  (labelled with the Marquee library it belongs to), and for Sonarr **which seasons** a show gets.
+- **Who can skip approval,** per person and separately for **films** and **shows**: their requests go
+  straight to Radarr / Sonarr. Everyone else's wait for you; admins' always go straight through.
+- **Approving** a request sends it, with the default profile or another one you pick, and for a show
+  the seasons you pick. *Approve only* marks it approved without sending it. Something already in
+  Radarr / Sonarr is linked rather than added twice.
+- **Download progress on the Requests page:** looking for a copy, downloading (with % and time
+  left), not out yet (with the expected date), how many episodes are in. The page keeps itself up to
+  date while something downloads; people who asked see the progress of their own requests.
+- **When Radarr / Sonarr can't be reached,** the request waits with the reason and a *Try again*
+  button, admins get a notification, and the health check shows it.
+
 ## 0.19.2
 
 **Fixing TV episodes, and sturdier backups.**

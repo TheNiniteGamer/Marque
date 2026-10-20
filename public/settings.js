@@ -17,6 +17,7 @@ const ST_ICON = {
   requests: '<path d="M4 5h16v11H8l-4 4z"/>',
   report: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  arr: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>',
 };
 const stIcon = (k) => raw(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ST_ICON[k] || ''}</svg>`);
 const chevron = () => raw('<svg class="st-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>');
@@ -222,6 +223,78 @@ const SETTINGS_PAGES = [
     },
   },
   {
+    // Radarr / Sonarr: approved requests are sent to them (lib/arr.js).
+    id: 'arr', label: 'Radarr & Sonarr',
+    load: async () => {
+      const [cfg, users] = await Promise.all([api('/api/arr'), api('/api/users')]);
+      const opts = {};
+      await Promise.all(['radarr', 'sonarr'].filter((a) => cfg[a].keySet).map(async (a) => {
+        try { opts[a] = await api(`/api/arr/${a}/options`); } catch (err) { opts[a] = { error: err.message }; }
+      }));
+      return { cfg, users, opts };
+    },
+    render: ({ cfg, users, opts }) => html`
+      <p class="muted st-intro">Approved requests are added to Radarr (films) or Sonarr (shows), which find and download them into a folder Marquee watches.
+        When the file arrives, the request is marked as here and whoever asked gets a notification.</p>
+      ${['radarr', 'sonarr'].map((a) => arrCard(a, cfg[a], opts[a], cfg.monitorOptions))}
+      <h2 class="st-sub">Who can skip approval</h2>
+      <p class="muted" style="margin:-4px 0 10px;font-size:13px">Their requests go straight to Radarr / Sonarr. Films and shows are separate, since a show can take far more space. Everyone else's wait for you on the Requests page.</p>
+      <div class="st-card">${users.map((u) => html`<div class="st-row arr-user" data-uid="${u.id}">
+        <span class="st-row-label">${u.username}${u.role === 'admin' ? html`<span class="st-row-note">Admin: always</span>` : ''}</span>
+        <label class="arr-auto">Films <input type="checkbox" class="switch" data-auto="movie" ${u.autoApprove?.movie ? 'checked' : ''} ${u.role === 'admin' ? 'disabled' : ''}></label>
+        <label class="arr-auto">Shows <input type="checkbox" class="switch" data-auto="show" ${u.autoApprove?.show ? 'checked' : ''} ${u.role === 'admin' ? 'disabled' : ''}></label>
+      </div>`)}</div>`,
+    bind: ({ cfg, users }) => {
+      const save = async (a, body, msg) => {
+        try { await api(`/api/arr/${a}`, { method: 'PUT', body }); toast(msg); router(); } catch (err) { toast(err.message, true); }
+      };
+      view.onsubmit = async (e) => {
+        const form = e.target.closest('[data-arr-form]');
+        if (!form) return;
+        e.preventDefault();
+        const a = form.dataset.arrForm;
+        const f = form.elements;
+        const btn = form.querySelector('button[type=submit]');
+        btn.disabled = true;
+        btn.textContent = 'Checking…';
+        // Checked first, then saved with the first profile capped at 1080p (or the first) and folder.
+        try {
+          const t = await api(`/api/arr/${a}/test`, { method: 'POST', body: { url: f.url.value, apiKey: f.apiKey.value } });
+          const p = t.profiles.find((x) => x.maxRes && x.maxRes <= 1080 && /1080/.test(x.name)) || t.profiles.find((x) => x.maxRes && x.maxRes <= 1080) || t.profiles[0];
+          const body = { url: f.url.value, apiKey: f.apiKey.value };
+          if (!cfg[a].profileId && p) body.profileId = p.id;
+          if (!cfg[a].rootFolder && t.rootFolders.length) body.rootFolder = (t.rootFolders.find((r) => r.library) || t.rootFolders[0]).path;
+          await save(a, body, `Connected to ${cfg[a].name} ${t.version || ''}`);
+        } catch (err) { toast(err.message, true); btn.disabled = false; btn.textContent = 'Connect'; }
+      };
+      view.onchange = async (e) => {
+        const el = e.target;
+        const a = el.closest('[data-arr]')?.dataset.arr;
+        if (a && el.dataset.set) {
+          const v = el.type === 'checkbox' ? el.checked : el.dataset.set === 'profileId' ? Number(el.value) : el.value;
+          return save(a, { [el.dataset.set]: v }, 'Saved');
+        }
+        const row = el.closest('.arr-user');
+        if (row && el.dataset.auto) {
+          const u = users.find((x) => x.id === row.dataset.uid);
+          try {
+            const r = await api(`/api/users/${u.id}`, { method: 'PATCH', body: { autoApprove: { [el.dataset.auto]: el.checked } } });
+            u.autoApprove = r.autoApprove;
+            toast(`${u.username}'s ${el.dataset.auto === 'movie' ? 'film' : 'show'} requests ${el.checked ? 'now go straight through' : 'now wait for you'}`);
+          } catch (err) { toast(err.message, true); el.checked = !el.checked; }
+        }
+      };
+      view.onclick = async (e) => {
+        const a = e.target.closest('[data-arr]')?.dataset.arr;
+        if (!a) return;
+        if (e.target.closest('[data-arr-change]')) { $(`#arr-form-${a}`).hidden = false; e.target.closest('.st-row').remove(); return; }
+        if (e.target.closest('[data-arr-off]') && confirm(`Disconnect ${cfg[a].name}? Requests will only be marked approved; nothing already in ${cfg[a].name} changes.`)) {
+          try { await api(`/api/arr/${a}`, { method: 'DELETE' }); toast('Disconnected'); router(); } catch (err) { toast(err.message, true); }
+        }
+      };
+    },
+  },
+  {
     id: 'metadata', label: 'Metadata & subtitles',
     load: () => api('/api/settings'),
     render: (st) => metadataSection(st, { heading: false }),
@@ -269,6 +342,35 @@ const SETTINGS_PAGES = [
     },
   },
 ];
+
+// One app's card on the Radarr & Sonarr page: connect, then pick the quality profile and folder.
+const arrRes = (r) => (!r ? 'any size' : r >= 2160 ? 'up to 4K' : `up to ${r}p`);
+function arrCard(a, c, o, monitorOptions) {
+  const form = html`<form class="st-card arr-form" data-arr-form="${a}" id="arr-form-${a}" ${c.keySet ? raw('hidden') : ''}>
+    <label class="st-row"><span class="st-row-label">Address<span class="st-row-note">On this PC, from Docker: ${c.suggestedUrl}</span></span>
+      <input class="input" name="url" value="${c.url || c.suggestedUrl}" required autocomplete="off" spellcheck="false"></label>
+    <label class="st-row"><span class="st-row-label">API key<span class="st-row-note">${c.name} → Settings → General → API Key</span></span>
+      <input class="input" name="apiKey" ${c.keySet ? raw(`placeholder="Saved (${c.keyHint}): leave empty to keep"`) : raw('required')} autocomplete="off" spellcheck="false"></label>
+    <div class="st-row"><span class="st-row-label"></span><button class="btn primary" type="submit">Connect</button></div>
+  </form>`;
+  if (!c.keySet) return html`<h2 class="st-sub">${c.name} <span style="font-weight:400">· ${a === 'radarr' ? 'films' : 'shows'}</span></h2>${form}`;
+  const profile = o?.profiles?.find((p) => p.id === c.profileId);
+  const folder = o?.rootFolders?.find((f) => f.path === c.rootFolder);
+  return html`<h2 class="st-sub">${c.name} <span style="font-weight:400">· ${a === 'radarr' ? 'films' : 'shows'}${o?.version ? ` · ${o.version}` : ''}</span></h2>
+    <div class="st-card" data-arr="${a}">
+      <div class="st-row arr-conn ${o?.error ? 'warn' : ''}"><span class="st-row-label">Connected to<span class="st-row-note">${c.url}</span></span>
+        <span class="st-row-value">${o?.error ? o.error : c.ready ? '✓ Ready' : 'Pick a profile and folder'}</span>
+        <button class="btn small" type="button" data-arr-change>Change</button><button class="btn small danger" type="button" data-arr-off>Disconnect</button></div>
+      ${o?.profiles ? html`
+        ${stSelect('Quality profile', profile?.maxRes > 1080 ? html`<span style="color:#ffd479">⚠ This profile lets in ${arrRes(profile.maxRes).replace('up to ', '')} files, which are several times bigger. Pick one capped at 1080p to save space.</span>` : 'What every request is added with. You can pick another when you approve one.',
+          'data-set="profileId"', html`${!c.profileId ? html`<option value="">Pick one…</option>` : ''}${o.profiles.map((p) => html`<option value="${p.id}" ${p.id === c.profileId ? 'selected' : ''}>${p.name} · ${arrRes(p.maxRes)}</option>`)}`)}
+        ${stSelect('Folder', folder ? (folder.library ? `In your “${folder.library}” library` : html`<span style="color:#ffd479">⚠ Not a folder any Marquee library uses, so downloads won't show up. Add it to a library, or pick another.</span>`) : 'Where downloads go',
+          'data-set="rootFolder"', html`${!c.rootFolder ? html`<option value="">Pick one…</option>` : ''}${o.rootFolders.map((f) => html`<option value="${f.path}" ${f.path === c.rootFolder ? 'selected' : ''}>${f.path}${f.freeSpace != null ? ` · ${fmtSize(f.freeSpace)} free` : ''}${f.library ? ` · ${f.library}` : ''}</option>`)}`)}
+        ${a === 'sonarr' ? stSelect('Seasons', 'Which seasons a show gets when its request goes straight through. You can pick when you approve one yourself.',
+          'data-set="monitor"', html`${Object.entries(monitorOptions).map(([k, l]) => html`<option value="${k}" ${k === c.monitor ? 'selected' : ''}>${l}</option>`)}`) : ''}
+        ${stToggle('Start looking straight away', `Otherwise it's only added to ${c.name}, and searched for on its own schedule`, 'data-set="search"', c.search)}` : ''}
+    </div>${form}`;
+}
 
 // Old links (#/settings?section=backups) lead to the page that has that section now.
 const SECTION_PAGE = { health: 'overview', problems: 'libraries', updates: 'server', logs: 'server', transcoding: 'playback', intro: 'playback', backups: 'backups' };

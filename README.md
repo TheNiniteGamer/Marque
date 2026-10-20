@@ -107,6 +107,33 @@ public hostname pointing to `http://marquee:32500`. Paste the tunnel token into 
 Either way, the extra container starts just because its key is set in `.env`. To turn it off,
 clear the key and run `start-marquee.bat` again.
 
+### Radarr and Sonarr
+
+Marquee can hand approved requests to [Radarr](https://radarr.video) (films) and
+[Sonarr](https://sonarr.tv) (shows), which find and download them; when the file lands in a library
+folder, the request is marked as here and whoever asked gets a notification.
+
+1. **Settings → Radarr & Sonarr.** If they run as normal programs on the same PC as Marquee's Docker,
+   the address is `http://host.docker.internal:7878` (Radarr) and `http://host.docker.internal:8989`
+   (Sonarr). The API key is in Radarr / Sonarr under *Settings → General*. Press **Connect**.
+2. **Quality profile:** what requests are added with. Each profile is listed with the biggest picture
+   it lets in ("HD-1080p · up to 1080p"); one that allows 4K is flagged, since those files are several
+   times bigger. A 1080p profile is picked for you when you connect.
+3. **Folder:** Radarr's / Sonarr's root folder for downloads. It must be a folder a Marquee library
+   uses (each is labelled with its library), and its drive must be shared with Docker (see
+   *Other drives*), or downloads won't show up.
+4. **Seasons (Sonarr):** which seasons a show gets when its request goes straight through: first
+   season only (the default), latest season, new episodes from now on, or every season.
+5. **Who can skip approval:** for each person, separately for films and for shows. Their requests go
+   straight to Radarr / Sonarr; everyone else's wait for you. Your own (admins') always go straight
+   through. When you approve one yourself you can pick a different profile, and for a show the
+   seasons, or *Approve only* to mark it approved without sending it.
+
+The Requests page then shows how each is getting on: *Looking for a copy*, *Downloading · 45% ·
+20 min left*, *Not out yet (expected 2027-03-12)*, *7 of 62 episodes downloaded*. If Radarr / Sonarr
+can't be reached, the request waits with the reason and a **Try again** button, admins get a
+notification, and the health check says so. Works with Radarr 3–5 and Sonarr 3 and 4.
+
 ### Backups
 
 Marquee backs itself up every night at 03:00 into the `backups` folder next to
@@ -235,7 +262,7 @@ never gets access to Docker itself.
 | **Kids profiles & ratings** | Titles carry their maturity rating (PG-13, TV-14, 12A…, from TMDB for your country, or set by hand with *⋯ → Edit*), shown as a badge. Give a profile a limit in *Settings → Users* (and choose whether unrated titles show): anything above it disappears everywhere for that profile. |
 | **Downloads on the phone** | The Android app saves movies and episodes to watch offline: the original file when the phone plays it, or a 1080p / 720p / 480p copy the server makes first. *Downloads* lists them; progress goes back to the server when you're online again. |
 | **Personal touches** | Sound and subtitle languages are remembered per show; 👍 / 👎 on titles steers suggestions ("Because you liked …"); a **Top 10 in your house this week** row; cast photos and **actor pages**; who's in it shows when you pause. |
-| **Requests** | Anyone can ask for a film or show (looked up on TMDB / TVmaze, or typed in) with a note; admins approve, decline or mark it added on the Requests page. It's marked as here by itself when it turns up, and whoever asked gets a notification. |
+| **Requests** | Anyone can ask for a film or show (looked up on TMDB / TVmaze, or typed in) with a note; admins approve, decline or mark it added on the Requests page. It's marked as here by itself when it turns up, and whoever asked gets a notification. With **Radarr / Sonarr** connected, approved requests are sent to them (with a chosen quality profile and, for shows, seasons), chosen people's requests skip approval (films and shows separately), and each request shows its download progress. |
 | **Notifications** | A bell with new episodes of shows you watch (or have on My List) and news about your requests; the phone app shows them as phone notifications. |
 | **Health check** | Settings shows disk space, offline folders, backups (and whether they're copied off the PC), update and graphics-card problems at a glance; admins are notified when something turns bad. |
 | **Skip Recap** | "Previously on…" recaps are found automatically and get a Skip Recap button. |
@@ -380,7 +407,8 @@ lib/picture.js      deinterlacing and square pixels (DVDs) when converting
 lib/report.js       Formats & space: which titles each kind of player has to convert, and why
 lib/hwaccel.js      encoder choice (NVDEC+NVENC / NVENC / QSV / VAAPI / x264), start-up tests, fallback
 lib/hls.js          adaptive streaming: VOD playlists, on-demand segment conversion per session
-lib/requests.js     requests ("can we get …?"): asking, the admin's list, noticing when a title arrives
+lib/requests.js     requests ("can we get …?"): asking, the admin's list, sending to Radarr / Sonarr, noticing when a title arrives
+lib/arr.js          Radarr and Sonarr: connecting, quality profiles (and their size cap), adding films and shows, download progress
 lib/notifications.js  each person's notifications (new episodes, requests, health)
 lib/health.js       the health check (disk space, folders, backups, updates, errors)
 lib/previews.js     preview clips for hovering over titles (made on first use, in the background)
