@@ -755,7 +755,7 @@ body.tv .shelf { padding-top: 16px; padding-bottom: 26px; scroll-snap-type: none
 /* Room after a row's last title, so the highlighted one can always slide to the row's start. */
 body.tv .shelf::after { content: ""; flex: none; width: calc(100% - clamp(200px, 18.5vw, 320px) - 8px); }
 /* Things for a mouse or for admins that only get in the remote's way on a TV. */
-body.tv #lib-size, body.tv .jump, body.tv [data-select-toggle], body.tv #lib-scan, body.tv #col-find, body.tv #col-new, body.tv .see-all { display: none; }
+body.tv #lib-size, body.tv .jump, body.tv [data-select-toggle], body.tv #lib-scan, body.tv #col-find, body.tv #col-new, body.tv [data-arrange], body.tv .see-all { display: none; }
 body.tv .round:focus-visible, body.tv .btn:focus-visible { outline-offset: 2px; }
 /* The top bar's sections: a white pill behind the highlighted one (an outline gets cut off there,
    as the bar scrolls sideways). */

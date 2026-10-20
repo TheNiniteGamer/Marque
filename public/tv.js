@@ -111,7 +111,10 @@ function tvStart() {
   const active = document.activeElement;
   if (active && active !== document.body && tvScope().contains(active) && tvVisible(active)) return;
   const scope = tvScope();
-  const first = scope.querySelector('#detail-panel .btn.play, .hero .btn.play, .profile-picker .pp-profile, .card .cover, main .btn.primary, .tv-settings .btn') || tvCandidates()[0];
+  // (Only something that can be highlighted: admin buttons hidden on TVs, like Collections' "New
+  // collection", left nothing highlighted and the remote dead.)
+  const first = [...scope.querySelectorAll('#detail-panel .btn.play, .hero .btn.play, .profile-picker .pp-profile, .card .cover, main .btn.primary, .tv-settings .btn')]
+    .find((el) => !el.matches(TV_SKIP) && tvVisible(el)) || tvCandidates()[0];
   if (first) { tvLockText(first); first.focus({ preventScroll: true }); }
 }
 

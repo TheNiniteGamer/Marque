@@ -283,6 +283,18 @@ public class MainActivity extends Activity {
             a.findViewById(R.id.offline_downloads).setVisibility(!a.tv && !OfflineStore.list(a).isEmpty() ? View.VISIBLE : View.GONE);
         }
 
+        // The page's renderer crashed, or the system closed it to free memory (TVs have little): open
+        // the app again at the home page instead of the whole app closing.
+        @Override
+        public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+            android.util.Log.w("Marquee", "Web page renderer gone (crashed: " + detail.didCrash() + ")");
+            a.web = null; // (unusable now)
+            view.destroy();
+            a.startActivity(new Intent(a, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION));
+            a.finish();
+            return true;
+        }
+
         @Override
         public void onPageFinished(WebView view, String url) {
             if (!a.mainFrameFailed) a.errorView.setVisibility(View.GONE);

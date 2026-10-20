@@ -4,6 +4,15 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.13.1
+
+- **TV: Collections no longer gets stuck.** On a TV (the Android TV app, or TV mode in a browser),
+  opening Collections left nothing highlighted, so the remote's arrows did nothing. It now starts
+  on the first collection, like the other pages. (The admin-only Arrange button is hidden on TVs,
+  like the other admin tools there.)
+- **Android TV app 1.5.1 / phone app 1.10.1:** if the TV's web engine crashes or is closed to free
+  memory, the app reopens at the home page instead of closing.
+
 ## 0.13.0
 
 - **Updates wait until nobody's watching.** Pressing **Update** downloads and builds the new version
