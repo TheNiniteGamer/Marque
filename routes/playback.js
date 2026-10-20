@@ -94,10 +94,12 @@ module.exports = function register(app) {
     const audioIndex = Math.max(0, Number(url.searchParams.get('audio')) || 0);
     const burn = burnParam(item, url);
     let finished = false;
-    const run = (encoder) => {
+    const run = (asked) => {
       const hevc = url.searchParams.get('hevc') === '1';
-      const proc = media.transcode(item, { start, audioIndex, encoder, burn, night: url.searchParams.get('night') === '1', hevc });
-      proc.meta = { itemId: item.id, userId: user.id, encoder: media.copiesVideo(item.media?.video, hevc) && burn == null ? null : encoder };
+      const proc = media.transcode(item, { start, audioIndex, encoder: asked, burn, night: url.searchParams.get('night') === '1', hevc });
+      // (What's really used: an NVIDIA card can't decode every video, and copied pictures use none.)
+      const encoder = proc.encoder || 'software';
+      proc.meta = { itemId: item.id, userId: user.id, encoder: proc.encoder };
       transcodes.add(proc);
       let stderr = '';
       let sent = false;
@@ -119,7 +121,7 @@ module.exports = function register(app) {
         if (finished) return;
         if (!sent && code && encoder !== 'software') {
           hwaccel.reportFailure(encoder, stderr.trim().split('\n').pop());
-          return run('software');
+          return run(hwaccel.fallback(encoder));
         }
         if (code && !signal) console.warn(`[transcode] ${path.basename(item.file)} exited ${code}: ${stderr.trim()}`);
         if (!sent && !res.headersSent) json(res, 500, { error: 'The server could not convert this video' });

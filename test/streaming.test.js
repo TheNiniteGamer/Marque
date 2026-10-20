@@ -11,7 +11,8 @@ const os = require('node:os');
 const path = require('node:path');
 
 const hls = require('../lib/hls');
-const { HwAccel, videoArgs } = require('../lib/hwaccel');
+const { HwAccel, videoArgs, useGpuCodecs } = require('../lib/hwaccel');
+const hdr = require('../lib/hdr');
 const { MediaTokens } = require('../lib/tokens');
 const intro = require('../lib/intro');
 const { makeSup } = require('./pgs');
@@ -137,6 +138,57 @@ test('encoder arguments for each kind of graphics card', () => {
   assert.ok(nv.output.includes('h264_nvenc') && nv.output.includes('4000000') && nv.output.includes('expr:gte(t,n_forced*4)'));
   assert.deepEqual(videoArgs('vaapi').input.slice(0, 1), ['-vaapi_device']);
   assert.ok(videoArgs('qsv').output.includes('h264_qsv'));
+});
+
+test('an NVIDIA card decodes and resizes too, when it can', async () => {
+  await hdr.check();
+  useGpuCodecs(['h264', 'hevc', 'mpeg2video', 'vc1']);
+  try {
+    const sdr = videoArgs('nvdec', { maxHeight: 720, bitrate: 4e6, video: { codec: 'hevc', pixFmt: 'yuv420p10le' } });
+    assert.equal(sdr.kind, 'nvdec');
+    assert.deepEqual(sdr.input, ['-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda']);
+    assert.equal(sdr.output[sdr.output.indexOf('-vf') + 1], "scale_cuda=-2:'min(720,ih)':format=nv12", 'stays on the card all the way to the encoder');
+    assert.ok(sdr.output.includes('h264_nvenc'));
+
+    // HDR: shrunk on the card, then brought back for tone mapping on the CPU.
+    const h = videoArgs('nvdec', { maxHeight: 1080, video: { codec: 'hevc', pixFmt: 'yuv420p10le', colorTransfer: 'smpte2084' } });
+    const vf = h.output[h.output.indexOf('-vf') + 1];
+    if (hdr.toneMapping()) assert.match(vf, /^scale_cuda=-2:'min\(1080,ih\)':format=p010le,hwdownload,format=p010le,zscale.*tonemap.*format=yuv420p$/);
+
+    // What the card can't decode (10-bit H.264, 4:2:2, codecs it wasn't seen decoding) and drawn-in
+    // subtitles are decoded on the CPU, and only encoded on the card.
+    for (const [why, opts] of [['10-bit H.264', { video: { codec: 'h264', pixFmt: 'yuv420p10le', profile: 'High 10' } }],
+      ['4:2:2', { video: { codec: 'hevc', pixFmt: 'yuv422p10le' } }], ['AV1 not seen', { video: { codec: 'av1', pixFmt: 'yuv420p' } }],
+      ['subtitles drawn in', { burn: 2, video: { codec: 'h264', pixFmt: 'yuv420p' } }]]) {
+      const a = videoArgs('nvdec', opts);
+      assert.equal(a.kind, 'nvenc', why);
+      assert.ok(!a.input.includes('-hwaccel') && a.output.includes('h264_nvenc'), why);
+    }
+  } finally { useGpuCodecs(['h264']); }
+
+  // Failing to start falls back step by step: card decoding → card encoding only → the CPU.
+  const hw = new HwAccel(memStore());
+  assert.equal(hw.fallback('nvdec'), 'nvenc');
+  assert.equal(hw.fallback('nvenc'), 'software');
+  hw.active = 'nvdec';
+  hw.reportFailure('nvdec', 'no NVDEC');
+  hw.reportFailure('nvdec', 'no NVDEC');
+  assert.equal(hw.active, 'nvenc', 'repeated failures drop decoding, not the card');
+});
+
+test('HLS falls back from NVIDIA decoding to the CPU when the card cannot start', async () => {
+  const file = path.join(ROOT, 'fallback-nvdec.mp4');
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=24:d=6', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', file]);
+  const failures = [];
+  const hw = { active: 'nvdec', reportFailure: (kind) => failures.push(kind), fallback: (k) => (k === 'nvdec' ? 'nvenc' : 'software') };
+  const mgr = new hls.HlsManager(path.join(ROOT, 'hls-nvdec'), hw);
+  const item = { id: 'nd', file, media: { duration: 6, bitrate: 1e6, video: { codec: 'h264', pixFmt: 'yuv420p', width: 640, height: 360 }, audio: [] } };
+  try {
+    const seg = await mgr.segment(item, { quality: '360p', sid: 'unit-test-nvdec' }, 0);
+    assert.ok(fs.statSync(seg).size > 0);
+    assert.deepEqual(failures, ['nvdec', 'nvenc'], 'this machine has no NVIDIA card: both steps fail, then the CPU does it');
+    assert.equal(mgr.status()[0].encoder, 'software');
+  } finally { mgr.stopAll(); }
 });
 
 test('a graphics card that keeps failing is dropped for the CPU', () => {

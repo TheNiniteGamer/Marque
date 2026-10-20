@@ -4,6 +4,21 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.16.0
+
+- **NVIDIA cards now decode too, not just encode.** With an NVIDIA card, the card also decodes and
+  resizes the video before encoding it (NVDEC). That was the CPU's heaviest job, above all with
+  4K HEVC, so converting now leaves the CPU almost free. Automatic picks it first; it's also in
+  Settings → Playback → Video converter as "NVIDIA graphics card, decoding too", and the page lists
+  which formats the card was seen decoding (H.264, HEVC, VP9, AV1 on an RTX 30 or later, MPEG-2, VC-1).
+- HDR pictures are resized on the card and brought back for the colour mapping on the CPU, now at
+  1080p or less instead of 4K.
+- Videos the card can't decode (10-bit H.264, 4:2:2) and Blu-ray subtitles drawn into the picture
+  are decoded on the CPU and still encoded on the card. If a stream fails to start, it's retried
+  with the card only encoding, then with the CPU; repeated failures turn card decoding off (not the
+  card) until the next check.
+- Nothing to change in Docker: the NVIDIA setup already passes the card's video decoder through.
+
 ## 0.15.0
 
 - **HDR films and shows keep their colours when converted.** HDR10 and HLG videos used to come

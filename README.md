@@ -140,7 +140,7 @@ this much faster than the CPU, and can handle several viewers at once.
 
 On Windows, NVIDIA needs Docker Desktop's WSL 2 backend (the default) and a current NVIDIA
 driver; nothing needs to be installed inside WSL. Without Docker, ffmpeg needs to be built with
-NVENC / VAAPI / QSV support. Set `HWACCEL=nvenc|vaapi|qsv|software` to force a choice.
+NVENC / VAAPI / QSV support. Set `HWACCEL=nvdec|nvenc|vaapi|qsv|software` to force a choice.
 
 ### Casting to a TV
 
@@ -223,7 +223,7 @@ never gets access to Docker itself.
 | **HDR** | HDR10 and HLG films keep their colours when the server converts them (tone mapping to ordinary colours), instead of looking grey and washed out; thumbnails and previews too. Players that show HDR themselves get the file as it is. |
 | **Streaming** | **Direct Play** with instant seeking when the browser supports the file. MKVs with H.264 video (the usual kind) stream with their **original picture, not converted**: cut into segments at the file's keyframes (found once per file, the first time it's played), so seeking works as with any video and only the sound is converted. HEVC (x265) plays without converting in browsers that decode it (Safari; Chrome and Edge on PCs whose graphics card can). Everything else ffmpeg converts **on the fly**. Falls back automatically if a way of playing fails. The Android apps and the Roku play MP4 and MKV files as they are when the device can, and the Roku keeps the original picture when only the sound needs converting. |
 | **Quality / adaptive streaming** | Pick **Original**, **Auto** or a fixed 1080p / 720p / 480p / 360p in the player. *Auto* uses HLS adaptive streaming, which switches quality to suit the connection. It is the default when you're away from home. Segments are made on demand, so seeking anywhere starts within seconds. |
-| **Graphics card conversion** | NVIDIA (NVENC), Intel Quick Sync and Intel/AMD VAAPI, detected automatically, with fallback to the CPU. |
+| **Graphics card conversion** | NVIDIA (NVENC), Intel Quick Sync and Intel/AMD VAAPI, detected automatically, with fallback to the CPU. An NVIDIA card also **decodes and resizes** the video (NVDEC), so converting even 4K HEVC leaves the CPU almost free; what the card can't decode falls back to the CPU for decoding only. |
 | **Skip intro, Up Next at the credits** | Theme songs and end credits are found automatically by comparing the audio of episodes in a season. A **Skip Intro** button appears during the intro (`S`), or turn on automatic skipping under *Account*. When the credits start, **Up Next** offers the next episode (with *Watch credits* to stay). Admins can fix either by hand: *⋯ → Edit intro & credits…*, or ✂ in the player. |
 | **Seek preview thumbnails** | Pictures above the seek bar while you hover or drag. They're made the first time a video is opened (a few seconds to a minute or two for a film). |
 | **Kids profiles & ratings** | Titles carry their maturity rating (PG-13, TV-14, 12A…, from TMDB for your country, or set by hand with *⋯ → Edit*), shown as a badge. Give a profile a limit in *Settings → Users* (and choose whether unrated titles show): anything above it disappears everywhere for that profile. |
@@ -303,7 +303,7 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `METADATA_LANGUAGE` | `en-US` | Default metadata language (also settable in *Settings → Metadata & subtitles*) |
 | `TVMAZE_DISABLED` | — | Set to `1` to stop using TVmaze |
 | `TRANSCODE_PRESET` | `veryfast` | x264 preset used when video must be re-encoded |
-| `HWACCEL` | `auto` | Video converter: `auto`, `software`, `nvenc`, `qsv`, `vaapi` (also in *Settings → Playback*) |
+| `HWACCEL` | `auto` | Video converter: `auto`, `software`, `nvdec` (NVIDIA decoding and encoding), `nvenc` (NVIDIA encoding only), `qsv`, `vaapi` (also in *Settings → Playback*) |
 | `GPU` | — | `.env` only: `nvidia`, `intel` or `amd` passes the graphics card into Docker |
 | `VAAPI_DEVICE` | `/dev/dri/renderD128` | Graphics device for VAAPI / Quick Sync |
 | `TRANSCODE_DIR` | system temp folder | Where adaptive-streaming segments are written while you watch |
@@ -369,7 +369,7 @@ lib/scanner.js      folder walking, ffprobe, show grouping, TMDB enrichment
 lib/media.js        ffprobe/ffmpeg: probe, thumbnails, direct-play check, live transcode, seek points
 lib/keyframes.js    where each file's keyframes are (for streaming the original picture in segments)
 lib/hdr.js          HDR detection and tone mapping to ordinary colours when converting
-lib/hwaccel.js      encoder choice (NVENC / QSV / VAAPI / x264), start-up tests, fallback
+lib/hwaccel.js      encoder choice (NVDEC+NVENC / NVENC / QSV / VAAPI / x264), start-up tests, fallback
 lib/hls.js          adaptive streaming: VOD playlists, on-demand segment conversion per session
 lib/requests.js     requests ("can we get …?"): asking, the admin's list, noticing when a title arrives
 lib/notifications.js  each person's notifications (new episodes, requests, health)
