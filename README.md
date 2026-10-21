@@ -195,7 +195,7 @@ NVENC / VAAPI / QSV support. Set `HWACCEL=nvdec|nvenc|vaapi|qsv|software` to for
 DVD rips (MPEG-2), 4K and HEVC files make the server convert them every time a 1080p TV, a Roku
 or a browser plays them. *Settings → Overnight conversions* makes a 1080p H.264 copy of each at
 night instead, on the graphics card. It **pauses whenever anyone is watching anything** (and carries
-on where it was afterwards), shows **how long it has left**, and admins can **Pause**, **Carry on**
+on where it was afterwards; on the graphics card it lets go of the card's memory while paused), shows **how long it has left**, and admins can **Pause**, **Carry on**
 or **Stop for tonight** (the copy under way is thrown away; it starts again the next night) from
 this page or the Activity page.
 The copy is another version of the title: each TV plays whichever copy it can play as it is (a 4K

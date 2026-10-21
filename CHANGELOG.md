@@ -4,6 +4,14 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.5
+
+- **A paused overnight conversion lets go of the graphics card:** when someone starts watching,
+  a conversion on the graphics card now stops cleanly and keeps what it has done, instead of
+  just waiting with the card's memory still in use. That memory goes to the people watching
+  (a 4K film's conversion held almost 2 GB), so several 4K films at once no longer run short.
+  Afterwards it carries on from where it stopped, and the parts are joined into one copy.
+
 ## 0.24.4
 
 - The graphics card is also tried again when it has a hiccup while Marquee starts (it then used

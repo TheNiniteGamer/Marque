@@ -56,6 +56,35 @@ test('time left, not counting time spent paused', () => {
   assert.equal(secondsLeft({ progress: 0.25, startedAt: now - 70_000, pausedMs: 20_000, paused: true, pausedAt: now - 10_000 }, now), 120, 'paused right now');
 });
 
+test('a conversion on the graphics card is ended on a pause, carries on where it was, and the parts are joined', async () => {
+  const dir = path.join(ROOT, 'parts');
+  const file = path.join(dir, 'Long Film.mkv');
+  fs.mkdirSync(dir, { recursive: true });
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=25:duration=60', '-f', 'lavfi', '-i', 'sine=d=60',
+    '-c:v', 'mpeg2video', '-b:v', '6M', '-c:a', 'ac3', file]);
+  const { probe } = require('../lib/media');
+  const item = { id: 'long1', type: 'movie', title: 'Long Film', file, mtime: 1, media: await probe(file) };
+  const store = { data: { items: { long1: item }, settings: { optimize: { enabled: true } } }, save() {} };
+  let busy = false;
+  const o = new Optimizer(store, path.join(dir, 'copies'), { active: 'software' }, { probe, isBusy: () => busy });
+  o.freesCard = () => true; // no graphics card here: treat the CPU's like one
+  o.run(item);
+  await until(() => o.running?.progress > 0.2, 60_000);
+  busy = true;
+  o.tick();
+  await until(() => o.running && !o.running.proc, 30_000);
+  const job = o.running;
+  assert.equal(job.parts.length, 1, 'what was done is kept as a part');
+  assert.ok(job.done > 5 && job.done < 55, `part of the way (${job.done}s)`);
+  assert.equal(o.status().running.paused, true);
+  assert.ok(o.used() > 0, 'the part counts towards the space used');
+  busy = false;
+  o.tick();
+  await until(() => item.optimized, 120_000);
+  assert.ok(Math.abs(item.optimized.media.duration - 60) < 1, `the whole film, once (${item.optimized.media.duration}s)`);
+  assert.deepEqual(fs.readdirSync(path.join(dir, 'copies')), [path.basename(item.optimized.file)], 'the parts are gone');
+});
+
 test('admins pause, carry on, or stop for tonight', () => {
   const store = { data: { items: {}, settings: { optimize: { enabled: true, end: '07:00' } } }, save() {} };
   const o = new Optimizer(store, path.join(ROOT, 'hold'), null, { now: () => new Date('2026-10-20T23:30:00') });
