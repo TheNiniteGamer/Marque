@@ -4,6 +4,14 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.1
+
+- **Your own opening sound:** Settings → Home screen → *Upload a sound* replaces the whoosh that
+  plays with the MARQUEE animation, on every browser, phone and TV. Any audio file works; the
+  silence at its start is cut so it lines up with the animation, and it stops after 6 seconds. It's
+  kept on your server only. *Use the built-in one* switches back.
+- Roku 1.15: plays the server's opening sound (its own if the server can't be reached).
+
 ## 0.24.0
 
 - **Profile pictures:** click your picture on the Account page to pick one of 16 cartoon faces and

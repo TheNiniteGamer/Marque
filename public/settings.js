@@ -175,8 +175,8 @@ const SETTINGS_PAGES = [
   },
   {
     id: 'home', label: 'Home screen',
-    load: () => api('/api/settings'),
-    render: (st) => {
+    load: () => Promise.all([api('/api/settings'), api('/api/intro-sound')]),
+    render: ([st, sound]) => {
       const h = st.home;
       const toggle = (k, label, note = '') => html`<label class="st-row st-toggle"><span class="st-row-label">${label}${note ? html`<span class="st-row-note">${note}</span>` : ''}</span>
         <input type="checkbox" class="switch" data-home="${k}" ${h[k] ? 'checked' : ''}></label>`;
@@ -195,9 +195,35 @@ const SETTINGS_PAGES = [
           ${toggle('upcoming', 'Coming soon', 'New episodes of shows you watch, and films on their way in Radarr')}
           ${count('collections', 'Collection rows', 'The first collections, in the order you arranged them')}
           ${count('genres', 'Genre rows', 'The biggest genres in your libraries')}
+        </div>
+        <h2 class="st-sub">When Marquee opens</h2>
+        <div class="st-card">
+          <div class="st-row"><span class="st-row-label">Opening sound<span class="st-row-note">${sound.custom ? 'Your own sound' : 'The built-in whoosh'} · plays with the MARQUEE animation on every browser, phone and TV (the Roku fetches it from this server). Any audio file; the silence at its start is cut and it stops after 6 seconds.</span></span>
+            <span class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">
+              <button type="button" class="btn small" id="sound-play">Play</button>
+              <label class="btn small" style="cursor:pointer">Upload a sound<input type="file" accept="audio/*" hidden id="sound-file"></label>
+              ${sound.custom ? html`<button type="button" class="btn small" id="sound-reset">Use the built-in one</button>` : ''}
+            </span></div>
         </div>`;
     },
     bind: () => {
+      let playing = null;
+      $('#sound-play').onclick = () => { playing?.pause(); playing = new Audio(`/sounds/intro.mp3?t=${Date.now()}`); playing.play().catch(() => toast('Couldn’t play it here', true)); };
+      $('#sound-reset')?.addEventListener('click', async () => {
+        try { await api('/api/intro-sound', { method: 'DELETE' }); toast('Back to the built-in sound'); router(); } catch (err) { toast(err.message, true); }
+      });
+      $('#sound-file').onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        toast('Uploading…');
+        try {
+          const res = await fetch('/api/intro-sound', { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) throw new Error(data?.error || `Upload failed (${res.status})`);
+          toast('Opening sound changed');
+          router();
+        } catch (err) { toast(err.message, true); }
+      };
       view.onchange = async (e) => {
         const el = e.target.closest('[data-home]');
         if (!el) return;

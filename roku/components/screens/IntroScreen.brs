@@ -16,15 +16,33 @@ sub init()
     slit(m.top.findNode("haze"), "haze", 110, x0, y0, w, h)
     slit(m.top.findNode("shine"), "shine", 44, x0, y0, w, h)
 
-    sound = CreateObject("roSGNode", "ContentNode")
-    sound.url = "pkg:/sounds/intro.mp3"
+    ' The server's opening sound (an admin can choose their own), or the channel's own when there's
+    ' no server yet or it can't be reached.
     m.sound = m.top.findNode("sound")
-    m.sound.content = sound
-    m.sound.control = "play"
+    server = m.global.server
+    if server <> invalid and server <> "" then
+        m.sound.observeField("state", "onSound")
+        playSound(server + "/sounds/intro.mp3")
+    else
+        playSound("pkg:/sounds/intro.mp3")
+    end if
 
     m.anim = m.top.findNode("anim")
     m.anim.observeField("state", "onAnim")
     m.anim.control = "start"
+end sub
+
+sub playSound(url as String)
+    sound = CreateObject("roSGNode", "ContentNode")
+    sound.url = url
+    m.sound.content = sound
+    m.sound.control = "play"
+end sub
+
+sub onSound()
+    if m.sound.state <> "error" then return
+    m.sound.unobserveField("state")
+    playSound("pkg:/sounds/intro.mp3")
 end sub
 
 ' One slit of light, `width` wide, crossing the word (x0, y0, w, h); the slits share a middle.

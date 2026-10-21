@@ -110,6 +110,8 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const THUMB_DIR = path.join(DATA_DIR, 'thumbs');
 const SUB_CACHE = path.join(DATA_DIR, 'subs');
 const SUB_DOWNLOADS = path.join(DATA_DIR, 'subs-downloaded');
+// The opening sound an admin chose (Settings → Home screen), in place of the built-in one.
+const INTRO_SOUND = path.join(DATA_DIR, 'intro-sound.mp3');
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const store = new Store(path.join(DATA_DIR, 'db.json'));
@@ -491,7 +493,7 @@ const app = {
   subs, lib, metadata, Matcher, Updater, Backups, HwAccel, hlsLib,
   MediaTokens, IntroDetector, FolderWatcher, findProblems, collections, OpenSubtitles, Parties, Trickplay,
   Activity, Maintenance, ENCODER_NAMES, PORT, HOST, DATA_DIR, MEDIA_ROOT, SCAN_INTERVAL_MIN,
-  MEDIA_LABELS, hostLabel, fromHostPath, folderPlaces, PUBLIC_DIR, THUMB_DIR, SUB_CACHE, SUB_DOWNLOADS, store, matcher,
+  MEDIA_LABELS, hostLabel, fromHostPath, folderPlaces, PUBLIC_DIR, INTRO_SOUND, THUMB_DIR, SUB_CACHE, SUB_DOWNLOADS, store, matcher,
   scanner, updater, hwaccel, TRANSCODE_DIR, hls, offline, offlineLib, health, previews, tokens, opensubs, parties,
   trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader, arr, optimizer, autoSubs, upcoming,
   transcodes, HttpError, json, readBody, readRaw, MIME, sendFile, getItem,
@@ -504,6 +506,7 @@ for (const group of ['auth', 'library', 'playback', 'admin', 'downloads', 'reque
 // ---------- server ----------
 function serveStatic(req, res, pathname) {
   const rel = safeDecode(pathname).replace(/^\/+/, '');
+  if (rel === 'sounds/intro.mp3' && fs.existsSync(INTRO_SOUND)) return sendFile(req, res, INTRO_SOUND, { type: 'audio/mpeg', headers: { 'Cache-Control': 'no-cache' } });
   let file = path.join(PUBLIC_DIR, rel);
   if (!file.startsWith(PUBLIC_DIR + path.sep) || !rel || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(PUBLIC_DIR, 'index.html');
   sendFile(req, res, file, { headers: { 'Cache-Control': 'no-cache' } });

@@ -11,7 +11,37 @@ module.exports = function register(app) {
     ENCODER_NAMES, store, matcher, updater, hwaccel, hls, opensubs, activity,
     maintenance, intro, backups, auth, transcodes, HttpError, json, readBody, trickplay, keyframes, offline,
     readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary, path, fromHostPath, health, isRemote, previews,
+    INTRO_SOUND,
   } = app;
+
+  // The opening sound: any audio file, made into a short MP3 without the silence at its start (so
+  // it lines up with the animation), at most 6 seconds. It stays on this server (not in backups).
+  route('GET', '/api/intro-sound', async (req, res) => json(res, 200, { custom: fs.existsSync(INTRO_SOUND) }), 'admin');
+  route('PUT', '/api/intro-sound', async (req, res, p, url, me) => {
+    const buf = await readRaw(req, 10 * 1024 * 1024);
+    const tmp = `${INTRO_SOUND}.upload`, out = `${INTRO_SOUND}.new.mp3`;
+    fs.writeFileSync(tmp, buf);
+    try {
+      await new Promise((resolve, reject) => require('node:child_process').execFile(process.env.FFMPEG_PATH || 'ffmpeg', [
+        '-hide_banner', '-loglevel', 'error', '-y', '-i', tmp, '-vn',
+        '-af', 'silenceremove=start_periods=1:start_threshold=-45dB,afade=t=out:st=5.4:d=0.6', '-t', '6',
+        '-ac', '2', '-ar', '44100', '-b:a', '128k', out,
+      ], { timeout: 30000 }, (err) => (err ? reject(err) : resolve())));
+      if (!fs.statSync(out).size) throw new Error('empty');
+      fs.renameSync(out, INTRO_SOUND);
+    } catch {
+      throw new HttpError(400, 'Couldn’t read that sound: try an MP3, WAV or M4A file');
+    } finally {
+      fs.rmSync(tmp, { force: true });
+      fs.rmSync(out, { force: true });
+    }
+    console.log(`[settings] ${me.username} changed the opening sound`);
+    json(res, 200, { custom: true });
+  }, 'admin');
+  route('DELETE', '/api/intro-sound', async (req, res) => {
+    fs.rmSync(INTRO_SOUND, { force: true });
+    json(res, 200, { custom: false });
+  }, 'admin');
 
   // --- activity (admin): who is watching what right now ---
   route('GET', '/api/activity', async (req, res) => {
