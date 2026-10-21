@@ -15,11 +15,12 @@ module.exports = function register(app) {
   } = app;
 
   // The opening sound: any audio file, made into a short MP3 without the silence at its start (so
-  // it lines up with the animation), at most 6 seconds. It stays on this server (not in backups).
+  // it lines up with the animation), at most 6 seconds. Backups include it.
   route('GET', '/api/intro-sound', async (req, res) => json(res, 200, { custom: fs.existsSync(INTRO_SOUND) }), 'admin');
   route('PUT', '/api/intro-sound', async (req, res, p, url, me) => {
     const buf = await readRaw(req, 10 * 1024 * 1024);
     const tmp = `${INTRO_SOUND}.upload`, out = `${INTRO_SOUND}.new.mp3`;
+    fs.mkdirSync(path.dirname(INTRO_SOUND), { recursive: true });
     fs.writeFileSync(tmp, buf);
     try {
       await new Promise((resolve, reject) => require('node:child_process').execFile(process.env.FFMPEG_PATH || 'ffmpeg', [

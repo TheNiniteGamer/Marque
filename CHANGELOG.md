@@ -4,6 +4,20 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.2
+
+**Ready for Linux.** Marquee now runs on a Linux PC (Debian, Ubuntu…) as easily as on Windows;
+the Windows scripts are unchanged.
+- **`marquee.sh`** does on Linux what `start-marquee.bat`, `update-marquee.bat` and `marquee.ps1` do
+  on Windows: start, stop, update, logs, and the **update helper** (as a system service) so
+  *Update* in Settings works. It also spots Windows paths left in a `.env` brought over, and checks
+  that Marquee can write to its folders, offering to fix the ones it can't.
+- **[docs/LINUX.md](docs/LINUX.md):** a step-by-step guide for Debian 13, from installing Docker
+  and the NVIDIA driver to mounting drives, and moving an existing Windows install over with a
+  backup.
+- Radarr and Sonarr on the same PC are found at `http://host.docker.internal` on Linux too.
+- Backups now include the uploaded opening sound.
+
 ## 0.24.1
 
 - **Your own opening sound:** Settings → Home screen → *Upload a sound* replaces the whoosh that

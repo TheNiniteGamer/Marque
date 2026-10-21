@@ -35,6 +35,7 @@ test('an uploaded sound replaces the built-in one, without its silent start; rem
   const r = await admin('PUT', '/api/intro-sound', null, { raw: fs.readFileSync(wav), type: 'audio/wav' });
   assert.deepEqual(r.data, { custom: true });
   assert.deepEqual((await admin('GET', '/api/intro-sound')).data, { custom: true });
+  assert.ok(fs.existsSync(path.join(ROOT, 'data', 'custom', 'intro-sound.mp3')), 'kept where backups include it');
   const mp3 = path.join(ROOT, 'got.mp3');
   fs.writeFileSync(mp3, await served());
   const secs = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', mp3]).toString());

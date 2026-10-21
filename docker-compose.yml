@@ -21,6 +21,14 @@ services:
     logging: *logging
     ports:
       - "${MARQUEE_PORT:-32500}:32500"
+    # "host.docker.internal" is this PC as seen from the container (Radarr and Sonarr running on the
+    # PC itself). Docker Desktop provides it; on Linux this line does.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Linux: also a member of your own group (marquee.sh sets MARQUEE_GID), so it can write to your
+    # folders that your group can write to. (Not needed on Windows.)
+    group_add:
+      - "${MARQUEE_GID:-999}"
     environment:
       TZ: ${TZ:-UTC}
       TMDB_API_KEY: ${TMDB_API_KEY:-}

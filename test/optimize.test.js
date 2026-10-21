@@ -66,7 +66,7 @@ test('admins pause, carry on, or stop for tonight', () => {
   o.stopForTonight('dad');
   assert.equal(o.status().state, 'tonight');
   assert.equal(new Date(o.hold().until).toString(), new Date('2026-10-21T07:00:00').toString(), 'until the morning');
-  store.data.optimizeHold.until = Date.now() - 1;
+  store.data.optimizeHold.until = new Date('2026-10-20T23:30:00').getTime() - 1;
   assert.equal(o.hold(), null, 'over by the next night');
   o.startNow();
   assert.equal(o.hold(), null, 'Start now carries on too');

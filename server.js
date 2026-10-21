@@ -110,10 +110,17 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const THUMB_DIR = path.join(DATA_DIR, 'thumbs');
 const SUB_CACHE = path.join(DATA_DIR, 'subs');
 const SUB_DOWNLOADS = path.join(DATA_DIR, 'subs-downloaded');
-// The opening sound an admin chose (Settings → Home screen), in place of the built-in one.
-const INTRO_SOUND = path.join(DATA_DIR, 'intro-sound.mp3');
+// The opening sound an admin chose (Settings → Home screen), in place of the built-in one. Kept in
+// data/custom, which backups include (it used to be data/intro-sound.mp3).
+const INTRO_SOUND = path.join(DATA_DIR, 'custom', 'intro-sound.mp3');
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
+try {
+  if (fs.existsSync(path.join(DATA_DIR, 'intro-sound.mp3')) && !fs.existsSync(INTRO_SOUND)) {
+    fs.mkdirSync(path.dirname(INTRO_SOUND), { recursive: true });
+    fs.renameSync(path.join(DATA_DIR, 'intro-sound.mp3'), INTRO_SOUND);
+  }
+} catch (err) { console.error('[settings] could not move the opening sound:', err.message); }
 const store = new Store(path.join(DATA_DIR, 'db.json'));
 store.data.settings ||= {};
 metadata.configure(() => store.data.settings);

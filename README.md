@@ -5,6 +5,10 @@ organizes them into a browsable library you can stream to any browser on your ne
 the house gets their own account and their own watch history, and there's a built-in YouTube
 downloader.
 
+On **Linux** (Debian, Ubuntu…), see **[docs/LINUX.md](docs/LINUX.md)**: install Docker, then
+`./marquee.sh start` does what the Windows scripts below do, including one-click updates. It also
+covers moving an existing Windows install over.
+
 ## Quick start on Windows (Docker)
 
 1. **Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)** and start it once.
@@ -268,6 +272,8 @@ inside Docker and can't rebuild itself, so the helper does it. The first time yo
   rebuilds it, waits for Marquee's go-ahead (nobody watching), and restarts Marquee into it. The web
   page shows progress and reloads by itself when the update is done.
 - **Turning it off:** run `marquee.ps1 RemoveHelper`, or delete the task in Task Scheduler.
+- **On Linux** it's a system service, `marquee-updater`, installed by `./marquee.sh install-helper`
+  (which `./marquee.sh start` offers); `./marquee.sh remove-helper` removes it.
 - **Without the helper:** run `update-marquee.bat` on the server PC. It does exactly the same thing.
 
 The helper and the app talk only through the `control` folder next to `docker-compose.yml`. The app
@@ -419,8 +425,9 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
   New passwords need at least 8 characters.
 - Backups contain password hashes and your TMDB key: keep them somewhere private (that includes
   the second copy you may keep in a cloud folder).
-- On Linux hosts (not needed on Windows), the container runs as uid 999. Make sure that user can
-  write to your YouTube and backups folders (`chown 999 /path/to/youtube /path/to/backups`).
+- On Linux hosts (not needed on Windows), the container runs as uid 999, also in your own group.
+  `./marquee.sh check` makes sure it can write to your YouTube, backups and converted-copies folders
+  (see [docs/LINUX.md](docs/LINUX.md#folder-permissions)).
 
 ## Keyboard shortcuts
 
