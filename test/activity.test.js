@@ -13,7 +13,7 @@ const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'marquee-activity-'));
 let srv, admin, bob, film;
 test.before(async () => {
   clip(path.join(ROOT, 'Movies', 'Film (2020).mp4'), 240); // long enough that its conversion is still going
-  srv = await startServer({ DATA_DIR: path.join(ROOT, 'data'), TVMAZE_DISABLED: '1', AUTO_LIBRARIES: `Movies:movie:${path.join(ROOT, 'Movies')}` });
+  srv = await startServer({ DATA_DIR: path.join(ROOT, 'data'), TVMAZE_DISABLED: '1', AUTO_LIBRARIES: `Movies:movie:${path.join(ROOT, 'Movies')}`, DASHBOARD_KEY: 'wall-key' });
   admin = srv.client(); bob = srv.client();
   await admin('POST', '/api/auth/setup', { username: 'admin', password: 'password1' });
   await until(async () => (await admin('GET', '/api/libraries')).data.every((l) => l.scannedAt));
@@ -30,6 +30,26 @@ test('device names from browsers and the Android app', () => {
   assert.equal(deviceName('Roku/DVP-14.0 (14.0.4.5112-46)'), 'Roku');
   assert.equal(deviceName('Mozilla/5.0 (Linux; Android 11; SHIELD Android TV) AppleWebKit/537.36 Chrome/120.0 Safari/537.36 MarqueeAndroid/1.9.0 MarqueeTV'), 'Android TV app');
   assert.equal(deviceName(''), 'Browser');
+});
+
+test('a wall dashboard reads a summary with its key, and nothing without it', async () => {
+  const get = (url, headers = {}) => fetch(srv.base + url, { headers }).then(async (r) => ({ status: r.status, data: await r.json().catch(() => null) }));
+  assert.equal((await get('/api/dashboard')).status, 401, 'no key');
+  assert.equal((await get('/api/dashboard', { 'X-Dashboard-Key': 'guess' })).status, 401, 'wrong key');
+  await bob('POST', `/api/items/${film.id}/progress`, { position: 2, paused: false, mode: 'direct', client: 'wall-1' });
+  const d = (await get('/api/dashboard', { 'X-Dashboard-Key': 'wall-key' })).data;
+  assert.equal(d.watching, 1);
+  assert.deepEqual(d.streams.map((s) => [s.user, s.title, s.how]), [['bob', 'Film', 'Playing as it is']]);
+  assert.equal(d.libraries.Movies, 1);
+  assert.equal(typeof d.overnight.state, 'string');
+  assert.equal(d.requests, 0);
+  assert.equal((await get('/api/dashboard?key=wall-key')).status, 200, 'or as ?key=');
+  await bob('POST', `/api/items/${film.id}/progress`, { position: 2, stopped: true, client: 'wall-1' });
+
+  const off = await startServer({ DATA_DIR: path.join(ROOT, 'data-nokey'), TVMAZE_DISABLED: '1' });
+  try {
+    assert.equal((await fetch(`${off.base}/api/dashboard?key=`).then((r) => r.status)), 404, 'off unless DASHBOARD_KEY is set');
+  } finally { await off.stop(); }
 });
 
 test('players show up while playing or paused, and disappear when they stop', async () => {

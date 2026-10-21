@@ -4,6 +4,13 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.6
+
+- **For a wall dashboard:** with `DASHBOARD_KEY` set in `.env`, a dashboard such as Homepage can show
+  who's watching what (and whether it's being converted), overnight conversions, requests waiting,
+  library sizes and whether an update is ready, without signing in to Marquee. It can only read
+  that summary; nothing else is reachable with the key, and it's off unless the key is set.
+
 ## 0.24.5
 
 - **A paused overnight conversion lets go of the graphics card:** when someone starts watching,

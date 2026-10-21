@@ -43,6 +43,8 @@ services:
       MARQUEE_NAME: ${MARQUEE_NAME:-${COMPUTERNAME:-}}
       # Update checks look at this GitHub repository; the helper and the app talk through /control.
       MARQUEE_REPO: ${MARQUEE_REPO:-TheNiniteGamer/Marque}
+      # A key that lets a wall dashboard (e.g. Homepage) read a summary at /api/dashboard (empty: off).
+      DASHBOARD_KEY: ${DASHBOARD_KEY:-}
       CONTROL_DIR: /control
       # Nightly backups land in a folder you can see on your PC (BACKUP_DIR in .env).
       BACKUP_DIR: /backups

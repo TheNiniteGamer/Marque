@@ -1,6 +1,6 @@
 {
   "name": "marquee",
-  "version": "0.24.5",
+  "version": "0.24.6",
   "description": "A small self-hosted media server inspired by Plex: libraries, metadata, streaming with transcoding, resume and watch tracking.",
   "main": "server.js",
   "bin": { "marquee": "server.js" },

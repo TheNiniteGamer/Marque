@@ -382,6 +382,7 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `AUTO_LIBRARIES` | — | Libraries to set up from config: `Name:movie\|show:/path1,/path2;…`. Checked on every start, so new folders are added. |
 | `MEDIA_LABELS` | — | Display names for container folders: `/media/movies=D:/Movies\|…` (set by Docker Compose) |
 | `SCAN_INTERVAL` | `30` | Minutes between automatic rescans (`0` disables). While new files are noticed on their own (`WATCH_INTERVAL`), full rescans run at most every 6 hours. |
+| `DASHBOARD_KEY` | — | Lets a wall dashboard (e.g. Homepage) read a summary from `/api/dashboard` (who's watching, conversions, requests, library sizes), sent as an `X-Dashboard-Key` header. Off when empty. |
 | `TMDB_API_KEY` / `TMDB_TOKEN` | — | TMDB key from the environment (easier: set it in *Settings → Metadata & subtitles*) |
 | `METADATA_LANGUAGE` | `en-US` | Default metadata language (also settable in *Settings → Metadata & subtitles*) |
 | `TVMAZE_DISABLED` | — | Set to `1` to stop using TVmaze |

@@ -2,6 +2,7 @@
 // Admin pages: activity, logs, maintenance, settings, metadata, updates, transcoding, remote access and backups.
 // Registered by server.js, which passes the shared helpers and services in `app`.
 
+const crypto = require('node:crypto');
 const { fare } = require('../lib/report');
 const { avatarOf } = require('../lib/auth');
 
@@ -114,6 +115,47 @@ module.exports = function register(app) {
     if (!activity.stop(String(body.key || ''), user.username)) throw new HttpError(404, 'That video has already stopped');
     json(res, 200, { ok: true });
   }, 'admin');
+
+  // --- dashboard (a key, not a sign-in): a read-only summary for a wall dashboard like Homepage ---
+  // Only when DASHBOARD_KEY is set in .env; it's sent as an X-Dashboard-Key header (or ?key=).
+  route('GET', '/api/dashboard', async (req, res, p, url) => {
+    const want = process.env.DASHBOARD_KEY || '';
+    if (!want) throw new HttpError(404, 'Not found');
+    const given = String(req.headers['x-dashboard-key'] || url.searchParams.get('key') || '');
+    const hash = (s) => crypto.createHash('sha256').update(s).digest(); // (equal lengths for the comparison)
+    if (!crypto.timingSafeEqual(hash(given), hash(want))) throw new HttpError(401, 'Wrong dashboard key');
+    const titleOf = (id) => {
+      const it = store.data.items[id];
+      if (!it) return null;
+      const s = lib.itemSummary(store, { id: '' }, it);
+      return s.showTitle ? `${s.showTitle} S${s.season}E${s.episode}` : s.title;
+    };
+    const HOW = { direct: 'Playing as it is', transcode: 'Converting', hls: 'Converting', cast: 'Casting' };
+    const streams = activity.watching().map((s) => ({
+      user: s.user, title: titleOf(s.itemId), device: s.device, how: (s.paused ? 'Paused · ' : '') + (HOW[s.mode] || 'Playing'), away: !!s.remote,
+    }));
+    const libraries = {};
+    for (const l of store.data.libraries) libraries[l.name] = 0;
+    for (const it of Object.values(store.data.items)) {
+      const l = store.data.libraries.find((x) => x.id === it.libraryId);
+      if (l) libraries[l.name]++;
+    }
+    const o = app.optimizer.status();
+    json(res, 200, {
+      version: require('../package.json').version,
+      updateAvailable: !!updater.updateAvailable(),
+      watching: streams.length,
+      away: streams.filter((s) => s.away).length,
+      converting: transcodes.size + hls.active,
+      encoder: ENCODER_NAMES[hwaccel.active],
+      streams,
+      overnight: { state: o.state, title: o.running?.title || null, progress: o.running ? Math.round(o.running.progress * 100) : null, queue: o.queue },
+      requests: require('../lib/requests').pendingCount(store),
+      libraries,
+      shows: Object.keys(store.data.shows || {}).length,
+      health: health?.last?.level || null,
+    });
+  }, 'public');
 
   // --- logs (admin) ---
   route('GET', '/api/logs', async (req, res, p, url) => json(res, 200, { entries: logs.recent({ all: url.searchParams.has('all') }) }), 'admin');
