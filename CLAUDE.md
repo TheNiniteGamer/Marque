@@ -53,6 +53,9 @@ never released publicly, so favour what works well in this house over general-pu
 - **The GitHub repo is public:** don't commit copyrighted or branded material (e.g. a streaming
   service's intro sound or logo). Things like that are uploaded into a running server instead.
 - When testing locally, stop only the processes you started (by PID); never `pkill -f node`.
+- **Don't update or restart the live server** (`./marquee.sh update`/`start`, rebuilding the
+  `marquee` container) without asking: the family may be watching. Push the release, then the user
+  installs it from Settings → Updates (or asks you to). Try changes in the test copy instead.
 
 ## Running it for development
 
@@ -62,3 +65,9 @@ npm test
 ```
 
 In Docker (as in production): `./marquee.sh start` on Linux, `start-marquee.bat` on Windows.
+
+On the server PC, Node isn't installed; run the tests in the image with the code mounted:
+`docker run --rm --user 1000:1000 -e HOME=/tmp -v ~/marquee:/src -w /src --entrypoint sh marquee:latest -c 'node --test test/*.test.js'`.
+A **test copy** (`~/marquee-test/compose.yml`: its own image, data and port 32501, drives read-only)
+runs the current code beside the live server:
+`docker compose -f ~/marquee-test/compose.yml up -d --build`, and `… down` when done.
