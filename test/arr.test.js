@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { clip, startServer, until } = require('./helpers');
-const { profileView, describe } = require('../lib/arr');
+const { Arr, profileView, describe } = require('../lib/arr');
 const { fakeArr, PROFILES } = require('./fake-arr');
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'marquee-arr-'));
@@ -151,6 +151,14 @@ test('when Radarr can’t be reached the request waits, admins are told why, and
   assert.equal(again.status, 200, JSON.stringify(again.data));
   assert.equal(again.data.status, 'approved');
   assert.equal(again.data.arr.error, undefined);
+});
+
+test('a saved folder Radarr no longer has (a Windows one from a restored backup) is explained, not sent', async () => {
+  const store = { data: { settings: { arr: { radarr: { url: urlOf(radarr.server), apiKey: KEY.radarr, profileId: 4, rootFolder: 'F:\\movies' } } } }, save() {} };
+  const before = radarr.sent.length;
+  await assert.rejects(new Arr(store).add({ kind: 'movie', title: 'The Matrix', year: 1999, provider: 'tmdb', providerId: '603' }),
+    /doesn’t have the folder “F:\\movies” any more: pick one in Settings → Radarr & Sonarr/);
+  assert.equal(radarr.sent.length, before, 'nothing was sent to Radarr');
 });
 
 test('something already in Radarr is linked, not added twice; "approve only" sends nothing', async () => {

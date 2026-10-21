@@ -4,6 +4,15 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.7
+
+- **Radarr & Sonarr settings after moving PCs:** a folder or quality profile that Radarr or Sonarr no
+  longer has (like `F:\movies` from a backup made on Windows) now shows as **Pick one…** with a
+  warning, instead of the list showing another folder as if it were the one saved. Before, choosing
+  that folder changed nothing, so it was never saved.
+- Requests explain it too: instead of Radarr's "Invalid Path", they say the folder is out of date
+  and where to pick a new one, and nothing is sent until it's fixed.
+
 ## 0.24.6
 
 - **For a wall dashboard:** with `DASHBOARD_KEY` set in `.env`, a dashboard such as Homepage can show

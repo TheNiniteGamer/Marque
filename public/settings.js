@@ -502,16 +502,20 @@ function arrCard(a, c, o, monitorOptions) {
   if (!c.keySet) return html`<h2 class="st-sub">${c.name} <span style="font-weight:400">· ${a === 'radarr' ? 'films' : 'shows'}</span></h2>${form}`;
   const profile = o?.profiles?.find((p) => p.id === c.profileId);
   const folder = o?.rootFolders?.find((f) => f.path === c.rootFolder);
+  // Saved, but no longer one the app has (e.g. a Windows folder restored from a backup): shown as
+  // "Pick one…" rather than letting the list show its first folder as if that were saved.
+  const lostProfile = !!(o?.profiles && c.profileId && !profile);
+  const lostFolder = !!(o?.rootFolders && c.rootFolder && !folder);
   return html`<h2 class="st-sub">${c.name} <span style="font-weight:400">· ${a === 'radarr' ? 'films' : 'shows'}${o?.version ? ` · ${o.version}` : ''}</span></h2>
     <div class="st-card" data-arr="${a}">
       <div class="st-row arr-conn ${o?.error ? 'warn' : ''}"><span class="st-row-label">Connected to<span class="st-row-note">${c.url}</span></span>
-        <span class="st-row-value">${o?.error ? o.error : c.ready ? '✓ Ready' : 'Pick a profile and folder'}</span>
+        <span class="st-row-value">${o?.error ? o.error : c.ready && !lostProfile && !lostFolder ? '✓ Ready' : 'Pick a profile and folder'}</span>
         <button class="btn small" type="button" data-arr-change>Change</button><button class="btn small danger" type="button" data-arr-off>Disconnect</button></div>
       ${o?.profiles ? html`
-        ${stSelect('Quality profile', profile?.maxRes > 1080 ? html`<span style="color:#ffd479">⚠ This profile lets in ${arrRes(profile.maxRes).replace('up to ', '')} files, which are several times bigger. Pick one capped at 1080p to save space.</span>` : 'What every request is added with. You can pick another when you approve one.',
-          'data-set="profileId"', html`${!c.profileId ? html`<option value="">Pick one…</option>` : ''}${o.profiles.map((p) => html`<option value="${p.id}" ${p.id === c.profileId ? 'selected' : ''}>${p.name} · ${arrRes(p.maxRes)}</option>`)}`)}
-        ${stSelect('Folder', folder ? (folder.library ? `In your “${folder.library}” library` : html`<span style="color:#ffd479">⚠ Not a folder any Marquee library uses, so downloads won't show up. Add it to a library, or pick another.</span>`) : 'Where downloads go',
-          'data-set="rootFolder"', html`${!c.rootFolder ? html`<option value="">Pick one…</option>` : ''}${o.rootFolders.map((f) => html`<option value="${f.path}" ${f.path === c.rootFolder ? 'selected' : ''}>${f.path}${f.freeSpace != null ? ` · ${fmtSize(f.freeSpace)} free` : ''}${f.library ? ` · ${f.library}` : ''}</option>`)}`)}
+        ${stSelect('Quality profile', lostProfile ? html`<span style="color:#ffd479">⚠ The saved profile, “${c.profileName || c.profileId}”, isn't one ${c.name} has any more. Pick one.</span>` : profile?.maxRes > 1080 ? html`<span style="color:#ffd479">⚠ This profile lets in ${arrRes(profile.maxRes).replace('up to ', '')} files, which are several times bigger. Pick one capped at 1080p to save space.</span>` : 'What every request is added with. You can pick another when you approve one.',
+          'data-set="profileId"', html`${!c.profileId || lostProfile ? html`<option value="" selected>Pick one…</option>` : ''}${o.profiles.map((p) => html`<option value="${p.id}" ${p.id === c.profileId ? 'selected' : ''}>${p.name} · ${arrRes(p.maxRes)}</option>`)}`)}
+        ${stSelect('Folder', lostFolder ? html`<span style="color:#ffd479">⚠ The saved folder, <code>${c.rootFolder}</code>, isn't one ${c.name} has any more, so requests can't be sent. Pick one.</span>` : folder ? (folder.library ? `In your “${folder.library}” library` : html`<span style="color:#ffd479">⚠ Not a folder any Marquee library uses, so downloads won't show up. Add it to a library, or pick another.</span>`) : 'Where downloads go',
+          'data-set="rootFolder"', html`${!c.rootFolder || lostFolder ? html`<option value="" selected>Pick one…</option>` : ''}${o.rootFolders.map((f) => html`<option value="${f.path}" ${f.path === c.rootFolder ? 'selected' : ''}>${f.path}${f.freeSpace != null ? ` · ${fmtSize(f.freeSpace)} free` : ''}${f.library ? ` · ${f.library}` : ''}</option>`)}`)}
         ${a === 'sonarr' ? stSelect('Seasons', 'Which seasons a show gets when its request goes straight through. You can pick when you approve one yourself.',
           'data-set="monitor"', html`${Object.entries(monitorOptions).map(([k, l]) => html`<option value="${k}" ${k === c.monitor ? 'selected' : ''}>${l}</option>`)}`) : ''}
         ${stToggle('Start looking straight away', `Otherwise it's only added to ${c.name}, and searched for on its own schedule`, 'data-set="search"', c.search)}` : ''}
