@@ -214,6 +214,35 @@ test('a graphics card that keeps failing is dropped for the CPU', () => {
   assert.match(hw.status().results.find((r) => r.kind === 'nvenc').error, /boom again/);
 });
 
+test('a graphics card that was dropped is tried again later, and used once it works', async () => {
+  const hw = new HwAccel(memStore());
+  hw.retryMs = 20;
+  hw.settle('auto', 'nvdec');
+  assert.equal(hw.retry, null, 'nothing to retry while the best one is in use');
+  // The first re-check finds the card still failing, the second finds it working again.
+  const found = ['software', 'nvdec'];
+  const used = [];
+  hw.detect = async () => { hw.settle('auto', found[used.length]); used.push(hw.active); };
+  hw.reportFailure('nvdec', 'out of memory');
+  hw.reportFailure('nvdec', 'out of memory');
+  assert.equal(hw.active, 'nvenc');
+  await until(() => used.length === 2, 2000);
+  assert.deepEqual(used, ['software', 'nvdec'], 'keeps trying while it fails, then goes back to the card');
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(used.length, 2, 'and stops trying once it works');
+  assert.equal(hw.retry, null);
+});
+
+test('no retries where no graphics card ever worked, or after the setting changes', () => {
+  const hw = new HwAccel(memStore());
+  hw.settle('auto', 'software');
+  assert.equal(hw.retry, null, 'a PC without a working card is not tested over and over');
+  hw.settle('auto', 'nvdec');
+  hw.settle('nvenc', 'nvenc');
+  assert.equal(hw.best, 'nvenc', 'choosing an encoder in Settings starts afresh');
+  assert.equal(hw.retry, null);
+});
+
 test('signed playback links: valid, scoped and tamper-proof', () => {
   const t = new MediaTokens(memStore());
   const tok = t.create('item1', 'user1');

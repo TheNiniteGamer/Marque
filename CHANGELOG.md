@@ -4,6 +4,13 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.3
+
+- **Back on the graphics card by itself:** if the graphics card fails while converting (for
+  example, it briefly runs out of memory because another program on the PC is using it too),
+  Marquee still switches to the CPU, but now tries the card again every 10 minutes and goes back
+  to it as soon as it works. Before, it stayed on the slower CPU until Marquee was restarted.
+
 ## 0.24.2
 
 **Ready for Linux.** Marquee now runs on a Linux PC (Debian, Ubuntu…) as easily as on Windows;
