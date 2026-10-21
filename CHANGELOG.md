@@ -4,6 +4,12 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.4
+
+- The graphics card is also tried again when it has a hiccup while Marquee starts (it then used
+  the card for encoding only, which works the CPU harder with 4K films). If the card keeps
+  failing, Marquee waits longer between tries (10 minutes, then 20, 40… up to 6 hours).
+
 ## 0.24.3
 
 - **Back on the graphics card by itself:** if the graphics card fails while converting (for

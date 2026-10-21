@@ -233,6 +233,23 @@ test('a graphics card that was dropped is tried again later, and used once it wo
   assert.equal(hw.retry, null);
 });
 
+test('a card whose decoding failed its start-up test is tried again, less and less often', async () => {
+  const hw = new HwAccel(memStore());
+  hw.retryMs = 20;
+  hw.results = { nvdec: { ok: false, error: 'CUDA busy' }, nvenc: { ok: true } };
+  const waits = [];
+  hw.detect = async () => { waits.push(hw.retryDelay); hw.results = { nvdec: { ok: false }, nvenc: { ok: true } }; hw.settle('auto', 'nvenc'); };
+  hw.settle('auto', 'nvenc');
+  assert.equal(hw.active, 'nvenc');
+  assert.equal(hw.best, 'nvdec', 'the decoder failing at start-up may be a hiccup');
+  await until(() => waits.length >= 3, 2000);
+  assert.deepEqual(waits.slice(0, 3), [40, 80, 160], 'each failed try doubles the wait');
+  hw.detect = async () => { hw.settle('auto', 'nvdec'); };
+  await until(() => hw.active === 'nvdec', 2000);
+  assert.equal(hw.retryDelay, null, 'working again: back to the short wait for next time');
+  assert.equal(hw.retry, null);
+});
+
 test('no retries where no graphics card ever worked, or after the setting changes', () => {
   const hw = new HwAccel(memStore());
   hw.settle('auto', 'software');

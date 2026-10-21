@@ -183,8 +183,8 @@ this much faster than the CPU, and can handle several viewers at once.
 2. Run `start-marquee.bat` again.
 3. *Settings → Playback* shows which converter is in use, and why a card isn't used if it
    couldn't start. Marquee tests each card with a short encode at start-up, and falls back to the
-   CPU on its own if the card fails during playback, then tries the card again every 10 minutes
-   and goes back to it once it works.
+   CPU on its own if the card fails during playback (or at start-up), then tries the card again
+   after 10 minutes (less often if it keeps failing) and goes back to it once it works.
 
 On Windows, NVIDIA needs Docker Desktop's WSL 2 backend (the default) and a current NVIDIA
 driver; nothing needs to be installed inside WSL. Without Docker, ffmpeg needs to be built with
