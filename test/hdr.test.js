@@ -1,6 +1,7 @@
 'use strict';
 // HDR videos: noticed when scanned (and for titles scanned before), and converted to ordinary
-// colours whenever the server converts the picture. Needs ffmpeg with zscale (zimg) and x265.
+// colours whenever the server converts the picture. Needs ffmpeg with zscale (zimg) or Jellyfin's
+// tonemapx, and x265.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -43,6 +44,17 @@ test('HDR10 and HLG are told apart from ordinary video', () => {
   assert.equal(hdr.hdrKind({ colorTransfer: 'arib-std-b67' }), 'hlg');
   assert.equal(hdr.hdrKind({ colorTransfer: 'bt709' }), null);
   assert.equal(hdr.hdrKind(null), null);
+  assert.equal(hdr.hdrKind({ dvProfile: 5 }), 'dovi', 'Dolby Vision without an HDR10 picture underneath');
+  assert.equal(hdr.hdrKind({ dvProfile: 8, colorTransfer: 'smpte2084' }), 'hdr10', 'Dolby Vision with one is mapped as HDR10');
+});
+
+test('Dolby Vision profile 5 is only converted by filters that read its colour instructions', (t) => {
+  if (!hdr.toneMapping()) return t.skip('no tone mapping in this ffmpeg');
+  const dovi = hdr.toneMap({ dvProfile: 5 });
+  if (/tonemapx/.test(hdr.toneMap({ colorTransfer: 'smpte2084' }))) {
+    assert.match(dovi, /^tonemapx=/, 'its colours come from the file, not stated');
+    assert.match(hdr.toneMap({ colorTransfer: 'arib-std-b67' }), /color_trc=arib-std-b67/);
+  } else assert.equal(dovi, '', 'zscale would only make it worse');
 });
 
 test('scanning notes a video\'s colours', async () => {
@@ -53,7 +65,7 @@ test('scanning notes a video\'s colours', async () => {
 test('converting an HDR video maps it to ordinary colours, not washed-out ones', (t) => {
   if (!hdr.toneMapping()) return t.skip('no zscale in this ffmpeg');
   const v = { colorTransfer: 'smpte2084' };
-  assert.match(videoArgs('software', { video: v }).output.join(' '), /zscale.*tonemap/);
+  assert.match(videoArgs('software', { video: v }).output.join(' '), /tonemap/);
   assert.match(videoArgs('vaapi', { video: v }).output.join(' '), /tonemap.*hwupload/, 'graphics cards get the CPU-mapped picture');
   assert.doesNotMatch(videoArgs('software', { video: { colorTransfer: 'bt709' } }).output.join(' '), /tonemap/, 'ordinary video untouched');
 

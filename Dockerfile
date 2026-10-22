@@ -4,13 +4,24 @@ FROM node:22-bookworm-slim AS node
 FROM ubuntu:24.04
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 
-# ffmpeg: probing, thumbnails, transcoding, merging downloads (its NVIDIA encoder loads the
-#   driver the NVIDIA container runtime passes in; the VA drivers cover Intel and AMD graphics)
 # python3: runs yt-dlp; tini: forwards signals and reaps child processes
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      ffmpeg python3 tini ca-certificates tzdata wget mesa-va-drivers \
-      $(if [ "$(dpkg --print-architecture)" = amd64 ]; then echo intel-media-va-driver; fi) \
+      python3 tini ca-certificates tzdata wget gnupg \
+ && rm -rf /var/lib/apt/lists/*
+
+# ffmpeg: probing, thumbnails, transcoding, merging downloads. Jellyfin's build of it: newer than
+# Ubuntu's, with HDR tone mapping on the graphics card (and a fast one on the CPU), Dolby Vision
+# colours, and its own Intel/AMD drivers. Its NVIDIA encoder loads the driver the NVIDIA
+# container runtime passes in.
+RUN mkdir -p /etc/apt/keyrings \
+ && wget -qO- https://repo.jellyfin.org/jellyfin_team.gpg.key | gpg --dearmor -o /etc/apt/keyrings/jellyfin.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/jellyfin.gpg] https://repo.jellyfin.org/ubuntu noble main" \
+      > /etc/apt/sources.list.d/jellyfin.list \
+ && apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends jellyfin-ffmpeg8 \
+ && ln -s /usr/lib/jellyfin-ffmpeg/ffmpeg /usr/local/bin/ffmpeg \
+ && ln -s /usr/lib/jellyfin-ffmpeg/ffprobe /usr/local/bin/ffprobe \
  && rm -rf /var/lib/apt/lists/*
 
 # Latest yt-dlp release (sites change often, so it is not taken from the distro).

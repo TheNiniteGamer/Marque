@@ -150,10 +150,12 @@ test('an NVIDIA card decodes and resizes too, when it can', async () => {
     assert.equal(sdr.output[sdr.output.indexOf('-vf') + 1], "scale_cuda=w='round(min(720,ih)*dar/2)*2':h='min(720,ih)':format=nv12,setsar=1", 'stays on the card all the way to the encoder');
     assert.ok(sdr.output.includes('h264_nvenc'));
 
-    // HDR: shrunk on the card, then brought back for tone mapping on the CPU.
+    // HDR: shrunk and tone-mapped on the card (Jellyfin's ffmpeg), else brought back for tone
+    // mapping on the CPU.
     const h = videoArgs('nvdec', { maxHeight: 1080, video: { codec: 'hevc', pixFmt: 'yuv420p10le', colorTransfer: 'smpte2084' } });
     const vf = h.output[h.output.indexOf('-vf') + 1];
-    if (hdr.toneMapping()) assert.match(vf, /^scale_cuda=w='round\(min\(1080,ih\)\*dar\/2\)\*2':h='min\(1080,ih\)':format=p010le,setsar=1,hwdownload,format=p010le,zscale.*tonemap.*format=yuv420p$/);
+    if (hdr.cudaToneMapping()) assert.match(vf, /^scale_cuda=w='round\(min\(1080,ih\)\*dar\/2\)\*2':h='min\(1080,ih\)':format=p010le,setparams=.*color_trc=smpte2084.*,tonemap_cuda=.*:format=nv12,setsar=1$/);
+    else if (hdr.toneMapping()) assert.match(vf, /^scale_cuda=w='round\(min\(1080,ih\)\*dar\/2\)\*2':h='min\(1080,ih\)':format=p010le,setsar=1,hwdownload,format=p010le,.*tonemapx?=.*format=yuv420p$/);
 
     // What the card can't decode (10-bit H.264, 4:2:2, codecs it wasn't seen decoding) and drawn-in
     // subtitles are decoded on the CPU, and only encoded on the card.
@@ -194,7 +196,7 @@ test('Intel/AMD graphics decode and resize too, when they can', async () => {
     // HDR: shrunk on the card, tone-mapped on the CPU, then back up for the encoder.
     const h = videoArgs('vaapidec', { maxHeight: 1080, video: { codec: 'hevc', pixFmt: 'yuv420p10le', colorTransfer: 'smpte2084' } });
     const vf = h.output[h.output.indexOf('-vf') + 1];
-    if (hdr.toneMapping()) assert.match(vf, /^scale_vaapi=.*:format=p010,setsar=1,hwdownload,format=p010le,zscale.*tonemap.*format=yuv420p,format=nv12,hwupload$/);
+    if (hdr.toneMapping()) assert.match(vf, /^scale_vaapi=.*:format=p010,setsar=1,hwdownload,format=p010le,.*tonemapx?=.*format=yuv420p,format=nv12,hwupload$/);
 
     // What it can't decode, and drawn-in subtitles: decoded on the CPU, encoded on the card.
     for (const [why, opts] of [['VC-1 not tested', { video: { codec: 'vc1', pixFmt: 'yuv420p' } }],

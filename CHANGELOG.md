@@ -4,6 +4,21 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.13 — Significant update
+
+- **A better ffmpeg inside Marquee:** the Docker image now uses Jellyfin's build of ffmpeg (the
+  program that does all the video converting) instead of Ubuntu's. It's newer, and the image is
+  about 230 MB smaller.
+- **4K HDR films convert on the graphics card:** when a 4K HDR film needs converting (a Roku, a
+  1080p TV, a phone, watching away from home), the colours are now fixed on the NVIDIA card too.
+  Converting Toy Story 4 went from about 1½ times as fast as it plays to 3 times, with 25 times less
+  work for the processor. Bright highlights (faces in sunlight, skies) also blow out less.
+- **Without a graphics card it's faster too:** the processor's HDR conversion does about a fifth of
+  the work it did.
+- **Dolby Vision profile 5** files (from streaming services) should now convert with the right
+  colours instead of purple and green. (There are none in the library yet to try it on.)
+- Installing this rebuilds Marquee's image, so it takes a few minutes longer than usual.
+
 ## 0.24.12
 
 - **Smarter search,** in every app (web, phones, the Shield and the Rokus):
