@@ -50,6 +50,17 @@ test('episode: 1x02 format and multi-episode', () => {
   assert.equal(multi.episodeEnd, 2);
 });
 
+test('episode: a number starting the title is the title, not more episodes', () => {
+  const titled = (f) => { const e = parseEpisode(`Show/Season 1/${f}`); return [e.episode, e.episodeEnd, e.title]; };
+  assert.deepEqual(titled('Doctor Who (2005) - S03E07 - 42.mkv'), [7, null, '42']);
+  assert.deepEqual(titled('Family Guy - S07E12 - 420.mp4'), [12, null, '420']);
+  assert.deepEqual(titled("Family Guy - S20E04 - 80's Guy.mp4"), [4, null, "80's Guy"]);
+  // Joined episodes still are, however they're written.
+  assert.deepEqual(titled('Show - S01E01E02 - Pilot.mkv'), [1, 2, 'Pilot']);
+  assert.deepEqual(titled('Show - S01E01-02 - Pilot.mkv'), [1, 2, 'Pilot']);
+  assert.deepEqual(titled('Show - S02E10E11E12 - Finale.mkv'), [10, 12, 'Finale']);
+});
+
 test('episode: season from folder, episode from name', () => {
   const e = parseEpisode('Planet Earth (2006)/Season 2/Episode 05.mkv');
   assert.equal(e.show, 'Planet Earth');

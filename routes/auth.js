@@ -10,7 +10,7 @@ const { playerPrefs, cleanPrefs, cleanAvatar } = require('../lib/auth');
 module.exports = function register(app) {
   const {
     publicUser, store, auth, HttpError, json, readBody, getUser, isPrivateIp,
-    clientIp, route, tokens, readRaw, sendFile, DATA_DIR,
+    clientIp, isRemote, route, tokens, readRaw, sendFile, DATA_DIR,
   } = app;
 
   // Profile pictures: a built-in face on a colour, or an uploaded photo. Your own, or (admins)
@@ -60,9 +60,10 @@ module.exports = function register(app) {
     const ip = clientIp(req);
     const body = await readBody(req);
     const name = String(body.username || '').slice(0, 64);
-    if (auth.isLimited(ip, name)) throw new HttpError(429, 'Too many failed attempts. Try again in a few minutes.');
+    const where = isRemote(req) ? 'away' : 'home';
+    if (auth.isLimited(ip, name, where)) throw new HttpError(429, 'Too many failed attempts. Try again in a few minutes.');
     const user = await auth.login(name, body.password);
-    if (!user) { auth.recordFailure(ip, name); throw new HttpError(401, 'Wrong username or password'); }
+    if (!user) { auth.recordFailure(ip, name, where); throw new HttpError(401, 'Wrong username or password'); }
     auth.createSession(req, res, user);
     json(res, 200, { user: publicUser(user) });
   }, 'public');

@@ -4,6 +4,27 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.9
+
+- **Kids' profiles and TV shows from TVmaze:** shows matched through TVmaze (which gives no maturity
+  ratings) now get theirs from TMDB, so a profile with an age limit no longer sees an older show just
+  because it came without a rating. Profiles' "titles without a rating" option now says what it covers.
+- **Episode titles that start with a number** ("42", "420", "1984") are no longer read as a run of
+  episodes (episodes 7 to 42); episodes joined in one file (S01E01E02E03) still are.
+- **A full disk no longer stops Marquee:** a save that fails is tried again every minute, with
+  nothing lost meanwhile, and Settings → Overview says so. Library folders that are there but empty
+  (a drive not mounted) now show as offline too.
+- **A missing drive at night no longer switches off the graphics card for everyone:** overnight
+  conversions skip films whose drive isn't there, and copies on an unplugged drive are kept for when
+  it's back.
+- **Requests no longer stay "on its way" for ever** when the person who asked can't see the library
+  the title arrived in (they aren't told about it, but it's marked as here). Deleting a person also
+  removes them from requests.
+- **A moment of TMDB being down** no longer leaves episodes without titles and pictures for good, nor
+  a show marked "no match": they're tried again on the next scan.
+- **Wrong passwords from outside the house** can't lock someone out of signing in at home any more.
+- Marquee writes its database far less often when nothing has changed.
+
 ## 0.24.8
 
 - **Going back in a film works again on the TVs and phones:** going back more than about a minute

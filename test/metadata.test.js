@@ -43,6 +43,9 @@ const mock = http.createServer((req, res) => {
     const m = /^\/movie\/(\d+)$/.exec(p);
     if (m) return MOVIES[m[1]] ? send(200, MOVIES[m[1]]) : send(404, {});
     if (p === '/search/tv') return send(200, { results: [] });
+    // Some Show (matched on TVmaze) is TMDB's 777, rated TV-MA there.
+    if (p === '/find/999') return send(200, { tv_results: [{ id: 777 }], movie_results: [] });
+    if (p === '/tv/777') return send(200, { id: 777, name: 'Some Show', content_ratings: { results: [{ iso_3166_1: 'US', rating: 'TV-MA' }] } });
     return send(404, {});
   }
   if (url.pathname === '/tvmaze/search/shows') {
@@ -51,7 +54,7 @@ const mock = http.createServer((req, res) => {
   }
   if (url.pathname === '/tvmaze/shows/55') {
     return send(200, {
-      id: 55, name: 'Some Show', premiered: '2019-02-03', summary: '<p>A <b>great</b> show.</p>', genres: ['Comedy'], rating: { average: 8.1 },
+      id: 55, name: 'Some Show', premiered: '2019-02-03', summary: '<p>A <b>great</b> show.</p>', genres: ['Comedy'], rating: { average: 8.1 }, externals: { thetvdb: 999 },
       image: { original: `${BASE}/img/tvm/poster.png` },
       _embedded: {
         episodes: [{ season: 1, number: 1, name: 'Pilot', summary: '<p>It begins.</p>', airdate: '2019-02-03', image: { original: `${BASE}/img/tvm/e1.png` } }],
@@ -118,6 +121,17 @@ test('movies need a TMDB key; a bad key is rejected and a good one is saved', as
   assert.equal(ok.data.tmdbKeySet, true);
   assert.equal(ok.data.tmdbKeyHint, '••••y123', 'the key itself is never sent back');
   assert.ok(!JSON.stringify(ok.data).includes(GOOD_KEY));
+});
+
+test('a show matched on TVmaze gets its maturity rating from TMDB, so kids don’t see it unrated', async () => {
+  await admin('PATCH', '/api/settings', { tmdbKey: GOOD_KEY });
+  await admin('POST', `/api/libraries/${ids.tv}/scan`);
+  const show = await until(async () => {
+    const s = (await admin('GET', `/api/shows/${ids.show}`)).data;
+    return s.contentRating ? s : null;
+  });
+  assert.equal(show.match.provider, 'tvmaze', 'still matched on TVmaze');
+  assert.equal(show.contentRating, 'TV-MA');
 });
 
 test('refresh matches the movie and pulls title, genres, cast and artwork', async () => {

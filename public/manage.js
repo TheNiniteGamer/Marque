@@ -628,7 +628,7 @@ function showUserForm(user = null) {
         <legend>Maturity (kids profiles)</legend>
         <label>Can watch
           <select name="maxAge">${[[null, 'Everything'], ...MATURITY].map(([v, l]) => html`<option value="${v ?? ''}" ${(user?.maxAge ?? null) === v ? 'selected' : ''}>${l}</option>`)}</select></label>
-        <label class="check"><input type="checkbox" name="allowUnrated" ${user?.allowUnrated !== false ? 'checked' : ''}> Also titles without a rating (YouTube, home videos, titles not matched online)</label>
+        <label class="check"><input type="checkbox" name="allowUnrated" ${user?.allowUnrated !== false ? 'checked' : ''}> Also titles without a rating (YouTube, home videos, and titles with no rating online)</label>
         <p class="muted" style="margin:0;font-size:13px">Titles rated above this are hidden for this person everywhere: home, libraries, search and the TV apps. Ratings come from TMDB (G, PG, TV-Y7…); set one by hand in a title's ⋯ → Edit.</p>
       </fieldset>
       <fieldset class="access" id="time-fields">
