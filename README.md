@@ -299,7 +299,7 @@ never gets access to Docker itself.
 | **Fix episode** | When a file's name has the wrong numbers (DVD order, specials, a double episode named as one) and it shows another episode's title and picture: *⋯ → Fix episode…* on the episode, and pick the episode it really is from the show's list (which also shows which file each episode is now), or type the season and episode. It's kept when files are rescanned; *Use the file name's numbers* undoes it. |
 | **Edit anything** | Change the title, sort title, year, tagline, summary and genres of a movie, show or episode. Set a poster or background by **uploading an image**, pasting a URL, or choosing from the matched source's alternatives. Your edits always win: refreshes and rescans never overwrite them, and each field can be reset to automatic. |
 | **Artwork** | Local `poster.jpg` / `fanart.jpg` / `<name>-poster.jpg`, online artwork, your own uploads, or a frame grabbed from the video. |
-| **Browsing** | Home screen with Continue Watching, My List and Recently Added. Library grids with sort, genre filter, title filter, an Unwatched filter, adjustable poster size, an A–Z jump bar and **Shuffle**. Show pages with seasons, cast lists, clickable genres, and live search (press `/`). The scroll position is kept when you go back. |
+| **Browsing** | Home screen with Continue Watching, My List and Recently Added. Library grids with sort, genre filter, title filter, an Unwatched filter, adjustable poster size, an A–Z jump bar and **Shuffle**. Show pages with seasons, cast lists, clickable genres, and live search (press `/`) that also finds actors ("tom hanks"), genres and moods ("funny", "scary"), years and decades ("90s comedy") and words from the story ("christmas"), and forgives spelling mistakes ("batmn"). The scroll position is kept when you go back. |
 | **My List & menus** | A **⋯** menu on every poster: play, mark watched/unwatched, add to **My List** (a per-user watchlist), remove from Continue Watching, and, for admins, edit / fix match / refresh. |
 | **Versions** | Two copies of a film (`Film (Year) - 4K.mkv` and `Film (Year) - 1080p.mp4`) are one title: each device plays the copy it can play as it is (4K for a 4K TV box, 1080p for phones, 1080p TVs and browsers), with a picker on the film's page. Discs ripped with MakeMKV (`Name_t00.mkv`, `_t01`…) become one film and its extras. **Settings → Formats & space** shows what the space goes on and which titles need converting for which players, and why. |
 | **HDR** | HDR10 and HLG films keep their colours when the server converts them (tone mapping to ordinary colours), instead of looking grey and washed out; thumbnails and previews too. Players that show HDR themselves get the file as it is. |
@@ -483,6 +483,7 @@ lib/problems.js     library health check (offline folders, duplicates, missing e
 lib/trickplay.js    seek preview thumbnail sheets
 lib/activity.js     "now playing" sessions for the Activity page
 lib/library.js      per-user API shaping: hubs, continue watching / up next, search, watch state
+lib/search.js       search: titles, cast, genres, years, story; spelling mistakes
 lib/metadata.js     metadata providers (TMDB, TVmaze), image downloads
 lib/matcher.js      matching, refresh/unmatch, user edits and custom artwork (edits > metadata > file name)
 lib/subtitles.js    SRT→VTT, cue time-shifting

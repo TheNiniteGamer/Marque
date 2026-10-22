@@ -26,7 +26,7 @@ test('changes show up at once; watch positions keep the tables', async () => {
   store.data.users = [{ id: 'k', username: 'kid', role: 'user', libraries: null, maxAge: 10, allowUnrated: true }];
   const kid = store.data.users[0];
   store.save();
-  const names = () => lib.search(store, kid, 'a').movies.map((m) => m.title).sort();
+  const names = () => lib.search(store, kid, 'drama').movies.map((m) => m.title).sort();
   assert.deepEqual(names(), ['Alpha', 'Bravo', 'Charlie']);
   await tick();
 

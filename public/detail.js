@@ -366,6 +366,7 @@ async function viewSearch({ query, seq }) {
   const total = r.movies.length + r.shows.length + r.episodes.length;
   if (!setView(seq, html`
     <div class="toolbar"><h1>Results for “${q}”</h1>${total ? selectButton() : ''}</div>
+    ${total && r.understood?.length ? html`<div class="muted" style="margin:-6px 0 12px">Showing ${r.understood.join(' · ')}</div>` : ''}
     ${!total ? html`<div class="empty">No matches.</div>` : ''}
     ${!tv.on || !total ? ask : ''}
     ${r.movies.length ? html`<section class="hub"><div class="hub-head"><h2>Movies</h2></div><div class="grid">${r.movies.map(posterCard)}</div></section>` : ''}

@@ -4,6 +4,17 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.12
+
+- **Smarter search,** in every app (web, phones, the Shield and the Rokus):
+  - **Spelling mistakes are forgiven:** "batmn", "toy stroy" and "jurasic park" find what you meant.
+  - **Actors:** "tom hanks" lists his films.
+  - **Moods and genres:** "funny", "scary", "cartoon" or "comedy".
+  - **Years and decades:** "1995", "90s comedy".
+  - **Words from the story:** "christmas", "pikachu", "north pole" (episodes too).
+  - Results come best match first, and the web app says how the search was understood
+    ("Showing with Tom Hanks").
+
 ## 0.24.11
 
 - **Long shows open quickly:** a show's page now loads one season at a time (the one you're up to),
