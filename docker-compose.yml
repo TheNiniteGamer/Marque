@@ -34,7 +34,7 @@ services:
       TMDB_API_KEY: ${TMDB_API_KEY:-}
       SCAN_INTERVAL: ${SCAN_INTERVAL:-30}
       TRANSCODE_PRESET: ${TRANSCODE_PRESET:-veryfast}
-      # Video converter: auto (use a graphics card if one works), software, nvenc, qsv or vaapi.
+      # Video converter: auto (use a graphics card if one works), software, nvdec, nvenc, vaapidec, vaapi or qsv.
       # The graphics card itself is passed in by docker-compose.nvidia.yml / docker-compose.intel-amd.yml (GPU= in .env).
       HWACCEL: ${HWACCEL:-auto}
       # Address Chromecasts use to reach Marquee (marquee.ps1 fills in this PC's network address).

@@ -94,8 +94,8 @@ function transcodingSection(t, intro, settings) {
     <h2 style="margin:28px 0 12px" id="transcoding">Transcoding &amp; streaming</h2>
     <div class="panel form" style="max-width:none" id="tc-panel">
       <div class="upd-state ${t.active !== 'software' ? 'ok' : ''}">${t.checking ? 'Checking graphics cards…' : html`Converting video with: <b>${t.activeName}</b>`}</div>
-      ${t.active === 'nvdec' ? html`<div class="muted" style="font-size:13px">The graphics card also decodes and resizes
-        ${(t.results.find((r) => r.kind === 'nvdec')?.codecs || []).map((c) => ({ h264: 'H.264', hevc: 'HEVC', vp9: 'VP9', av1: 'AV1', mpeg2video: 'MPEG-2', vc1: 'VC-1' })[c] || c).join(', ')} video,
+      ${['nvdec', 'vaapidec'].includes(t.active) ? html`<div class="muted" style="font-size:13px">The graphics card also decodes and resizes
+        ${(t.results.find((r) => r.kind === t.active)?.codecs || []).map((c) => ({ h264: 'H.264', hevc: 'HEVC', vp9: 'VP9', av1: 'AV1', mpeg2video: 'MPEG-2', vc1: 'VC-1' })[c] || c).join(', ')} video,
         so the CPU is left almost free (HDR colours are still mapped on the CPU, after resizing).</div>` : ''}
       <label>Video converter
         <select id="tc-hw">${t.options.map((o) => html`<option value="${o.id}" ${o.id === t.setting ? 'selected' : ''}>${o.name}</option>`)}</select></label>

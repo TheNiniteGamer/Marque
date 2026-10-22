@@ -11,3 +11,6 @@ services:
     # Find it with:  getent group render   and set RENDER_GID in .env if it isn't 105.
     group_add:
       - "${RENDER_GID:-105}"
+    environment:
+      # With two graphics cards, the one to use (ls -l /dev/dri/by-path shows which is which).
+      VAAPI_DEVICE: ${VAAPI_DEVICE:-/dev/dri/renderD128}

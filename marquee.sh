@@ -88,12 +88,15 @@ apply_env() {
   [ -n "$(setting CLOUDFLARE_TUNNEL_TOKEN)" ] && profiles+=(cloudflare)
   if [ -n "$(setting COMPOSE_PROFILES)" ]; then export COMPOSE_PROFILES="$(setting COMPOSE_PROFILES)"
   else export COMPOSE_PROFILES="$(IFS=,; echo "${profiles[*]:-}")"; fi
-  # A graphics card for video conversion (GPU=nvidia, intel or amd in .env) adds its compose file.
-  local files="docker-compose.yml"
-  case "$(setting GPU | tr '[:upper:]' '[:lower:]')" in
-    nvidia) files="$files:docker-compose.nvidia.yml" ;;
-    intel|amd) files="$files:docker-compose.intel-amd.yml" ;;
-  esac
+  # A graphics card for video conversion (GPU=nvidia, intel or amd in .env) adds its compose file;
+  # both cards are passed in with e.g. GPU=nvidia,intel.
+  local files="docker-compose.yml" gpu
+  for gpu in $(setting GPU | tr '[:upper:],' '[:lower:] '); do
+    case "$gpu" in
+      nvidia) files="$files:docker-compose.nvidia.yml" ;;
+      intel|amd) [[ $files == *intel-amd* ]] || files="$files:docker-compose.intel-amd.yml" ;;
+    esac
+  done
   export COMPOSE_PATH_SEPARATOR=":" COMPOSE_FILE="$files"
   # Chromecasts need an address on the home network: this PC's, unless .env sets CAST_URL.
   if [ -z "$(setting CAST_URL)" ]; then
@@ -326,7 +329,7 @@ cmd_check() {
   make_folders
   say "Docker: OK ($(docker version --format '{{.Server.Version}}' 2>/dev/null))"
   say "Compose files: $COMPOSE_FILE${COMPOSE_PROFILES:+ (with $COMPOSE_PROFILES)}"
-  if [ "$(setting GPU | tr '[:upper:]' '[:lower:]')" = nvidia ]; then
+  if [[ ",$(setting GPU | tr '[:upper:]' '[:lower:]' | tr -d ' ')," == *,nvidia,* ]]; then
     if docker info 2>/dev/null | grep -qi 'nvidia'; then say "NVIDIA: the container toolkit is set up"
     else say "NVIDIA: GPU=nvidia is set but Docker doesn't know the NVIDIA runtime. Install the NVIDIA Container Toolkit (docs/LINUX.md)."; fi
   fi

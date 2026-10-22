@@ -179,7 +179,10 @@ another drive or a synced folder (OneDrive/Dropbox) for extra safety.
 Videos your browser can't play as they are get converted while you watch. A graphics card does
 this much faster than the CPU, and can handle several viewers at once.
 1. In `.env`, set `GPU=nvidia` (an NVIDIA card on Windows or Linux), or `GPU=intel` / `GPU=amd`
-   (built-in graphics, **Linux hosts only**: Docker Desktop on Windows can't pass these through).
+   (built-in graphics or an Intel Arc card, **Linux hosts only**: Docker Desktop on Windows can't
+   pass these through). NVIDIA, Intel and AMD cards decode and resize the video too, not just
+   encode it, so the CPU is left almost free. With two cards (say NVIDIA for AI and an Intel Arc
+   for Marquee), pick the Intel one in *Settings → Playback* and point `VAAPI_DEVICE` at it.
 2. Run `start-marquee.bat` again.
 3. *Settings → Playback* shows which converter is in use, and why a card isn't used if it
    couldn't start. Marquee tests each card with a short encode at start-up, and falls back to the
@@ -188,7 +191,7 @@ this much faster than the CPU, and can handle several viewers at once.
 
 On Windows, NVIDIA needs Docker Desktop's WSL 2 backend (the default) and a current NVIDIA
 driver; nothing needs to be installed inside WSL. Without Docker, ffmpeg needs to be built with
-NVENC / VAAPI / QSV support. Set `HWACCEL=nvdec|nvenc|vaapi|qsv|software` to force a choice.
+NVENC / VAAPI / QSV support. Set `HWACCEL=nvdec|nvenc|vaapidec|vaapi|qsv|software` to force a choice.
 
 ### Overnight conversions
 
@@ -387,9 +390,9 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `METADATA_LANGUAGE` | `en-US` | Default metadata language (also settable in *Settings → Metadata & subtitles*) |
 | `TVMAZE_DISABLED` | — | Set to `1` to stop using TVmaze |
 | `TRANSCODE_PRESET` | `veryfast` | x264 preset used when video must be re-encoded |
-| `HWACCEL` | `auto` | Video converter: `auto`, `software`, `nvdec` (NVIDIA decoding and encoding), `nvenc` (NVIDIA encoding only), `qsv`, `vaapi` (also in *Settings → Playback*) |
+| `HWACCEL` | `auto` | Video converter: `auto`, `software`, `nvdec` (NVIDIA decoding and encoding), `nvenc` (NVIDIA encoding only), `vaapidec` (Intel/AMD decoding and encoding), `vaapi` (Intel/AMD encoding only), `qsv` (also in *Settings → Playback*) |
 | `GPU` | — | `.env` only: `nvidia`, `intel` or `amd` passes the graphics card into Docker |
-| `VAAPI_DEVICE` | `/dev/dri/renderD128` | Graphics device for VAAPI / Quick Sync |
+| `VAAPI_DEVICE` | `/dev/dri/renderD128` | Graphics device for VAAPI / Quick Sync (with two cards: `ls -l /dev/dri/by-path` shows which is which) |
 | `TRANSCODE_DIR` | system temp folder | Where adaptive-streaming segments are written while you watch |
 | `HLS_MAX_SESSIONS` | `6` | Adaptive streams converted at the same time |
 | `CAST_URL` | — | Address cast devices use to reach Marquee |

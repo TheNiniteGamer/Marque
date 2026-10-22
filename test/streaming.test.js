@@ -176,6 +176,48 @@ test('an NVIDIA card decodes and resizes too, when it can', async () => {
   assert.equal(hw.active, 'nvenc', 'repeated failures drop decoding, not the card');
 });
 
+test('Intel/AMD graphics decode and resize too, when they can', async () => {
+  await hdr.check();
+  useGpuCodecs(['h264', 'hevc', 'mpeg2video'], 'vaapidec');
+  try {
+    const sdr = videoArgs('vaapidec', { maxHeight: 720, bitrate: 4e6, video: { codec: 'hevc', pixFmt: 'yuv420p10le' } });
+    assert.equal(sdr.kind, 'vaapidec');
+    assert.deepEqual(sdr.input.slice(0, 3), ['-init_hw_device', 'vaapi=va:/dev/dri/renderD128', '-hwaccel']);
+    assert.ok(sdr.input.includes('-hwaccel_output_format') && sdr.input.includes('-filter_hw_device'));
+    assert.equal(sdr.output[sdr.output.indexOf('-vf') + 1], "scale_vaapi=w='round(min(720,ih)*dar/2)*2':h='min(720,ih)':format=nv12,setsar=1", 'stays on the card all the way to the encoder');
+    assert.ok(sdr.output.includes('h264_vaapi') && sdr.output.includes('4000000'));
+
+    // A DVD: deinterlaced on the card (only the frames marked interlaced).
+    const dvd = videoArgs('vaapidec', { maxHeight: 1080, video: { codec: 'mpeg2video', pixFmt: 'yuv420p', fieldOrder: 'tt' } });
+    assert.match(dvd.output[dvd.output.indexOf('-vf') + 1], /^deinterlace_vaapi=auto=1,scale_vaapi=/);
+
+    // HDR: shrunk on the card, tone-mapped on the CPU, then back up for the encoder.
+    const h = videoArgs('vaapidec', { maxHeight: 1080, video: { codec: 'hevc', pixFmt: 'yuv420p10le', colorTransfer: 'smpte2084' } });
+    const vf = h.output[h.output.indexOf('-vf') + 1];
+    if (hdr.toneMapping()) assert.match(vf, /^scale_vaapi=.*:format=p010,setsar=1,hwdownload,format=p010le,zscale.*tonemap.*format=yuv420p,format=nv12,hwupload$/);
+
+    // What it can't decode, and drawn-in subtitles: decoded on the CPU, encoded on the card.
+    for (const [why, opts] of [['VC-1 not tested', { video: { codec: 'vc1', pixFmt: 'yuv420p' } }],
+      ['4:2:2', { video: { codec: 'hevc', pixFmt: 'yuv422p10le' } }],
+      ['subtitles drawn in', { burn: 1, video: { codec: 'h264', pixFmt: 'yuv420p' } }]]) {
+      const a = videoArgs('vaapidec', opts);
+      assert.equal(a.kind, 'vaapi', why);
+      assert.ok(!a.input.includes('-hwaccel') && a.output.includes('h264_vaapi'), why);
+    }
+    // The NVIDIA list is separate.
+    assert.equal(videoArgs('nvdec', { video: { codec: 'mpeg2video', pixFmt: 'yuv420p' } }).kind, 'nvenc');
+  } finally { useGpuCodecs(['h264'], 'vaapidec'); }
+
+  const hw = new HwAccel(memStore());
+  assert.equal(hw.fallback('vaapidec'), 'vaapi');
+  hw.store.data.settings = { hwaccel: 'vaapidec' };
+  const st = await hw.detect();
+  assert.equal(st.active, 'software', 'no graphics device here');
+  assert.deepEqual(st.results.map((r) => r.kind), ['vaapidec', 'vaapi'], 'tries decoding on the card, then encoding only');
+  assert.match(st.results[0].error, /not found/);
+  assert.ok(st.options.some((o) => o.id === 'vaapidec'));
+});
+
 test('HLS falls back from NVIDIA decoding to the CPU when the card cannot start', async () => {
   const file = path.join(ROOT, 'fallback-nvdec.mp4');
   ff(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=24:d=6', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', file]);

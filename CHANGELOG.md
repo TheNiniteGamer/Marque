@@ -4,6 +4,17 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.10
+
+- **Intel and AMD graphics do the whole job:** with an Intel Arc card (or Intel/AMD built-in
+  graphics) on Linux, the card now decodes, resizes and deinterlaces the video as well as encoding
+  it, as NVIDIA cards already did, so the CPU is left almost free. It's the new "Intel/AMD graphics,
+  decoding too" choice in Settings → Playback, picked automatically when it works; videos the card
+  can't decode fall back to the encode-only way, and HDR colours are still mapped on the CPU after
+  resizing. (Not yet tried on a real Intel card.)
+- **Two graphics cards:** `GPU=nvidia,intel` in `.env` passes both into Marquee, and
+  `VAAPI_DEVICE` picks which Intel/AMD device it uses.
+
 ## 0.24.9
 
 - **Kids' profiles and TV shows from TVmaze:** shows matched through TVmaze (which gives no maturity
