@@ -4,6 +4,18 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.11
+
+- **Long shows open quickly:** a show's page now loads one season at a time (the one you're up to),
+  and the other seasons load when you pick them. A show with a thousand episodes (Pokémon, say) was
+  sending all of them at once, which made the Roku pause before showing it. Admins' list of a
+  show's files loads when it's opened.
+- **Smoother while people watch:** saving where everyone is up to no longer re-writes the whole
+  library each time, which briefly held the server up with a few thousand titles.
+- **Less work in the background:** the web app stops checking in with the server while its tab
+  or the app is out of sight, and catches up the moment it's back.
+- **Roku channel 1.16:** the episodes screen loads a season at a time too.
+
 ## 0.24.10
 
 - **Intel and AMD graphics do the whole job:** with an Intel Arc card (or Intel/AMD built-in

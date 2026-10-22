@@ -148,10 +148,11 @@ document.addEventListener('click', (e) => {
 });
 
 async function viewShow({ params: [id], query, seq }) {
-  const show = await api(`/api/shows/${id}`);
+  // One season's episodes at a time (the one asked for, else the next to watch's): the others are
+  // loaded when picked, so a show with a thousand episodes opens as quickly as any other.
+  const show = await api(`/api/shows/${id}?episodes=${encodeURIComponent(query.get('season') ?? 'auto')}`);
   const seasonKey = (s) => String(s.season);
-  let current = query.get('season') ?? (show.upNext ? String(show.upNext.season) : show.seasons[0] && seasonKey(show.seasons[0]));
-  if (!show.seasons.some((s) => seasonKey(s) === current)) current = show.seasons[0] && seasonKey(show.seasons[0]);
+  let current = show.seasons.find((s) => s.episodes) && seasonKey(show.seasons.find((s) => s.episodes));
   const up = show.upNext;
   const resuming = up?.progress?.position && !up.progress.watched;
   const upLabel = up ? `${resuming ? 'Resume' : 'Play'} ${epLabel(up).replace(' · ', ':')}` : null;
@@ -176,8 +177,16 @@ async function viewShow({ params: [id], query, seq }) {
       </div>
     </div>`; };
 
-  const renderSeason = () => {
+  const renderSeason = async () => {
     const season = show.seasons.find((s) => seasonKey(s) === current);
+    if (!season.episodes) {
+      const body = $('#season-body');
+      body.innerHTML = html`<div class="muted">Loading ${season.title}…</div>`.s;
+      const got = await api(`/api/shows/${id}/episodes?season=${encodeURIComponent(current)}`).catch((err) => { toast(err.message, true); return null; });
+      // (Not if another season was picked meanwhile, or the page left.)
+      if (!got || seasonKey(season) !== current || !body.isConnected) return;
+      season.episodes = got.episodes;
+    }
     const allWatched = season.episodes.every((e) => e.progress?.watched);
     $('#season-watch').textContent = allWatched ? 'Mark season unwatched' : 'Mark season watched';
     $('#season-body').innerHTML = html`<div class="episodes">${season.episodes.map(episodeRow)}</div>`.s;
@@ -233,10 +242,22 @@ async function viewShow({ params: [id], query, seq }) {
     ${castSection(show.cast)}
     ${franchiseSection(show.franchise)}
     ${similarSection(show.similar)}
-    ${show.files ? showFilesBox(show.files) : ''}`)) return;
+    ${show.files ? (show.files.episodes ? showFilesBox(show.files) : html`<details class="tech-box" id="show-files"><summary>Files (${show.files.count})</summary><div class="muted">Loading…</div></details>`) : ''}`)) return;
 
   bindDetailActions(show);
   if (current != null && show.seasons.length) renderSeason();
+  // Admins: every episode's file, fetched when opened.
+  const filesBox = $('#show-files');
+  if (filesBox) filesBox.ontoggle = async () => {
+    if (!filesBox.open || filesBox.dataset.loaded) return;
+    filesBox.dataset.loaded = '1';
+    const f = await api(`/api/shows/${id}/files`).catch(() => null);
+    if (!f) return;
+    const box = document.createElement('div');
+    box.innerHTML = showFilesBox(f).s;
+    box.firstElementChild.open = true;
+    filesBox.replaceWith(box.firstElementChild);
+  };
   if ($('#season-pick')) $('#season-pick').onchange = (e) => {
     current = e.target.value;
     history.replaceState(null, '', `#/show/${id}?season=${current}`);

@@ -103,10 +103,19 @@ module.exports = function register(app) {
 
   route('GET', '/api/search', async (req, res, p, url, user) => json(res, 200, lib.search(store, user, url.searchParams.get('q') || '')));
 
+  // ?episodes=none|auto|<season> sends less (see showDetail); the rest comes from the two below.
   route('GET', '/api/shows/:id', async (req, res, { id }, url, user) => {
     const show = getShow(id, user);
-    json(res, 200, { ...lib.showDetail(store, user, show), collections: collections.of(store, user, id), franchise: collections.franchiseRow(store, user, id), similar: lib.similar(store, user, show) });
+    json(res, 200, { ...lib.showDetail(store, user, show, { episodes: url.searchParams.get('episodes') || 'all' }), collections: collections.of(store, user, id), franchise: collections.franchiseRow(store, user, id), similar: lib.similar(store, user, show) });
   });
+
+  route('GET', '/api/shows/:id/episodes', async (req, res, { id }, url, user) =>
+    json(res, 200, lib.seasonEpisodes(store, user, getShow(id, user), url.searchParams.get('season') ?? '')));
+
+  route('GET', '/api/shows/:id/files', async (req, res, { id }, url, user) => {
+    const show = getShow(id, user);
+    json(res, 200, lib.showFiles(show, lib.episodesOf(store, show.id)));
+  }, 'admin');
 
   route('POST', '/api/shows/:id/watched', async (req, res, { id }, url, user) => {
     const body = await readBody(req);
@@ -114,7 +123,7 @@ module.exports = function register(app) {
     let eps = lib.episodesOf(store, show.id);
     if (body.season !== undefined) eps = eps.filter((e) => (e.season ?? null) === body.season);
     lib.setWatched(store, user, eps.map((e) => e.id), body.watched !== false);
-    json(res, 200, lib.showDetail(store, user, show));
+    json(res, 200, lib.showDetail(store, user, show, { episodes: 'none' }));
   });
 
   route('GET', '/api/items/:id', async (req, res, { id }, url, user) => {

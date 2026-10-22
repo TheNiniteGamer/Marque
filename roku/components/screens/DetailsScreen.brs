@@ -34,7 +34,7 @@ end sub
 
 sub load()
     p = m.top.params
-    if p.kind = "show" then mqApi("/api/shows/" + p.id, "onLoaded") else mqApi("/api/items/" + p.id, "onLoaded")
+    if p.kind = "show" then mqApi("/api/shows/" + p.id + "?episodes=none", "onLoaded") else mqApi("/api/items/" + p.id, "onLoaded")
 end sub
 
 sub onLoaded(event as Object)

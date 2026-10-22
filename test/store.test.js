@@ -23,6 +23,33 @@ test('each save keeps the previous version as db.json.bak', () => {
   assert.ok(!fs.existsSync(`${file}.tmp`));
 });
 
+test('saves after watching reuse the library text, and still write everything', () => {
+  const file = path.join(ROOT, 'reuse', 'db.json');
+  const s = new Store(file);
+  s.data.items.a = { id: 'a', title: 'First' };
+  s.data.shows.x = { id: 'x', title: 'Show' };
+  s.save(); s.flushOrRetry();
+  const made = s.written.items;
+  // Only watch progress changed: the titles' text isn't made again, but the file has it all.
+  s.data.progress.u = { a: { position: 42 } };
+  s.save({ personal: true }); s.flushOrRetry();
+  assert.equal(s.written.items, made);
+  let disk = JSON.parse(fs.readFileSync(file));
+  assert.deepEqual(disk.progress.u.a, { position: 42 });
+  assert.deepEqual(disk.items.a, { id: 'a', title: 'First' });
+  assert.deepEqual(disk.shows.x, { id: 'x', title: 'Show' });
+  // A change to the library is written.
+  s.data.items.b = { id: 'b', title: 'Second' };
+  s.save(); s.flushOrRetry();
+  disk = JSON.parse(fs.readFileSync(file));
+  assert.ok(disk.items.b);
+  // A save on request (shutdown, backups) writes everything afresh.
+  s.data.items.c = { id: 'c' };
+  s.flush();
+  assert.ok(JSON.parse(fs.readFileSync(file)).items.c);
+  clearTimeout(s.timer);
+});
+
 test('an unreadable db.json is recovered from the previous copy', () => {
   const file = path.join(ROOT, 'b', 'db.json');
   const s = new Store(file);

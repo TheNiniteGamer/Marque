@@ -64,7 +64,7 @@ function itemMenu(anchor, x, { ctx } = {}) {
   openMenu(anchor, [
     { label: '▶  Play', onClick: async () => {
       if (x.type !== 'show') { location.hash = `#/play/${x.id}`; return; }
-      const s = await api(`/api/shows/${x.id}`);
+      const s = await api(`/api/shows/${x.id}?episodes=none`);
       if (s.upNext) location.hash = `#/play/${s.upNext.id}`; else toast('Nothing to play');
     } },
     { label: watched ? '○  Mark as unwatched' : '✓  Mark as watched', onClick: () => setWatchedFor(x, !watched) },
@@ -319,7 +319,7 @@ async function openMatcher(id) {
 // Shows numbered straight through ("One Piece - 1071") are placed in their seasons automatically;
 // this sets it for one show when the automatic choice is wrong.
 async function openNumbering(show) {
-  const d = await api(`/api/shows/${show.id}`);
+  const d = await api(`/api/shows/${show.id}?episodes=none`);
   const now = d.numbering || 'auto';
   const opts = [
     ['auto', 'Automatic', 'Episode numbers without a season (“Show - 1071”) are counted through the whole show when they don’t exist in their season.'],

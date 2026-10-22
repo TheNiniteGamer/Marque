@@ -24,9 +24,19 @@ sub onRefresh()
     if m.top.refresh then load()
 end sub
 
+' One season's episodes at a time (long shows have a thousand): the one shown, else the next to watch's.
 sub load()
-    mqApi("/api/shows/" + m.top.params.id, "onLoaded")
+    key = m.key
+    if key = invalid and m.top.params.season <> invalid then key = seasonKey(m.top.params.season)
+    if key = invalid then key = "auto"
+    mqApi("/api/shows/" + m.top.params.id + "?episodes=" + key, "onLoaded")
 end sub
+
+' "3", "0" (specials) or "null" (unsorted), as the server takes it.
+function seasonKey(n as Dynamic) as String
+    if n = invalid then return "null"
+    return mqStr(n)
+end function
 
 sub onLoaded(event as Object)
     r = event.getData()
@@ -42,15 +52,15 @@ sub onLoaded(event as Object)
     for each s in m.show.seasons
         n = root.createChild("ContentNode")
         n.title = mqStr(s.title)
-        if m.season <> invalid and s.season = m.season then pick = i
-        if m.season = invalid and m.top.params.season <> invalid and s.season = m.top.params.season then pick = i
+        if s.episodes <> invalid then pick = i
         i = i + 1
     end for
     ' (After a change in the same season, the highlight stays on the same episode.)
     keep = -1
-    if m.episodes.content <> invalid and m.season <> invalid then keep = m.episodes.itemFocused
+    if m.episodes.content <> invalid and m.key <> invalid then keep = m.episodes.itemFocused
     m.seasons.content = root
     m.seasons.jumpToItem = pick
+    m.key = invalid
     m.episodes.content = invalid ' rebuilt with the latest progress
     showSeason(pick)
     if keep >= 0 and keep < m.episodes.content.getChildCount() then m.episodes.jumpToItem = keep
@@ -65,9 +75,17 @@ end sub
 sub showSeason(index as Integer)
     if m.show = invalid or index < 0 or index >= m.show.seasons.Count() then return
     season = m.show.seasons[index]
-    if m.season <> invalid and m.season = season.season and m.episodes.content <> invalid then return
+    key = seasonKey(season.season)
+    if m.key <> invalid and m.key = key and m.episodes.content <> invalid then return
     m.seasonData = season
-    m.season = season.season
+    m.key = key
+    if season.episodes = invalid then
+        ' Fetched now; shown if this season is still the one picked when it arrives.
+        m.list = []
+        m.episodes.content = CreateObject("roSGNode", "ContentNode")
+        mqApi("/api/shows/" + m.top.params.id + "/episodes?season=" + key, "onSeasonLoaded")
+        return
+    end if
     m.list = season.episodes
     root = CreateObject("roSGNode", "ContentNode")
     focusAt = 0
@@ -86,6 +104,23 @@ sub showSeason(index as Integer)
     end for
     m.episodes.content = root
     m.episodes.jumpToItem = focusAt
+end sub
+
+sub onSeasonLoaded(event as Object)
+    r = event.getData()
+    if r.status <> 200 or r.data = invalid or m.show = invalid then return
+    key = seasonKey(r.data.season)
+    i = 0
+    for each s in m.show.seasons
+        if seasonKey(s.season) = key then
+            s.episodes = r.data.episodes
+            if m.key = key then
+                m.key = invalid
+                showSeason(i)
+            end if
+        end if
+        i = i + 1
+    end for
 end sub
 
 sub onEpisodeSelected()
@@ -122,6 +157,7 @@ end sub
 
 function seasonWatched() as Boolean
     if m.seasonData = invalid then return false
+    if m.seasonData.episodes = invalid then return mqIsTrue(m.seasonData.watched)
     for each e in m.seasonData.episodes
         if not mqWatched(e) then return false
     end for

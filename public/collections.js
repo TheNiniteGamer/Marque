@@ -287,7 +287,7 @@ function reorderList(container, { items, note, save, reset, resetLabel }) {
 
 // "Add to collection…": tick the collections a movie or show should be in (TMDB ones too), or make a new one.
 async function openCollectionPicker(x) {
-  const [all, detail] = await Promise.all([api('/api/collections?hidden=1'), api(x.type === 'show' ? `/api/shows/${x.id}` : `/api/items/${x.id}`)]);
+  const [all, detail] = await Promise.all([api('/api/collections?hidden=1'), api(x.type === 'show' ? `/api/shows/${x.id}?episodes=none` : `/api/items/${x.id}`)]);
   const inIds = new Set((detail.collections || []).map((c) => c.id));
   const m = openModal({
     title: `Collections — ${x.title}`,

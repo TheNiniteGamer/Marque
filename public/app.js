@@ -69,10 +69,12 @@ window.marqueeVoiceResult = (text) => {
 window.addEventListener('scroll', () => document.body.classList.toggle('scrolled', window.scrollY > 10), { passive: true });
 
 // ---------- scan status polling ----------
-let pollTimer;
+let pollTimer, polling = false;
 async function pollStatus() {
   clearTimeout(pollTimer);
-  if (!state.user) return;
+  // (One at a time: two running at once would each keep a loop going.)
+  if (!state.user || polling) return;
+  polling = true;
   try {
     const prev = state.status;
     state.status = await api('/api/status');
@@ -100,8 +102,11 @@ async function pollStatus() {
     const { path } = parseHash();
     if ((finished || after !== before) && !player && (path === '/' || path.startsWith('/library/') || path === '/settings')) router();
   } catch { /* server unreachable; try again later */ }
-  pollTimer = setTimeout(pollStatus, state.status?.scanning ? 2000 : 15000);
+  polling = false;
+  // Not while the tab or app is out of sight: it catches up as soon as it's back.
+  if (!document.hidden) pollTimer = setTimeout(pollStatus, state.status?.scanning ? 2000 : 15000);
 }
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pollStatus(); });
 
 // Admins: how many requests are waiting, on the Requests link.
 function noteRequests(n) {

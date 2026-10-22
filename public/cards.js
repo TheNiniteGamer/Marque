@@ -200,7 +200,7 @@ document.addEventListener('click', async (e) => {
   e.preventDefault();
   let id = btn.dataset.play;
   if (id.startsWith('show:')) {
-    const show = await api(`/api/shows/${id.slice(5)}`).catch(() => null);
+    const show = await api(`/api/shows/${id.slice(5)}?episodes=none`).catch(() => null);
     if (!show?.upNext) return toast('Nothing to play');
     id = show.upNext.id;
   }
