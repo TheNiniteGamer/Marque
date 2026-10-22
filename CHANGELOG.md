@@ -4,6 +4,19 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.8
+
+- **Going back in a film works again on the TVs and phones:** going back more than about a minute
+  in a video being converted (the Roku, the Android TV and phone apps, browsers) left the spinner up
+  for a minute and then failed. It now starts again from that point straight away.
+- **A drive that isn't ready no longer empties a library:** if a library's folder is there but empty
+  or can't be read during a scan (a USB drive not mounted yet when the PC starts, or one dropping
+  out), its titles are kept as they are, instead of being removed and later added back as new
+  without their fixes, intro markers and converted copies.
+- **Upgraded files keep their history:** when Radarr or Sonarr replaces a film or episode with a
+  better copy under a new name, it keeps everyone's watch progress, My List, thumbs, collections and
+  the date it was added, instead of showing up as new and unwatched.
+
 ## 0.24.7
 
 - **Radarr & Sonarr settings after moving PCs:** a folder or quality profile that Radarr or Sonarr no

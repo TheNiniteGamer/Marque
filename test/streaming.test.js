@@ -204,6 +204,24 @@ test('conversion pauses a short way ahead of the player instead of racing to the
   } finally { mgr.stopAll(); }
 });
 
+test('going back more than a minute converts again from there, once the old segments are cleaned up', async () => {
+  const file = path.join(ROOT, 'back.mp4');
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=10:d=200', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', file]);
+  const mgr = new hls.HlsManager(path.join(ROOT, 'hls-back'), { active: 'software', reportFailure() {} });
+  const item = { id: 'back', file, media: { duration: 200, bitrate: 3e5, video: { codec: 'h264', pixFmt: 'yuv420p', width: 320, height: 180 }, audio: [] } };
+  const opts = { quality: '360p', sid: 'unit-test-back' };
+  try {
+    for (let n = 0; n <= 30; n++) await mgr.segment(item, opts, n); // watched the first two minutes
+    mgr.sweep(); // the clean-up deletes what's more than a minute behind
+    assert.ok(!fs.existsSync(mgr.fileOf([...mgr.sessions.values()][0], 5)), 'segment 5 was cleaned up');
+    const t0 = Date.now();
+    const seg = await mgr.segment(item, opts, 5); // …and the viewer goes back to 0:20
+    assert.ok(fs.statSync(seg).size > 0);
+    assert.ok(Date.now() - t0 < 20_000, `made again in ${Date.now() - t0} ms, not left waiting`);
+    assert.ok(fs.statSync(await mgr.segment(item, opts, 6)).size > 0, 'and carries on from there');
+  } finally { mgr.stopAll(); }
+});
+
 test('a graphics card that keeps failing is dropped for the CPU', () => {
   const hw = new HwAccel(memStore());
   hw.active = 'nvenc';
