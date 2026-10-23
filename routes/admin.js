@@ -10,7 +10,7 @@ module.exports = function register(app) {
   const {
     logs, fs, os, pipeline, lib, metadata, hlsLib, findProblems,
     ENCODER_NAMES, store, matcher, updater, hwaccel, hls, opensubs, activity,
-    maintenance, intro, backups, auth, transcodes, HttpError, json, readBody, trickplay, keyframes, offline,
+    maintenance, intro, backups, auth, transcodes, rokus, HttpError, json, readBody, trickplay, keyframes, offline,
     readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary, path, fromHostPath, health, isRemote, previews,
     INTRO_SOUND,
   } = app;
@@ -441,6 +441,13 @@ module.exports = function register(app) {
     const body = await readBody(req);
     updater.requestUpdate(user, { when: body?.when === 'now' ? 'now' : 'idle' });
     json(res, 202, updatesView());
+  }, 'admin');
+  // The Rokus Marquee is on, and sending them the channel in this version (lib/rokus.js).
+  route('GET', '/api/rokus', async (req, res) => json(res, 200, await rokus.list()), 'admin');
+  // { password?, force? } -> { result: 'updated' | 'password' | 'busy' | 'offline' | 'failed', message }
+  route('POST', '/api/rokus/:ip/update', async (req, res, { ip }) => {
+    const body = await readBody(req);
+    try { json(res, 200, await rokus.update(decodeURIComponent(ip), { password: body?.password, force: body?.force === true })); } catch (err) { throw new HttpError(err.status || 400, err.message); }
   }, 'admin');
   route('POST', '/api/updates/restart-now', async (req, res, p, url, user) => { updater.restartNow(user); json(res, 200, updatesView()); }, 'admin');
 

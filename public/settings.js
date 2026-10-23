@@ -438,6 +438,7 @@ const SETTINGS_PAGES = [
     load: () => Promise.all([api('/api/status'), api('/api/updates'), api('/api/maintenance')]),
     render: ([s, updates, maint]) => html`
       ${updatesSection(updates)}
+      ${rokusSection()}
       <h2 style="margin:28px 0 12px">This server</h2>
       <div class="panel">
         <dl class="kv">
@@ -454,6 +455,7 @@ const SETTINGS_PAGES = [
       ${logsSection()}`,
     bind: ([, updates]) => {
       bindUpdatesSection(updates);
+      bindRokusSection();
       bindLogsSection();
       $('#maint-clean').onclick = async (e) => {
         e.target.disabled = true;

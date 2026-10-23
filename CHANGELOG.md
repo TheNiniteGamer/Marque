@@ -4,6 +4,15 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.16
+
+- **Update the Rokus from Settings:** *Settings → Server & updates → Roku TVs* lists each Roku that
+  has opened Marquee at home, with its channel version, what it's doing, and an **Update** button
+  (or **Update all**) when this version of Marquee has a newer channel. No more uploading the zip to
+  each one: Marquee sends it to the Roku itself. It asks for the Roku's developer password once and
+  remembers it. A Roku that's showing something (Marquee, another channel or a TV input) isn't
+  interrupted unless you say so, and one that was on its home screen is put back there afterwards.
+
 ## 0.24.15
 
 Roku channel 1.17 (upload the new zip from Account → *Watch on a TV* to each Roku):

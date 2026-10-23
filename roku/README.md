@@ -20,7 +20,11 @@ account needed beyond the Roku one you already have). Each Roku can have one dev
    `rokudev` with your password, choose **Upload**, pick the zip and press **Install with zip**.
    Marquee opens on the TV, and stays in your channel list.
 
-To update, upload the new zip the same way (it replaces the old one).
+To update, upload the new zip the same way (it replaces the old one), or let Marquee do it:
+**Settings → Server & updates → Roku TVs** lists each Roku that has opened Marquee at home, with the
+version it has, and **Update** sends it the new one (it asks for the developer password once). It
+won't interrupt a Roku that's showing something unless you say so, and one that was on its home
+screen is put back there afterwards.
 
 ## Sign in
 

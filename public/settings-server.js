@@ -126,6 +126,88 @@ function bindUpdatesSection(u) {
   if (u.helper.state === 'updating' || u.helper.state === 'ready' || u.helper.pending) watchUpdate();
 }
 
+// Roku TVs: send each one the channel from this version (lib/rokus.js). Asking the Rokus takes a
+// moment (one that's off at the wall takes a few seconds to give up on), so it fills in after.
+function rokusSection() {
+  return html`<h2 style="margin:28px 0 12px" id="rokus">Roku TVs</h2>
+    <div class="panel form" id="rokus-panel" style="max-width:none"><div class="muted">Looking for Rokus…</div></div>`;
+}
+
+function rokuRow(x, latest) {
+  let state;
+  if (x.updating) state = html`<span class="spin"></span> Updating…`;
+  else if (!x.online) state = html`<span class="muted">Not answering (off at the wall, or it has a new address)</span>`;
+  else if (!x.developerMode) state = html`<span class="muted">Developer mode is off</span>`;
+  else if (!x.installed) state = html`<span class="muted">${x.otherChannel ? `Its developer slot has “${x.otherChannel}”` : 'Marquee isn’t installed'}</span>`;
+  else if (x.needsUpdate) state = html`<b>Version ${x.installed}</b> · ${latest} is ready`;
+  else state = html`✓ Up to date <span class="muted">(${x.installed})</span>`;
+  const doing = x.online && x.on ? (x.playing ? ' · watching Marquee' : x.app === 'other' ? ` · on ${x.appName || 'another channel'}` : x.app === 'marquee' ? ' · Marquee open' : ' · home screen') : x.online ? ' · switched off' : '';
+  const canUpdate = x.online && x.developerMode && !x.updating && (x.needsUpdate || !x.installed);
+  return html`<div class="row roku-row" data-ip="${x.ip}" style="justify-content:space-between;padding:8px 0;border-top:1px solid var(--line, #333)">
+      <div><b>${x.name}</b> <span class="muted" style="font-size:13px">${x.model || ''} · ${x.ip}${doing}</span><div style="font-size:14px">${state}</div></div>
+      ${canUpdate ? html`<button class="btn small ${x.needsUpdate ? 'primary' : ''}" data-roku-update="${x.ip}">${x.installed ? 'Update' : 'Install'}</button>` : ''}
+    </div>`;
+}
+
+async function bindRokusSection() {
+  const panel = $('#rokus-panel');
+  if (!panel) return;
+  let d;
+  try { d = await api('/api/rokus'); } catch (err) { panel.innerHTML = html`<div class="muted">Couldn't look for Rokus: ${err.message}</div>`.s; return; }
+  if (!document.body.contains(panel)) return;
+  const waiting = d.rokus.filter((x) => x.needsUpdate && x.online);
+  panel.innerHTML = html`
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div class="muted" style="font-size:13px;max-width:640px">${d.latest ? `This version of Marquee has Roku channel ${d.latest}.` : 'The Roku channel isn’t in this copy of Marquee.'}
+        A Roku is listed once it has opened Marquee at home. Updating sends it the new channel, as uploading the zip does,
+        and needs the developer password set when developer mode was turned on (asked for once).</div>
+      ${waiting.length > 1 ? html`<button class="btn primary small" id="roku-all">Update all ${waiting.length}</button>` : ''}
+    </div>
+    ${d.rokus.length ? d.rokus.map((x) => rokuRow(x, d.latest)) : html`<div class="muted">No Rokus yet: open Marquee on a Roku at home and it shows up here.</div>`}`.s;
+
+  // One Roku: asks for the password or "update anyway" when the Roku needs it. Returns whether it worked.
+  const update = async (ip, opts = {}) => {
+    const name = d.rokus.find((x) => x.ip === ip)?.name || 'the Roku';
+    const btn = $(`[data-roku-update="${CSS.escape(ip)}"]`, panel);
+    if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
+    let r;
+    try { r = await api(`/api/rokus/${encodeURIComponent(ip)}/update`, { method: 'POST', body: opts }); } catch (err) { r = { result: 'failed', message: err.message }; }
+    if (r.result === 'password') {
+      const pass = await askRokuPassword(name, r.message);
+      if (pass) return update(ip, { ...opts, password: pass });
+    } else if (r.result === 'busy') {
+      if (confirm(`${name}: ${r.message}\n\nUpdate it anyway? Installing opens Marquee on it, so whatever's on stops.`)) return update(ip, { ...opts, force: true });
+    } else toast(`${name}: ${r.message}`, r.result !== 'updated');
+    return r.result === 'updated';
+  };
+  panel.onclick = async (e) => {
+    const one = e.target.closest('[data-roku-update]');
+    if (one) { await update(one.dataset.rokuUpdate); return bindRokusSection(); }
+    if (e.target.closest('#roku-all')) {
+      e.target.disabled = true;
+      for (const x of waiting) await update(x.ip);
+      bindRokusSection();
+    }
+  };
+}
+
+function askRokuPassword(name, why) {
+  return new Promise((done) => {
+    const m = openModal({
+      title: `Update ${name}`,
+      body: html`<p>${why}</p>
+        <label>Developer password<input class="input" id="roku-pass" type="password" autocomplete="off"></label>
+        <p class="muted" style="font-size:13px">Forgotten it? Turn developer mode on again on the Roku (Home ×3, Up ×2, Right, Left, Right, Left, Right) and set a new one; channels stay installed.</p>
+        <div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn primary" id="roku-pass-go">Update</button></div>`,
+      onClose: () => done(null),
+    });
+    const go = () => { done($('#roku-pass', m.el).value || null); m.close(); }; // (closing would answer null first)
+    $('#roku-pass-go', m.el).onclick = go;
+    $('#roku-pass', m.el).onkeydown = (e) => { if (e.key === 'Enter') go(); };
+    $('#roku-pass', m.el).focus();
+  });
+}
+
 // Follow an update: refresh the panel while it runs, then wait out the restart and reload into the new version.
 let updateWatch = null;
 function watchUpdate() {

@@ -46,6 +46,7 @@ const { Arr } = require('./lib/arr');
 const { Optimizer } = require('./lib/optimize');
 const { AutoSubs } = require('./lib/autosubs');
 const { Upcoming } = require('./lib/upcoming');
+const { Rokus } = require('./lib/rokus');
 const { Health } = require('./lib/health');
 const { Previews } = require('./lib/previews');
 const { KINDS: ENCODER_NAMES } = require('./lib/hwaccel');
@@ -165,6 +166,12 @@ const arr = new Arr(store, {
   },
 });
 const upcoming = new Upcoming(store, arr, { nextEpisodeOf: metadata.nextEpisodeOf });
+// (Rokus at home only: a Tailscale device isn't on the home network the Roku installer is reached on.)
+const rokus = new Rokus(store, {
+  zip: path.join(PUBLIC_DIR, 'downloads', 'Marquee-Roku.zip'),
+  isHomeIp: (ip) => isPrivateIp(ip) && !isTailscaleIp(ip),
+  ports: { ecp: Number(process.env.ROKU_ECP_PORT) || undefined, dev: Number(process.env.ROKU_DEV_PORT) || undefined },
+});
 const backups = new Backups(store, {
   dataDir: DATA_DIR,
   dir: path.resolve(process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups')),
@@ -515,7 +522,7 @@ const app = {
   Activity, Maintenance, ENCODER_NAMES, PORT, HOST, DATA_DIR, MEDIA_ROOT, SCAN_INTERVAL_MIN,
   MEDIA_LABELS, hostLabel, fromHostPath, folderPlaces, PUBLIC_DIR, INTRO_SOUND, THUMB_DIR, SUB_CACHE, SUB_DOWNLOADS, store, matcher,
   scanner, updater, hwaccel, TRANSCODE_DIR, hls, offline, offlineLib, health, previews, tokens, opensubs, parties,
-  trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader, arr, optimizer, autoSubs, upcoming,
+  trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader, arr, optimizer, autoSubs, upcoming, rokus,
   transcodes, HttpError, json, readBody, readRaw, MIME, sendFile, getItem,
   getShow, getLibrary, getUser, librarySummary, validateLibraryInput, removeLibraryData, resolveArt, subtitleVtt,
   isPrivateIp, isTailscaleIp, TRUST_PROXY, clientIp, viaHttpsProxy, noteRemoteOrigin, mediaTokenUser, castAddresses, isRemote,
@@ -596,7 +603,7 @@ const server = http.createServer(async (req, res) => {
             res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
           }
         }
-        if (user) noteRemoteOrigin(req);
+        if (user) { noteRemoteOrigin(req); rokus.seen(req, clientIp(req)); }
         // A temporary password from an admin: nothing but choosing their own (and signing out) until then.
         if (user?.mustChangePassword && !MUST_CHANGE_ALLOWED.has(`${method} ${url.pathname}`)) {
           throw Object.assign(new HttpError(403, 'Choose a new password first'), { mustChangePassword: true });
