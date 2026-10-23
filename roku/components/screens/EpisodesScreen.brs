@@ -96,6 +96,7 @@ sub showSeason(index as Integer)
         if e.episode <> invalid then num = mqStr(e.episode) + ". "
         c.title = num + mqStr(e.title)
         c.sub = mqDuration(e.duration)
+        if e.absoluteNumber <> invalid then c.sub = "#" + mqStr(e.absoluteNumber) + "  ·  " + c.sub
         if mqWatched(e) then c.sub = "Watched  ·  " + c.sub
         c.description = mqStr(e.overview)
         root.appendChild(c)

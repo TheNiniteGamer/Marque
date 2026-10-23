@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="PinKeyItem" extends="Group">
+    <interface>
+        <field id="itemContent" type="node" onChange="onContent" />
+        <field id="focusPercent" type="float" onChange="onFocus" />
+        <field id="gridHasFocus" type="boolean" onChange="onFocus" />
+    </interface>
+    <script type="text/brightscript" uri="PinKeyItem.brs" />
+    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+    <children>
+        <Rectangle id="bg" width="140" height="88" color="0x333333FF" />
+        <Label id="text" width="140" height="88" horizAlign="center" vertAlign="center" color="0xFFFFFFFF" font="font:LargeBoldSystemFont" />
+    </children>
+</component>

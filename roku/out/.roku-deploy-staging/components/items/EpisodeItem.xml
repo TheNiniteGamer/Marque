@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="EpisodeItem" extends="Group">
+    <interface>
+        <field id="itemContent" type="node" onChange="onContent" />
+        <field id="focusPercent" type="float" onChange="onFocus" />
+    </interface>
+    <script type="text/brightscript" uri="EpisodeItem.brs" />
+    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+    <children>
+        <Rectangle id="bg" width="1300" height="200" color="0x262626FF" opacity="0" />
+        <Rectangle id="thumbBg" translation="[16,16]" width="300" height="168" color="0x1F1F1FFF" />
+        <Poster id="thumb" translation="[16,16]" width="300" height="168" loadWidth="300" loadHeight="168" loadDisplayMode="scaleToZoom" />
+        <Rectangle id="track" translation="[16,178]" width="300" height="6" color="0x787878C0" visible="false" />
+        <Rectangle id="bar" translation="[16,178]" height="6" color="0xE31B23FF" visible="false" />
+        <Label id="title" translation="[350,22]" width="600" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" />
+        <Label id="length" translation="[960,22]" width="320" horizAlign="right" color="0xA8A8A8FF" font="font:SmallSystemFont" />
+        <Label id="overview" translation="[350,72]" width="900" wrap="true" maxLines="3" color="0xBDBDBDFF" font="font:SmallSystemFont" />
+    </children>
+</component>

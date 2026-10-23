@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="PairScreen" extends="Group">
+    <interface>
+        <field id="params" type="assocarray" />
+        <field id="navigate" type="assocarray" />
+        <field id="refresh" type="boolean" />
+    </interface>
+    <script type="text/brightscript" uri="PairScreen.brs" />
+    <script type="text/brightscript" uri="pkg:/components/common.brs" />
+    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+    <children>
+        <Label text="MARQUEE" translation="[120,90]" color="0xE31B23FF">
+            <Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="56" />
+        </Label>
+        <Label text="Sign in" translation="[120,230]" color="0xFFFFFFFF">
+            <Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="52" />
+        </Label>
+        <Label id="how" translation="[120,320]" width="1500" wrap="true" color="0xD6D6D6FF" font="font:MediumSystemFont" />
+        <Label id="code" translation="[120,450]" width="1500" color="0xFFFFFFFF" text="······">
+            <Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="150" />
+        </Label>
+        <Label id="hint" translation="[120,700]" width="1500" wrap="true" color="0xA8A8A8FF" font="font:SmallSystemFont" text="Waiting for the code to be entered… Press ✱ to use a different server." />
+        <Timer id="poll" duration="3" repeat="true" />
+        <Timer id="retry" duration="5" repeat="false" />
+    </children>
+</component>

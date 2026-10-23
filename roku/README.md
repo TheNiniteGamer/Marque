@@ -57,6 +57,10 @@ Next and All episodes for an episode), then rows of trailers & extras, the cast 
 lists their titles), the rest of its franchise and more like it. **More seasons** lists the show's
 seasons that aren't all here yet: tick them with **OK**, then choose *Ask for these seasons*.
 
+**Search** finds titles, episodes, actors, moods and years ("funny", "90s comedy") as on the web,
+and says what it understood. On a voice remote you can say what you're looking for instead of
+typing it (Rokus from the last few years).
+
 **Requests**: in Search, *Not here? Ask for "…"* (above the results) looks the name up online
 as a film or a TV show; choosing one asks for it (or opens it, if it's here already), and the last
 line asks for it by name. *My requests* (under your profile) shows how each is getting on; one

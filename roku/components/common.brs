@@ -100,6 +100,8 @@ function mqEpLabel(item as Object) as String
         if out <> "" then out = out + ":"
         out = out + "E" + mqStr(item.episode)
     end if
+    ' Anime numbered straight through ("One Piece - 1071"), placed in its season: the running number too.
+    if item.absoluteNumber <> invalid then out = out + " (#" + mqStr(item.absoluteNumber) + ")"
     return out
 end function
 

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="TopBar" extends="Group">
+    <interface>
+        <field id="current" type="string" onChange="paint" />
+        <field id="chosen" type="assocarray" alwaysNotify="true" />
+        <field id="leave" type="boolean" alwaysNotify="true" />
+        <field id="reload" type="boolean" alwaysNotify="true" onChange="onReload" />
+    </interface>
+    <script type="text/brightscript" uri="TopBar.brs" />
+    <script type="text/brightscript" uri="pkg:/components/common.brs" />
+    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+    <children>
+        <Poster uri="pkg:/images/fade_top.png" width="1920" height="240" />
+        <Label text="MARQUEE" translation="[96,36]" color="0xE31B23FF">
+            <Font role="font" uri="pkg:/fonts/Archivo-Black.ttf" size="38" />
+        </Label>
+        <Group id="links" translation="[384,34]" />
+        <Group id="bell" translation="[1552,30]">
+            <Poster id="bellPill" uri="pkg:/images/pill.9.png" width="64" height="64" opacity="0" />
+            <Poster id="bellIcon" uri="pkg:/images/ic_bell.png" translation="[8,8]" width="48" height="48" />
+            <Rectangle id="bellDot" translation="[38,2]" width="30" height="30" color="0xE31B23FF" visible="false" />
+            <Label id="bellCount" translation="[38,2]" width="30" height="30" horizAlign="center" vertAlign="center" color="0xFFFFFFFF" font="font:SmallestBoldSystemFont" visible="false" />
+        </Group>
+        <Group id="search" translation="[1652,30]">
+            <Poster id="searchPill" uri="pkg:/images/pill.9.png" width="64" height="64" opacity="0" />
+            <Poster id="searchIcon" uri="pkg:/images/ic_search.png" translation="[8,8]" width="48" height="48" />
+        </Group>
+        <Group id="avatar" translation="[1752,32]">
+            <Rectangle id="avatarRing" translation="[-5,-5]" width="70" height="70" color="0xFFFFFFFF" visible="false" />
+            <Rectangle id="avatarBg" width="60" height="60" color="0x2F6FB3FF" />
+            <Label id="avatarText" width="60" height="60" horizAlign="center" vertAlign="center" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" />
+            <Poster id="avatarPic" width="60" height="60" loadWidth="120" loadHeight="120" visible="false" />
+        </Group>
+        <Group id="account" visible="false" translation="[1452,112]">
+            <Rectangle width="360" height="312" color="0x181818FA" />
+            <LabelList id="accountList" translation="[16,12]" itemSize="[328,72]" numRows="4" vertFocusAnimationStyle="floatingFocus" color="0xE6E6E6FF" focusedColor="0x000000FF" focusBitmapUri="pkg:/images/pill.9.png" font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" />
+        </Group>
+    </children>
+</component>

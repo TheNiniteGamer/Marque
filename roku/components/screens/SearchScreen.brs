@@ -1,5 +1,10 @@
 sub init()
-    m.keyboard = m.top.findNode("keyboard")
+    ' The keyboard that also takes voice from a voice remote, on Rokus new enough to have it.
+    m.keyboard = CreateObject("roSGNode", "DynamicMiniKeyboard")
+    if m.keyboard = invalid then m.keyboard = CreateObject("roSGNode", "MiniKeyboard")
+    m.keyboard.id = "keyboard"
+    m.keyboard.translation = [96, 180]
+    m.top.insertChild(m.keyboard, 1)
     m.status = m.top.findNode("status")
     m.results = m.top.findNode("results")
     m.typing = m.top.findNode("typing")
@@ -29,7 +34,7 @@ sub search()
     if q = "" then
         m.results.content = invalid
         m.items = []
-        m.status.text = "Type a title or an episode name."
+        m.status.text = "Type a title, an actor, or something like “funny” or “90s”."
         return
     end if
     mqApi("/api/search?q=" + mqEscape(q), "onResults")
@@ -53,7 +58,13 @@ sub onResults(event as Object)
         end if
     end for
     m.results.content = root
-    if m.items.Count() = 0 then m.status.text = "Nothing found." else m.status.text = ""
+    ' What the search understood, as on the web ("films with Tom Hanks · comedies").
+    m.status.text = ""
+    if m.items.Count() = 0 then
+        m.status.text = "Nothing found."
+    else if r.data.understood <> invalid and r.data.understood.Count() > 0 then
+        m.status.text = "Showing " + r.data.understood.Join(" · ")
+    end if
 end sub
 
 sub onSelected()

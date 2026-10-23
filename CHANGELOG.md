@@ -4,6 +4,18 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.15
+
+Roku channel 1.17 (upload the new zip from Account → *Watch on a TV* to each Roku):
+- **Paused on a Roku still shows on Activity,** and an admin's **Stop** or bedtime reaches a paused
+  Roku straight away. Before, a Roku paused for more than 30 seconds dropped off the list and only
+  stopped once someone pressed play.
+- **Search says what it understood** ("Showing films with Tom Hanks · comedies"), as on the web,
+  and the hint mentions you can search for actors, moods and years.
+- **Voice search:** on a voice remote, say what you're looking for instead of typing it.
+- **Anime numbers:** episodes numbered straight through show their running number ("#1071"), as on
+  the web.
+
 ## 0.24.14
 
 - **Tailscale counts as away from home:** someone watching through Tailscale is now treated as

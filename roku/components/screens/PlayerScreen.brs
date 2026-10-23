@@ -1124,8 +1124,10 @@ end sub
 
 ' ---------- progress ----------
 
+' Also while paused, as the other apps do: the Activity page keeps showing it, and bedtime or an
+' admin's Stop reaches it without waiting for someone to press play.
 sub onReportTimer()
-    if m.video.state = "playing" then report(false)
+    if m.video.state = "playing" or m.video.state = "paused" then report(false)
 end sub
 
 sub report(stopped as Boolean, position = -1 as Float)
