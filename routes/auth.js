@@ -37,7 +37,8 @@ module.exports = function register(app) {
 
   route('GET', '/api/auth/me', async (req, res, p, url, user) => {
     if (!user) return json(res, 401, { error: 'Not signed in', setupRequired: !auth.hasUsers() });
-    json(res, 200, { user: publicUser(user) });
+    // away: the player starts on Auto quality, even when the house address is used (through Tailscale).
+    json(res, 200, { user: publicUser(user), away: isRemote(req) });
   }, 'public');
 
   route('POST', '/api/auth/setup', async (req, res) => {

@@ -414,8 +414,14 @@ function isPrivateIp(ip) {
   if (a === '::1' || a === '127.0.0.1' || a.startsWith('127.')) return true;
   if (/^(10\.|192\.168\.|169\.254\.)/.test(a)) return true;
   const m = /^172\.(\d+)\./.exec(a); if (m && +m[1] >= 16 && +m[1] <= 31) return true;
-  const t = /^100\.(\d+)\./.exec(a); if (t && +t[1] >= 64 && +t[1] <= 127) return true;
+  if (isTailscaleIp(a)) return true;
   return /^f[cd]/i.test(a) || /^fe80:/i.test(a);
+}
+// A device on the family's Tailscale network: trusted like home, but watching from somewhere else.
+function isTailscaleIp(ip) {
+  const a = String(ip || '').replace(/^::ffff:/, '');
+  const t = /^100\.(\d+)\./.exec(a);
+  return (!!t && +t[1] >= 64 && +t[1] <= 127) || /^fd7a:115c:a1e0:/i.test(a);
 }
 // Behind Tailscale serve / Cloudflare Tunnel / a reverse proxy, the real visitor is the last address
 // the proxy added to X-Forwarded-For. Only trusted when the request came from a local proxy.
@@ -423,7 +429,8 @@ const TRUST_PROXY = process.env.TRUST_PROXY !== '0';
 function clientIp(req) {
   const direct = req.socket.remoteAddress || 'unknown';
   const xff = req.headers['x-forwarded-for'];
-  if (TRUST_PROXY && xff && isPrivateIp(direct)) {
+  // (Not from a Tailscale device: it could claim to be at home.)
+  if (TRUST_PROXY && xff && isPrivateIp(direct) && !isTailscaleIp(direct)) {
     const parts = String(xff).split(',').map((x) => x.trim()).filter(Boolean);
     if (parts.length) return parts[parts.length - 1];
   }
@@ -470,9 +477,15 @@ function castAddresses() {
 
 // ---------- helpers shared by several route groups ----------
 // The admin can cap the quality for viewers away from home (Settings → Transcoding), so one remote
-// viewer can't use up the home upload. Away = through Tailscale / Cloudflare, or from outside the network.
+// viewer can't use up the home upload. Away = from a Tailscale device or outside the network, or
+// through an HTTPS proxy that doesn't say who's behind it. A proxy in the house (Nginx Proxy Manager)
+// passes on the visitor's home address, so people at home count as home through it.
 // Returns null (no limit) or { maxHeight, originalAllowed }.
-const isRemote = (req) => viaHttpsProxy(req) || !isPrivateIp(clientIp(req));
+function isRemote(req) {
+  const ip = clientIp(req);
+  if (isTailscaleIp(ip) || !isPrivateIp(ip)) return true;
+  return viaHttpsProxy(req) && !(TRUST_PROXY && req.headers['x-forwarded-for']);
+}
 function remoteLimit(req, item) {
   const q = hlsLib.QUALITIES.find((x) => x.id === store.data.settings.remoteMaxQuality);
   if (!q || !isRemote(req)) return null;
@@ -505,7 +518,7 @@ const app = {
   trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader, arr, optimizer, autoSubs, upcoming,
   transcodes, HttpError, json, readBody, readRaw, MIME, sendFile, getItem,
   getShow, getLibrary, getUser, librarySummary, validateLibraryInput, removeLibraryData, resolveArt, subtitleVtt,
-  isPrivateIp, TRUST_PROXY, clientIp, viaHttpsProxy, noteRemoteOrigin, mediaTokenUser, castAddresses, isRemote,
+  isPrivateIp, isTailscaleIp, TRUST_PROXY, clientIp, viaHttpsProxy, noteRemoteOrigin, mediaTokenUser, castAddresses, isRemote,
   remoteLimit, getTarget, route,
 };
 for (const group of ['auth', 'library', 'playback', 'admin', 'downloads', 'requests']) require(`./routes/${group}`)(app);

@@ -542,5 +542,6 @@ async function startApp() {
   const data = res ? await res.json().catch(() => ({})) : {};
   if (!res?.ok) return showAuth({ setupRequired: !!data.setupRequired, message: res ? '' : 'Cannot reach the server.' });
   state.user = data.user;
+  state.away = data.away;
   startApp();
 })();

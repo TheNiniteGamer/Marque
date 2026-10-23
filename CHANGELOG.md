@@ -4,6 +4,15 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.14
+
+- **Tailscale counts as away from home:** someone watching through Tailscale is now treated as
+  away (the away-from-home quality limit, *Auto* quality to start with, "away from home" on the
+  Activity page), even when they use the house address, such as `marquee.home…` through a Tailscale
+  that shares the home network. Before, Tailscale devices counted as home.
+- **Through a proxy in the house, home is home:** behind a reverse proxy at home (like Nginx Proxy
+  Manager), people in the house are no longer treated as away.
+
 ## 0.24.13 — Significant update
 
 - **A better ffmpeg inside Marquee:** the Docker image now uses Jellyfin's build of ffmpeg (the

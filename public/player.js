@@ -99,10 +99,11 @@ function loadScript(src) {
 }
 
 // On the home network the original file is best; from outside, adaptive streaming copes with
-// slower connections. Users can pick a fixed choice on the Account page or in the player.
+// slower connections (the server says which, since Tailscale reaches home addresses too). Users can pick a fixed choice on the Account page or in the player.
 function defaultQuality() {
   const q = store.get('quality', '');
   if (q) return q;
+  if (typeof state.away === 'boolean') return state.away ? 'auto' : 'original';
   const h = location.hostname;
   const home = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1)/.test(h) || h.endsWith('.local') || !h.includes('.');
   return home ? 'original' : 'auto';

@@ -64,3 +64,17 @@ test('settings show the remote address once it has been used', async () => {
   assert.equal(r.data.seen.via, 'Tailscale');
   assert.equal(r.data.viaRemoteNow, false);
 });
+
+test('Tailscale and outside viewers count as away; people at home through the house proxy as home', async () => {
+  const login = await call('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'password1' } });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const away = async (headers) => (await call('/api/auth/me', { headers: { ...headers, cookie } })).data.away;
+  assert.equal(await away({}), false);
+  assert.equal(await away(viaProxy('100.101.102.103')), true); // Tailscale
+  assert.equal(await away(viaProxy('fd7a:115c:a1e0::1')), true);
+  assert.equal(await away(viaProxy('203.0.113.9')), true); // Cloudflare
+  // Nginx Proxy Manager in the house passes on the visitor's home address.
+  assert.equal(await away(viaProxy('192.168.1.50', { 'x-forwarded-host': 'marquee.home.example.com' })), false);
+  // An HTTPS proxy that doesn't say who's behind it: assume away.
+  assert.equal(await away({ 'x-forwarded-proto': 'https' }), true);
+});
