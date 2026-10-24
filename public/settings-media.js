@@ -14,12 +14,13 @@ const helpText = (body, summary = 'What’s this?') => html`<details class="help
 function metadataSection(st, { heading = true } = {}) {
   const keyStatus = st.tmdbKeySet ? html`Saved (${st.tmdbKeyHint})` : st.tmdbKeyFromEnv ? 'Set by the server configuration' : html`<span style="color:var(--danger)">Not set</span> — movies can't be looked up online`;
   const tmdbDone = st.tmdbKeySet || st.tmdbKeyFromEnv;
+  const tvdbDone = st.tvdbKeySet || st.tvdbKeyFromEnv;
   return html`
     ${heading ? html`<h2 style="margin:28px 0 12px">Metadata</h2>` : ''}
     <div class="panel form" id="meta-settings" style="max-width:none">
       <div class="meta-sources">
         ${st.providers.map((p) => html`<div class="source ${p.enabled ? 'on' : ''}"><b>${p.name}</b>
-          <span class="muted">${p.kinds.includes('movie') ? 'Movies & TV' : 'TV shows'} · ${p.enabled ? 'Active' : p.id === 'tmdb' ? 'Needs API key' : 'Off'}</span></div>`)}
+          <span class="muted">${p.kinds.includes('movie') ? 'Movies & TV' : 'TV shows'} · ${p.enabled ? 'Active' : p.id === 'tvmaze' ? 'Off' : 'Needs API key'}</span></div>`)}
       </div>
       ${tmdbDone ? html`<div class="row setup-done"><span>✓ TMDB connected <span class="muted">${st.tmdbKeyHint || '(set by the server configuration)'}</span></span>
         <button type="button" class="btn small" data-reveal="tmdb-edit">Change</button></div>` : ''}
@@ -31,6 +32,22 @@ function metadataSection(st, { heading = true } = {}) {
         </div>
         ${helpText(html`Free: create an account at <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org → Settings → API</a> and copy the “API Key”. TMDB gives posters, summaries, cast and ratings for films and shows.`, 'Where do I get one?')}
       </label>
+      ${tvdbDone ? html`<div class="row setup-done"><span>✓ TheTVDB connected <span class="muted">${st.tvdbKeyHint || '(set by the server configuration)'}${st.tvdbPinSet ? ' · with PIN' : ''}</span></span>
+        <button type="button" class="btn small" data-reveal="tvdb-edit">Change</button>
+        ${st.tvdbKeySet ? html`<button type="button" class="btn small danger" id="tvdb-remove">Remove</button>` : ''}</div>` : ''}
+      <div id="tvdb-edit" ${tvdbDone ? raw('hidden') : ''}>
+        <div class="row" style="align-items:flex-end">
+          <label style="flex:1;min-width:220px">TheTVDB API key <span class="muted" style="font-weight:400">— optional, for TV shows</span>
+            <input class="input" id="tvdb-key" type="password" autocomplete="off" placeholder="${st.tvdbKeySet ? 'Paste a new key to replace it' : 'Paste your TheTVDB API key'}"></label>
+          <label style="min-width:150px">Subscriber PIN<input class="input" id="tvdb-pin" type="password" autocomplete="off" placeholder="${st.tvdbPinSet ? 'Unchanged' : 'If your key needs one'}"></label>
+          <button class="btn small" id="tvdb-save" style="margin-bottom:8px">Save</button>
+        </div>
+        ${helpText(html`TheTVDB is where Sonarr gets its episode numbers, so shows matched with it agree with Sonarr's
+          (anime, DVD-order shows and specials especially). Make a project key at <a href="https://thetvdb.com/api-information" target="_blank" rel="noopener">thetvdb.com → API</a>;
+          a free “user-supported” key also needs the PIN from a TheTVDB subscription.`, 'Where do I get one?')}
+      </div>
+      ${tvdbDone ? html`<label class="check"><input type="checkbox" id="meta-prefer-tvdb" ${st.preferTvdb ? 'checked' : ''}> Look up new shows on TheTVDB first (numbers like Sonarr's)</label>
+        <p class="muted" style="margin:-4px 0 0;font-size:13px">Shows already matched keep their match: change one with ⋯ → Fix match, or “Re-check matches” on a TV library to move them all. Show information from <a href="https://thetvdb.com" target="_blank" rel="noopener">TheTVDB</a>.</p>` : ''}
       <div class="row" style="align-items:flex-end">
         <label style="min-width:220px">Language for titles and summaries
           <select id="meta-lang">${LANGUAGES.map(([c, n]) => html`<option value="${c}" ${st.language === c ? 'selected' : ''}>${n}</option>`)}
@@ -77,6 +94,15 @@ function bindMetadataSection() {
     await patch({ tmdbKey: key }, 'TMDB key saved — use “Refresh metadata” to look up your movies');
     e.target.disabled = false; e.target.textContent = 'Save key';
   };
+  $('#tvdb-save').onclick = async (e) => {
+    const key = $('#tvdb-key').value.trim();
+    if (!key) return toast('Paste a key first', true);
+    e.target.disabled = true; e.target.textContent = 'Checking…';
+    await patch({ tvdbKey: key, tvdbPin: $('#tvdb-pin').value.trim() || undefined }, 'TheTVDB connected — choose it for a show with ⋯ → Fix match');
+    e.target.disabled = false; e.target.textContent = 'Save';
+  };
+  if ($('#tvdb-remove')) $('#tvdb-remove').onclick = () => confirm('Remove the TheTVDB key? Shows matched with it keep what they have.') && patch({ tvdbKey: '' }, 'Key removed');
+  if ($('#meta-prefer-tvdb')) $('#meta-prefer-tvdb').onchange = (e) => patch({ preferTvdb: e.target.checked }, e.target.checked ? 'New shows are looked up on TheTVDB first' : 'New shows are looked up on TMDB first');
   if ($('#tmdb-remove')) $('#tmdb-remove').onclick = () => confirm('Remove the TMDB key?') && patch({ tmdbKey: '' }, 'Key removed');
   $('#meta-lang').onchange = (e) => patch({ language: e.target.value }, 'Language saved — refresh metadata to apply it');
   $('#meta-auto').onchange = (e) => patch({ autoMatch: e.target.checked }, e.target.checked ? 'Automatic matching on' : 'Automatic matching off');
@@ -174,7 +200,7 @@ function problemsSection(p) {
         ${x.candidates.length ? html`<div class="review-cands">${x.candidates.map((c) => html`
           <button class="review-cand" data-review-pick="${x.id}" data-provider="${c.provider}" data-pid="${c.id}" title="Use ${c.title}${yr(c.year)}">
             ${c.thumb ? html`<img src="${c.thumb}" alt="" loading="lazy">` : html`<span class="review-noimg">?</span>`}
-            <span>${c.title}${yr(c.year)}<br><span class="muted">${c.score}% · ${c.provider === 'tvmaze' ? 'TVmaze' : 'TMDB'}</span></span></button>`)}</div>` : ''}
+            <span>${c.title}${yr(c.year)}<br><span class="muted">${c.score}% · ${sourceName(c.provider)}</span></span></button>`)}</div>` : ''}
         <div class="review-more"><button class="link-btn" data-fix-match="${x.id}">Search…</button> · <button class="link-btn" data-review-none="${x.id}">Don't match it</button></div>
       </li>`,
       help: 'Marquee wasn’t sure about these. Pick the right one, confirm the current match, or search. Titles renamed with an id, like “Heat (1995) {tmdb-949}”, always match exactly.' },

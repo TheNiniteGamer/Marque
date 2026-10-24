@@ -294,7 +294,7 @@ never gets access to Docker itself.
 | **Libraries** | Movie and TV Show libraries, each combining one or more folders, which can be on different drives. Everything inside the folders is found, including shows in folders of their own (`Kids/Bluey/…`). Add, edit and remove them in Settings with a built-in folder picker that lists your drives, accepts typed paths and shows how many videos a folder holds; whole drives can be shared with Docker (see *Other drives*). |
 | **Scanning** | Probes new or changed files with `ffprobe`, removes deleted ones, and rescans periodically. If a drive is offline, its items and watch history are kept. |
 | **Filename matching** | `Movie (Year).ext`, release-style names like `Movie.2019.1080p.BluRay.x264`, `Show/Season 01/Show - S01E02 - Title.ext`, `1x02`, `S01E01-E02`, Specials folders. |
-| **Online metadata** | Posters, backgrounds, summaries, genres, ratings, cast and episode titles. TV shows use **TVmaze** (no key needed). Movies and TV can also use **TMDB**: paste a free API key in *Settings → Metadata & subtitles*. Pick the metadata language there too. New items are matched automatically. |
+| **Online metadata** | Posters, backgrounds, summaries, genres, ratings, cast and episode titles. TV shows use **TVmaze** (no key needed). Movies and TV can also use **TMDB**: paste a free API key in *Settings → Metadata & subtitles*. Shows can also use **TheTVDB**, where Sonarr gets its episode numbers (a project key, plus a subscriber PIN for a user-supported key): choose it for a show with *⋯ → Fix match*, or tick *Look up new shows on TheTVDB first*. Pick the metadata language there too. New items are matched automatically. |
 | **Fix match / refresh** | When a title is matched wrong: *⋯ → Fix match…*, search, and pick the right result from a list with posters. *Refresh metadata* and *Unmatch* are in the same menu. For a show, use the show's ⋯ menu (or *Fix show match…* on any of its episodes). |
 | **Fix episode** | When a file's name has the wrong numbers (DVD order, specials, a double episode named as one) and it shows another episode's title and picture: *⋯ → Fix episode…* on the episode, and pick the episode it really is from the show's list (which also shows which file each episode is now), or type the season and episode. It's kept when files are rescanned; *Use the file name's numbers* undoes it. |
 | **Edit anything** | Change the title, sort title, year, tagline, summary and genres of a movie, show or episode. Set a poster or background by **uploading an image**, pasting a URL, or choosing from the matched source's alternatives. Your edits always win: refreshes and rescans never overwrite them, and each field can be reset to automatic. |
@@ -389,6 +389,7 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `TMDB_API_KEY` / `TMDB_TOKEN` | — | TMDB key from the environment (easier: set it in *Settings → Metadata & subtitles*) |
 | `METADATA_LANGUAGE` | `en-US` | Default metadata language (also settable in *Settings → Metadata & subtitles*) |
 | `TVMAZE_DISABLED` | — | Set to `1` to stop using TVmaze |
+| `TVDB_API_KEY` / `TVDB_PIN` | — | TheTVDB project key and subscriber PIN (or set them in *Settings → Metadata*) |
 | `TRANSCODE_PRESET` | `veryfast` | x264 preset used when video must be re-encoded |
 | `HWACCEL` | `auto` | Video converter: `auto`, `software`, `nvdec` (NVIDIA decoding and encoding), `nvenc` (NVIDIA encoding only), `vaapidec` (Intel/AMD decoding and encoding), `vaapi` (Intel/AMD encoding only), `qsv` (also in *Settings → Playback*) |
 | `GPU` | — | `.env` only: `nvidia`, `intel` or `amd` passes the graphics card into Docker |
@@ -484,7 +485,7 @@ lib/trickplay.js    seek preview thumbnail sheets
 lib/activity.js     "now playing" sessions for the Activity page
 lib/library.js      per-user API shaping: hubs, continue watching / up next, search, watch state
 lib/search.js       search: titles, cast, genres, years, story; spelling mistakes
-lib/metadata.js     metadata providers (TMDB, TVmaze), image downloads
+lib/metadata.js     metadata providers (TMDB, TVmaze, TheTVDB), image downloads
 lib/matcher.js      matching, refresh/unmatch, user edits and custom artwork (edits > metadata > file name)
 lib/subtitles.js    SRT→VTT, cue time-shifting
 lib/store.js        JSON-file database with atomic writes

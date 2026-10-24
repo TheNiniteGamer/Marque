@@ -170,6 +170,8 @@ module.exports = function register(app) {
     return {
       tmdbKeySet: !!st.tmdbKey, tmdbKeyFromEnv: !st.tmdbKey && !!(process.env.TMDB_API_KEY || process.env.TMDB_TOKEN),
       tmdbKeyHint: st.tmdbKey ? `••••${st.tmdbKey.slice(-4)}` : null,
+      tvdbKeySet: !!st.tvdbKey, tvdbKeyFromEnv: !st.tvdbKey && !!process.env.TVDB_API_KEY,
+      tvdbKeyHint: st.tvdbKey ? `••••${st.tvdbKey.slice(-4)}` : null, tvdbPinSet: !!st.tvdbPin, preferTvdb: !!st.preferTvdb,
       language: st.language || process.env.METADATA_LANGUAGE || 'en-US',
       autoMatch: st.autoMatch !== false,
       updateCheck: st.updateCheck !== false,
@@ -193,6 +195,18 @@ module.exports = function register(app) {
         st.tmdbKey = key;
       } else delete st.tmdbKey;
     }
+    if (body.tvdbKey !== undefined) {
+      // { tvdbKey, tvdbPin }: checked by signing in; an empty key removes both.
+      const key = String(body.tvdbKey || '').trim();
+      const pin = String(body.tvdbPin ?? st.tvdbPin ?? '').trim();
+      if (key) {
+        const t = await metadata.tvdb.test(key, pin);
+        if (!t.ok) throw new HttpError(400, t.error);
+        st.tvdbKey = key;
+        if (pin) st.tvdbPin = pin; else delete st.tvdbPin;
+      } else { delete st.tvdbKey; delete st.tvdbPin; delete st.preferTvdb; }
+    }
+    if (body.preferTvdb !== undefined) st.preferTvdb = !!body.preferTvdb;
     if (body.language !== undefined) {
       if (!/^[a-z]{2}(-[A-Z]{2})?$/.test(body.language)) throw new HttpError(400, 'Language must look like en-US');
       st.language = body.language;

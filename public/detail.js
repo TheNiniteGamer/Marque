@@ -45,6 +45,7 @@ function sideInfo(x) {
     ${x.collections?.some((c) => c.franchise) ? html`<div>Part of: ${list(x.collections.filter((c) => c.franchise).map((c) => html`<a href="#/collection/${c.id}">${c.name}</a>`))}</div>` : ''}
     ${x.collections?.some((c) => !c.franchise) ? html`<div>Collections: ${list(x.collections.filter((c) => !c.franchise).map((c) => html`<a href="#/collection/${c.id}">${c.name}</a>`))}</div>` : ''}
     ${lib ? html`<div>Library: <a href="#/library/${lib.id}">${lib.name}</a></div>` : ''}
+    ${x.match?.provider === 'tvdb' ? html`<div class="muted">Show information from <a href="https://thetvdb.com/dereferrer/series/${x.match.providerId}" target="_blank" rel="noopener">TheTVDB</a></div>` : ''}
   </div>`;
 }
 function matchNote(x) {

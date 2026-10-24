@@ -150,7 +150,7 @@ async function openEditor(id, tab = 'general') {
         <h3>${ART_LABEL[k]} ${d.art[k] ? html`<span class="chip">Custom</span>` : html`<span class="chip">Automatic</span>`}</h3>
         <label class="btn small file-btn">⤒ Upload image…<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-upload="${k}" hidden></label>
         <div class="row url-row"><input class="input" placeholder="…or paste an image URL" data-url="${k}"><button class="btn small" data-use-url="${k}">Use</button></div>
-        ${d.match && k !== 'thumb' ? html`<button class="btn small" data-choose="${k}">Choose from ${d.match.provider === 'tvmaze' ? 'TVmaze' : 'TMDB'}…</button>` : ''}
+        ${d.match && k !== 'thumb' ? html`<button class="btn small" data-choose="${k}">Choose from ${sourceName(d.match.provider)}…</button>` : ''}
         ${d.art[k] ? html`<button class="btn small danger" data-art-reset="${k}">Reset to automatic</button>` : ''}
         <div class="art-choices" data-choices="${k}"></div>
       </div>
@@ -247,7 +247,7 @@ async function openMatcher(id) {
   if (d.kind === 'episode') return openMatcher((knownItems.get(id) || {}).showId);
   const providers = d.providers;
   const current = d.match
-    ? html`Currently matched to <b>${d.match.title || '?'}</b>${d.match.year ? ` (${d.match.year})` : ''} on ${d.match.provider === 'tvmaze' ? 'TVmaze' : 'TMDB'}.`
+    ? html`Currently matched to <b>${d.match.title || '?'}</b>${d.match.year ? ` (${d.match.year})` : ''} on ${sourceName(d.match.provider)}.`
     : d.unmatched ? 'Currently unmatched (using information from the file name only).' : 'Not matched yet.';
   const m = openModal({
     title: `Fix match`,
@@ -290,7 +290,7 @@ async function openMatcher(id) {
         <button class="match-row" data-provider="${x.provider}" data-id="${x.id}">
           <span class="match-thumb">${x.thumb ? html`<img loading="lazy" src="${x.thumb}" alt="">` : ''}</span>
           <span class="match-info"><span class="match-line"><b>${x.title}</b> ${x.year ? html`<span class="muted">(${x.year})</span>` : ''}
-            <span class="chip">${x.provider === 'tvmaze' ? 'TVmaze' : 'TMDB'}</span>
+            <span class="chip">${sourceName(x.provider)}</span>
             ${d.match && d.match.provider === x.provider && d.match.providerId === x.id ? html`<span class="chip current">Current</span>` : ''}</span>
             <span class="match-overview">${x.overview || ''}</span></span>
         </button>`.s).join('') : '<div class="muted" style="padding:12px">No results. Try a shorter title or remove the year.</div>';

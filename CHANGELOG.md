@@ -4,6 +4,16 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.17
+
+- **TheTVDB for TV shows:** a third place to get show information, next to TMDB and TVmaze. It's
+  where Sonarr gets its episode numbers, so a show matched with it lists its episodes the same way
+  Sonarr names the files (anime, DVD-order shows and specials especially). Add a key in
+  *Settings → Metadata* (TheTVDB's free "user-supported" key also needs the PIN from a TheTVDB
+  subscription), then pick TheTVDB for a show with **⋯ → Fix match**. Ticking **Look up new shows
+  on TheTVDB first** uses it for new shows too; *Re-check matches* on a TV library moves the rest.
+  Shows from TheTVDB say so on their page, with a link to it.
+
 ## 0.24.16
 
 - **Update the Rokus from Settings:** *Settings → Server & updates → Roku TVs* lists each Roku that

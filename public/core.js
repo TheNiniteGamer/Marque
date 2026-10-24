@@ -12,6 +12,8 @@ function html(strings, ...vals) {
   vals.forEach((v, i) => { out += renderVal(v) + strings[i + 1]; });
   return raw(out);
 }
+// Where a title's details came from, by name.
+const sourceName = (id) => ({ tmdb: 'TMDB', tvmaze: 'TVmaze', tvdb: 'TheTVDB' }[id] || 'TMDB');
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
