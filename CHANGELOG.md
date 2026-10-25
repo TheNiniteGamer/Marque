@@ -4,6 +4,14 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.24
+
+- **A drive hiccup can't clear out part of a library.** When lots of titles (20 or more, and over a
+  tenth of the library) vanish in a single scan, Marquee now keeps them, with their watch history,
+  and only removes them if they're still missing on a scan at least ten minutes later. A folder
+  that briefly came back short (a USB drive stumbling, permissions changing part-way) is back to
+  normal by then; a real clear-out goes as before, one scan later.
+
 ## 0.24.23
 
 - **Quicker to open away from home:** the page now names its scripts with a stamp of their
