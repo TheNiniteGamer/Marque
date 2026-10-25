@@ -82,7 +82,7 @@ async function viewParty({ params: [id] }) {
     const p = await api(`/api/parties/${id}`);
     location.replace(`#/play/${p.itemId}?party=${p.id}`);
   } catch (err) {
-    view.innerHTML = html`<div class="empty"><h2>Can't join this watch party</h2><p>${err.message}</p><a class="btn" href="#/">Go home</a></div>`.s;
+    view.innerHTML = emptyState({ art: 'warn', error: true, title: 'Can’t join this watch party', text: err.message, actions: html`<a class="btn" href="#/">Go home</a>` }).s;
   }
 }
 

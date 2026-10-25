@@ -9,10 +9,24 @@ let renderSeq = 0;
 const view = $('#view');
 // Where the current page is drawn: the page itself, or the "More info" pop-up for movies, shows and episodes.
 let viewEl = view;
+// A new page fades in; the same page drawn again (after a change, or a refresh) doesn't.
+let fadeNext = false;
 function setView(seq, content) {
   if (seq !== renderSeq) return false;
   viewEl.innerHTML = renderVal(content);
+  if (fadeNext) { fadeNext = false; viewEl.classList.remove('page-in'); void viewEl.offsetWidth; viewEl.classList.add('page-in'); }
   return true;
+}
+
+// Grey outlines of what's coming while a page loads, shaped like it (rows on Home, a grid in a
+// library), so it doesn't jump about when the real thing arrives.
+function skeleton(path) {
+  const cards = (n) => Array.from({ length: n }, () => '<div class="card skel-card"><div class="art skel"></div><div class="skel skel-line"></div></div>').join('');
+  if (path === '/') {
+    return `<div class="skel skel-hero"></div>${[0, 1, 2].map(() => `<section class="hub"><div class="skel skel-title"></div><div class="rail"><div class="shelf">${cards(7)}</div></div></section>`).join('')}`;
+  }
+  if (/^\/(library|collections?|watchlist|search|person)\b/.test(path)) return `<div class="skel skel-title skel-h1"></div><div class="grid">${cards(18)}</div>`;
+  return '<div class="spinner"></div>';
 }
 
 async function refreshLibraries() {
@@ -202,17 +216,16 @@ async function viewHome({ seq }) {
   // Recently added titles that belong to a collection show as the collection.
   if (cols.length) for (const hub of homeData.hubs) if (hub.libraryId) hub.items = groupByCollection(hub.items, cols);
   if (!state.libraries.length && state.user.role !== 'admin') {
-    return setView(seq, html`<div class="empty"><h2>Welcome, ${state.user.username}</h2><p>No libraries have been shared with you yet. Ask the server's administrator for access.</p></div>`);
+    return setView(seq, emptyState({ art: 'lock', title: `Welcome, ${state.user.username}`, text: 'Nothing has been shared with you yet. Ask whoever runs Marquee to give you access to a library.' }));
   }
   if (!state.libraries.length) {
-    return setView(seq, html`<div class="empty"><h2>Welcome to Marquee</h2>
-      <p>Point Marquee at the folders where you keep your movies and TV shows,<br>and it will organize them into a browsable library.</p>
-      <a class="btn primary" href="#/settings/libraries?add=1">Add a library</a></div>`);
+    return setView(seq, emptyState({ art: 'folder', title: 'Welcome to Marquee', text: 'Point Marquee at the folders where you keep your films and TV shows, and it will organise them into libraries to browse.',
+      actions: html`<a class="btn primary" href="#/settings/libraries?add=1">Add a library</a>` }));
   }
   if (!homeData.hubs.length) {
-    return setView(seq, html`<div class="empty"><h2>${state.status?.scanning ? 'Scanning your libraries…' : 'No media found yet'}</h2>
-      <p>${state.status?.scanning ? 'New items will appear here as they are found.' : 'Check that your library folders contain video files, then scan again.'}</p>
-      <a class="btn" href="#/settings/libraries">Manage libraries</a></div>`);
+    return setView(seq, emptyState({ art: state.status?.scanning ? 'wave' : 'film', title: state.status?.scanning ? 'Looking through your libraries…' : 'No films or shows found yet',
+      text: state.status?.scanning ? 'Titles appear here as they are found.' : 'Check that the library folders have video files in them, then scan again.',
+      actions: html`<a class="btn" href="#/settings/libraries">Manage libraries</a>` }));
   }
   if (seq !== renderSeq) return;
   view.classList.toggle('has-hero', !!homeData.hero);
@@ -252,7 +265,8 @@ async function viewLibrary({ params: [id], query, seq }) {
     const grid = $('#lib-grid');
     grid.style.setProperty('--card-w', `${prefs.cardW}px`);
     grid.innerHTML = current.length ? current.map((x) => posterCard(x).s).join('')
-      : html`<div class="empty" style="grid-column:1/-1">${data.items.length ? 'Nothing matches these filters.' : state.status?.scanning ? 'Scanning…' : 'This library is empty.'}</div>`.s;
+      : (data.items.length ? emptyState({ art: 'search', title: 'Nothing matches', text: 'Try fewer filters, or another word.', style: 'grid-column:1/-1' })
+        : emptyState({ art: state.status?.scanning ? 'wave' : 'film', title: state.status?.scanning ? 'Looking for titles…' : 'This library is empty', text: state.status?.scanning ? 'They appear here as they are found.' : 'Anything added to its folders shows up after the next scan.', style: 'grid-column:1/-1' })).s;
     // A–Z jump bar only makes sense when sorted by title.
     const jump = $('#lib-jump');
     jump.hidden = prefs.sort !== 'title' || current.length < 20;
@@ -274,13 +288,8 @@ async function viewLibrary({ params: [id], query, seq }) {
         ${[['title', 'Title'], ['added', 'Date added'], ['year', 'Year'], ['rating', 'Rating'], ...(lib.type === 'movie' ? [['duration', 'Duration']] : [])]
           .map(([k, label]) => html`<option value="${k}" ${prefs.sort === k ? 'selected' : ''}>${label}</option>`)}
       </select>
-      <input type="range" id="lib-size" min="180" max="420" step="20" value="${prefs.cardW}" title="Card size" aria-label="Card size">
-      <button class="btn small" id="lib-shuffle" title="Play something random from this view">⤮ Shuffle</button>
       ${selectButton()}
-      ${cols.length ? html`<div class="seg" id="lib-group" title="Show titles that are in a collection as the collection, or every title on its own">
-        <button data-g="1" class="${groupingOn() ? 'on' : ''}">▦ Collections</button><button data-g="0" class="${groupingOn() ? '' : 'on'}">All titles</button></div>
-        <a class="btn small" href="#/collections?library=${id}">Browse collections (${cols.length})</a>` : ''}
-      ${state.user.role === 'admin' ? html`<button class="btn small" id="lib-scan">↻ Scan</button>` : ''}
+      <button class="btn small more-btn" id="lib-more" data-popmenu aria-haspopup="menu" title="More: shuffle, card size, collections${state.user.role === 'admin' ? ', scan' : ''}">⋯</button>
     </div>
     ${genre ? html`<div class="filter-note">Showing <b>${genre}</b> · <a href="#/library/${id}">clear</a></div>` : ''}
     <div class="lib-wrap"><div class="grid sized" id="lib-grid"></div><nav class="jump" id="lib-jump" aria-label="Jump to letter" hidden></nav></div>`)) return;
@@ -288,7 +297,18 @@ async function viewLibrary({ params: [id], query, seq }) {
   bindSelect({ root: () => $('#lib-grid'), kind: 'titles' });
   const save = () => store.set(`lib:${id}`, prefs);
   $('#lib-sort').onchange = (e) => { prefs.sort = e.target.value; save(); render(); };
-  $('#lib-size').oninput = (e) => { prefs.cardW = Number(e.target.value); save(); $('#lib-grid').style.setProperty('--card-w', `${prefs.cardW}px`); };
+  // The things used now and then sit in ⋯ so the toolbar stays one tidy row.
+  const SIZES = [['Small cards', 200], ['Medium cards', 260], ['Large cards', 340]];
+  const nearest = () => SIZES.reduce((a, b) => (Math.abs(b[1] - prefs.cardW) < Math.abs(a[1] - prefs.cardW) ? b : a))[1];
+  $('#lib-more').onclick = (e) => (openPop ? closeMenu() : openMenu(e.currentTarget, [
+    { label: '⤮ Shuffle: play something random', onClick: () => shuffle() },
+    { sep: true },
+    ...SIZES.map(([label, w]) => ({ label: `${nearest() === w ? '✓ ' : '\u2003'}${label}`, onClick: () => { prefs.cardW = w; save(); $('#lib-grid').style.setProperty('--card-w', `${w}px`); } })),
+    ...(cols.length ? [{ sep: true },
+      { label: groupingOn() ? 'Show every title on its own' : '▦ Group titles into their collections', onClick: () => { store.set('groupCollections', !groupingOn()); render(); } },
+      { label: `Browse collections (${cols.length})`, onClick: () => { location.hash = `#/collections?library=${id}`; } }] : []),
+    ...(state.user.role === 'admin' ? [{ sep: true }, { label: '↻ Scan this library for new files', onClick: () => scan() }] : []),
+  ]));
   // Redrawn once typing pauses, not on every key (big libraries have thousands of cards).
   let typing = null;
   $('#lib-text').oninput = (e) => { text = e.target.value; clearTimeout(typing); typing = setTimeout(render, 150); };
@@ -299,18 +319,12 @@ async function viewLibrary({ params: [id], query, seq }) {
     $$('#lib-filter button').forEach((b) => b.classList.toggle('on', b.dataset.f === f));
     render();
   };
-  if ($('#lib-group')) $('#lib-group').onclick = (e) => {
-    const g = e.target.dataset.g; if (g == null) return;
-    store.set('groupCollections', g === '1');
-    $$('#lib-group button').forEach((b) => b.classList.toggle('on', b.dataset.g === g));
-    render();
-  };
   $('#lib-jump').onclick = (e) => {
     const c = e.target.dataset.letter; if (!c) return;
     const idx = current.findIndex((x) => { const f = titleKey(x)[0]?.toUpperCase() || '#'; return c === '#' ? !/[A-Z]/.test(f) : f === c; });
     $$('#lib-grid .card')[idx]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-  $('#lib-shuffle').onclick = async () => {
+  const shuffle = async () => {
     const titles = current.flatMap((x) => (x.type === 'collection' ? x.members : [x]));
     const pool = titles.filter(unwatched).length ? titles.filter(unwatched) : titles;
     if (!pool.length) return toast('Nothing to play', true);
@@ -322,7 +336,7 @@ async function viewLibrary({ params: [id], query, seq }) {
     const ep = (fresh.length ? fresh : eps)[Math.floor(Math.random() * (fresh.length || eps.length))];
     if (ep) location.hash = `#/play/${ep.id}?t=0`;
   };
-  if ($('#lib-scan')) $('#lib-scan').onclick = async () => { await api(`/api/libraries/${id}/scan`, { method: 'POST' }); toast(`Scanning ${lib.name}…`); pollStatus(); };
+  const scan = async () => { await api(`/api/libraries/${id}/scan`, { method: 'POST' }); toast(`Scanning ${lib.name}…`); pollStatus(); };
 }
 
 // ---------- router ----------
@@ -454,7 +468,7 @@ async function router() {
   }
   // On a TV, the pages made for a keyboard point to a phone or computer instead.
   const match = tv.on && TV_ELSEWHERE.test(path) ? [/^.*$/, viewTvElsewhere] : routes.find(([re]) => re.test(path));
-  if (!match) { closeDetailLayer(); return setView(seq, html`<div class="empty"><h2>Page not found</h2><a class="btn" href="#/">Go home</a></div>`); }
+  if (!match) { closeDetailLayer(); return setView(seq, emptyState({ art: 'compass', title: 'Page not found', text: 'That link doesn’t go anywhere in Marquee.', actions: html`<a class="btn" href="#/">Go home</a>` })); }
   if (isDetail) {
     // Movies, shows and episodes open over the page you were on.
     openDetailLayer();
@@ -465,8 +479,9 @@ async function router() {
     closeDetailLayer();
     view.onclick = null;
     if (!view.innerHTML || !view.dataset.path || view.dataset.path !== path) {
-      view.className = '';
-      view.innerHTML = '<div class="spinner"></div>';
+      view.className = path === '/' ? 'has-hero' : ''; // (Home's banner outline sits under the top bar, as the banner does)
+      view.innerHTML = skeleton(path);
+      fadeNext = true;
       window.scrollTo(0, 0);
     }
     view.dataset.path = path;
@@ -485,7 +500,9 @@ async function router() {
     }
   } catch (err) {
     if (isPlay) { toast(err.message, true); return; }
-    setView(seq, html`<div class="empty"><h2>Something went wrong</h2><p class="error-box" style="display:inline-block">${err.message}</p><br><a class="btn" href="#/">Go home</a></div>`);
+    if (setView(seq, emptyState({ art: 'warn', error: true, title: 'Something went wrong', text: err.message, actions: html`<button class="btn" data-retry>Try again</button><a class="btn" href="#/">Go home</a>` }))) {
+      $('[data-retry]', viewEl).onclick = () => router();
+    }
   }
 }
 

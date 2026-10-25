@@ -75,8 +75,7 @@ async function viewCollections({ query, seq }) {
         <div class="hub-head"><h2>${SECTION_HEAD[k]} <span class="muted" style="font-weight:400;font-size:14px">${l.length}</span></h2>
           ${admin && l.length > 1 ? html`<button class="btn small" data-arrange="${k}">⇅ Arrange</button>` : ''}</div>
         <div class="grid" data-grid="${k}">${l.map(collectionCard)}</div>
-      </section>`) : html`<div class="empty"><h2>No collections yet</h2>
-      <p>Film series like “The Matrix Collection”, and franchises like the Marvel Cinematic Universe or Pixar, appear here automatically once two of their titles are matched with TMDB.${admin ? ' You can also make your own with ＋ New collection, by selecting titles in a library (☑ Select), or with ⌕ Find series for YouTube series.' : ''}</p></div>`}</div>`)) return;
+      </section>`) : emptyState({ art: 'stack', title: 'No collections yet', text: `Film series like “The Matrix Collection”, and franchises like the Marvel Cinematic Universe or Pixar, appear here by themselves once two of their titles are matched with TMDB.${admin ? ' You can also make your own with ＋ New collection, by selecting titles in a library (☑ Select), or with ⌕ Find series for YouTube series.' : ''}` })}</div>`)) return;
   if ($('#cols-jump')) $('#cols-jump').onclick = (e) => { const k = e.target.dataset.jump; if (k) $(`#sec-${k}`)?.scrollIntoView({ behavior: 'smooth' }); };
   if (!admin) return;
   bindSelect({ root: () => $('#cols-body'), kind: 'collections' });
@@ -192,7 +191,7 @@ async function viewCollection({ params: [id], seq }) {
         ${Object.entries(SECTION_LABEL).map(([k, l]) => html`<option value="${k}" ${c.sectionSetByHand && c.section === k ? 'selected' : ''}>${l}</option>`)}</select></label>
       ${c.sort === 'episode' ? html`<span class="muted" style="font-size:13px">Uses numbers in the titles: “Ep 12”, “Episode 12”, “S2E5”, “Part 3”, “#12”, or a number at the end.</span>` : ''}
     </div>` : ''}
-    <div id="col-body">${!c.items.length ? html`<div class="empty"><p>This collection is empty. Use “Add to collection…” in the ⋯ menu of a movie or show.</p></div>`
+    <div id="col-body">${!c.items.length ? emptyState({ art: 'stack', title: 'This collection is empty', text: 'Use “Add to collection…” in the ⋯ menu of a film or show to put it here.' })
       : rows ? c.parts.map((p) => html`<section class="hub"><div class="hub-head"><h2>${p.name}</h2><span class="hub-note">${p.ids.length}</span></div>
           ${rail(p.ids.map((i) => byId.get(i)).filter(Boolean), (x) => posterCard(x, ctx))}</section>`)
       : html`<div class="grid">${c.items.map((x) => posterCard(x, ctx))}</div>`}</div>

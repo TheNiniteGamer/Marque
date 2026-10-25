@@ -360,15 +360,15 @@ async function viewSearch({ query, seq }) {
   if (q) $('#search-form').classList.add('open');
   const ask = html`<div class="req-ask"><span class="muted">Not finding what you want?</span> <button class="btn small" data-ask="${q}">Ask for it</button></div>`;
   if (!q.trim()) {
-    return setView(seq, $('#voice-btn').hidden ? html`<div class="empty">Type to search your libraries.</div>`
-      : html`<div class="empty">Type to search your libraries, or <button class="btn" data-voice>${icon('mic')} Search by voice</button></div>`);
+    return setView(seq, emptyState({ art: 'search', title: 'Search Marquee', text: 'Type a title, an actor, or something like “funny” or “90s”.',
+      actions: $('#voice-btn').hidden ? '' : html`<button class="btn" data-voice>${icon('mic')} Search by voice</button>` }));
   }
   const r = await api(`/api/search?q=${encodeURIComponent(q)}`);
   const total = r.movies.length + r.shows.length + r.episodes.length;
   if (!setView(seq, html`
     <div class="toolbar"><h1>Results for “${q}”</h1>${total ? selectButton() : ''}</div>
     ${total && r.understood?.length ? html`<div class="muted" style="margin:-6px 0 12px">Showing ${r.understood.join(' · ')}</div>` : ''}
-    ${!total ? html`<div class="empty">No matches.</div>` : ''}
+    ${!total ? emptyState({ art: 'search', title: 'No matches', text: 'Try a shorter word, or check the spelling.' }) : ''}
     ${!tv.on || !total ? ask : ''}
     ${r.movies.length ? html`<section class="hub"><div class="hub-head"><h2>Movies</h2></div><div class="grid">${r.movies.map(posterCard)}</div></section>` : ''}
     ${r.shows.length ? html`<section class="hub"><div class="hub-head"><h2>Shows</h2></div><div class="grid">${r.shows.map(posterCard)}</div></section>` : ''}

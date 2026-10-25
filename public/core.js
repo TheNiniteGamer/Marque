@@ -12,6 +12,25 @@ function html(strings, ...vals) {
   vals.forEach((v, i) => { out += renderVal(v) + strings[i + 1]; });
   return raw(out);
 }
+// An empty or error page: a small picture, a heading, a line or two, and what to do next.
+// actions: html (buttons/links). error: shown in the danger colour.
+const EMPTY_ART = {
+  film: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
+  heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z"/>',
+  folder: '<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
+  stack: '<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M7 5h10M9 2h6"/>',
+  lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
+  wave: '<circle cx="12" cy="12" r="9"/><path d="M8 12h.01M12 12h.01M16 12h.01"/>',
+  warn: '<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17h.01"/>',
+  compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
+};
+function emptyState({ art = 'film', title = '', text = '', actions = '', error = false, style = '' } = {}) {
+  return html`<div class="empty ${error ? 'is-error' : ''}" style="${style}">
+    <div class="empty-art">${raw(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${EMPTY_ART[art] || EMPTY_ART.film}</svg>`)}</div>
+    ${title ? html`<h2>${title}</h2>` : ''}${text ? html`<p>${text}</p>` : ''}${actions ? html`<div class="empty-actions">${actions}</div>` : ''}</div>`;
+}
+
 // Where a title's details came from, by name.
 const sourceName = (id) => ({ tmdb: 'TMDB', tvmaze: 'TVmaze', tvdb: 'TheTVDB' }[id] || 'TMDB');
 const $ = (sel, root = document) => root.querySelector(sel);

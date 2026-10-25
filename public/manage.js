@@ -726,7 +726,7 @@ function jobRow(j, dl) {
 }
 
 async function viewDownloads({ seq }) {
-  if (!state.user.canDownload) return setView(seq, html`<div class="empty"><h2>Downloads aren't enabled for your account</h2><p>Ask an administrator to turn them on.</p></div>`);
+  if (!state.user.canDownload) return setView(seq, emptyState({ art: 'lock', title: 'Downloads aren’t switched on for you', text: 'Ask whoever runs Marquee to turn them on for your account.' }));
   let data = await api('/api/downloads');
   const prefs = store.get('download', { libraryId: null, folder: 'YouTube', quality: 'compatible' });
   if (!data.targets.some((t) => t.id === prefs.libraryId)) prefs.libraryId = data.targets[0]?.id || null;

@@ -32,7 +32,8 @@ function openMenu(anchor, entries) {
   openPop = m;
   m.querySelector('button')?.focus();
 }
-document.addEventListener('click', (e) => { if (openPop && !e.target.closest('.popmenu, [data-menu]')) closeMenu(); });
+// ([data-popmenu]: a button that opens its own menu with openMenu, e.g. a page's ⋯ in its toolbar.)
+document.addEventListener('click', (e) => { if (openPop && !e.target.closest('.popmenu, [data-menu], [data-popmenu]')) closeMenu(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && openPop) { closeMenu(); e.stopPropagation(); } }, true);
 window.addEventListener('resize', closeMenu);
 window.addEventListener('scroll', closeMenu, { passive: true });
@@ -403,7 +404,7 @@ async function viewWatchlist({ seq }) {
   setView(seq, html`
     <div class="toolbar"><h1>My List<span class="count">${list.length}</span></h1>${list.length ? selectButton() : ''}</div>
     ${list.length ? html`<div class="grid">${list.map(posterCard)}</div>`
-      : html`<div class="empty"><h2>Nothing here yet</h2><p>Use the ⋯ menu on any movie or show, or the ♡ button on its page, to save it for later.</p></div>`}`);
+      : emptyState({ art: 'heart', title: 'Nothing saved yet', text: 'Use the ⋯ menu on any film or show, or the ♡ button on its page, to keep it here for later.', actions: html`<a class="btn" href="#/">Find something</a>` })}`);
   bindSelect({ root: () => $('#view'), kind: 'titles' });
 }
 

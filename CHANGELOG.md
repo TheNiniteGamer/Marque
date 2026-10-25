@@ -4,6 +4,20 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.21
+
+A polish pass on the web app (and the Android TV app, which uses it):
+- **Tidier library toolbar:** filter, All/Unwatched, sort and Select stay in view; shuffle, card
+  size, the collections switch and scanning are in a **⋯** menu, so the row no longer wraps into a
+  jumble on smaller screens.
+- **Loading looks like the page it's loading:** grey outlines of the banner, rows or grid with a
+  soft shimmer instead of a spinning circle, and new pages fade in gently.
+- **Easier to read:** secondary text is a little lighter, the search box opens more smoothly, and
+  pop-up messages have a coloured edge (green when something's done, red for a problem).
+- **Friendlier empty and error pages:** a small picture, a heading, a line about what to do and a
+  button, for search, no matches, an empty My List, library or collection, a page that doesn't
+  exist, and errors (now with **Try again**).
+
 ## 0.24.20
 
 Fixes from a second look at the last review's fixes:
