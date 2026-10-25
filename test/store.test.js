@@ -127,3 +127,42 @@ test('with no usable copy and no backup, the server waits instead of starting em
   assert.equal(fs.readFileSync(path.join(data, 'db.json.bak'), 'utf8'), '[]', 'nothing was saved over the copies');
   assert.ok(!fs.existsSync(path.join(data, 'db.json')), '(the damaged one was put aside)');
 });
+
+test('a malformed database is a problem to report, never a crash', () => {
+  const { problemWith } = require('../lib/store');
+  for (const bad of [null, 5, 'x', { libraries: null }, { libraries: [null] }, { libraries: [], items: null, shows: { a: null } }, { libraries: [], users: [5] }]) {
+    assert.equal(typeof problemWith(bad), 'string', JSON.stringify(bad));
+  }
+  const file = path.join(ROOT, 'nulls', 'db.json');
+  const s = new Store(file);
+  s.data.libraries = [{ id: 'l1', paths: ['/films'] }];
+  s.flush(); s.flush();
+  fs.writeFileSync(file, '{"libraries":null}');
+  const r = quiet(() => new Store(file));
+  assert.equal(r.recoveredFrom, `${file}.bak`);
+  assert.equal(r.data.libraries[0].id, 'l1');
+});
+
+test('waiting for a database carries on after a restart, until a copy is back or it’s reset', async () => {
+  const data = path.join(ROOT, 'held2', 'data');
+  const env = { DATA_DIR: data, BACKUP_DIR: path.join(ROOT, 'held2', 'backups'), TVMAZE_DISABLED: '1' };
+  fs.mkdirSync(data, { recursive: true });
+  fs.writeFileSync(path.join(data, 'db.json'), 'garbage');
+  const waits = async () => {
+    const srv = await startServer(env);
+    try {
+      const call = srv.client();
+      return { me: await call('GET', '/api/auth/me'), setup: await call('POST', '/api/auth/setup', { username: 'stranger', password: 'password1' }) };
+    } finally { await srv.stop(); }
+  };
+  for (const start of ['first', 'second']) {
+    const r = await waits();
+    assert.equal(r.me.status, 503, `${start} start waits`);
+    assert.equal(r.setup.status, 503, `${start} start: nobody can claim it`);
+  }
+  // Starting afresh is a deliberate step: deleting the marker.
+  fs.rmSync(path.join(data, 'db.json.recovery-needed'));
+  const r = await waits();
+  assert.equal(r.me.data.setupRequired, true);
+  assert.equal(r.setup.status, 201);
+});

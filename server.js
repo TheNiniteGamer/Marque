@@ -92,8 +92,10 @@ function folderPlaces() {
   if (process.platform === 'win32') {
     for (const c of 'CDEFGHIJKLMNOPQRSTUVWXYZ') if (fs.existsSync(`${c}:\\`)) add(`${c}:\\`, `${c}: drive`);
   } else {
-    const user = os.userInfo().username;
-    for (const base of ['/mnt', '/media', `/media/${user}`, `/run/media/${user}`, '/Volumes']) {
+    // (A user id with no name on the system, as Docker's `user:` can give, has no userInfo: it throws.)
+    let user = process.env.USER || '';
+    try { user = os.userInfo().username; } catch { /* nameless: no /media/<name> to look in */ }
+    for (const base of ['/mnt', '/media', ...(user ? [`/media/${user}`, `/run/media/${user}`] : []), '/Volumes']) {
       let dirs = [];
       try { dirs = fs.readdirSync(base, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith('.')); } catch { continue; }
       for (const e of dirs) {
@@ -185,8 +187,8 @@ const auth = new Auth(store);
 const health = new Health({ store, dataDir: DATA_DIR, transcodeDir: TRANSCODE_DIR, backups, updater, hwaccel, logs, arr, labelFor: hostLabel });
 const downloader = new Downloader(store, { dataDir: DATA_DIR, onFinished: (job) => scanner.enqueue(job.libraryId) });
 const transcodes = new Set();
-// (The HLS places are shared with these, apart from the asker's own of the same title.)
-hls.others = (userId, itemId) => [...transcodes].filter((p) => !(p.meta?.userId === userId && p.meta?.itemId === itemId)).length;
+// (The HLS places are shared with these; a player's earlier one is stopped before it's counted, see /transcode.)
+hls.others = () => transcodes.size;
 
 // ---------- helpers ----------
 class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
@@ -696,14 +698,15 @@ async function recoverLostDatabase() {
   for (const b of backups.list()) {
     try {
       const r = await backups.restore(fs.createReadStream(path.join(backups.dir, b.name)), { safetyCopy: false });
+      store.recovered();
       console.error(`[store] Restored the database from the backup made ${r.restoredFrom}.`);
       return;
     } catch (err) {
       console.error(`[store] Could not restore ${b.name}: ${err.message}`);
     }
   }
-  store.held = true;
-  console.error(`[store] No backup could be restored. Marquee is waiting: put a backup (marquee-backup-….tar.gz) in ${backups.dir} and restart it, or move the db.json files out of ${DATA_DIR} to start afresh.`);
+  store.hold();
+  console.error(`[store] No backup could be restored. Marquee is waiting: put a backup (marquee-backup-….tar.gz) in ${backups.dir} and restart it, or, to start afresh with no accounts or libraries, delete ${store.marker} and restart.`);
 }
 const HELD_MESSAGE = 'Marquee couldn’t open its database, or any backup of it, so it has stopped to keep them safe. An admin needs to put a backup in the backups folder and restart Marquee (the server’s log says where).';
 

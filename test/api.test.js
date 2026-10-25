@@ -11,8 +11,10 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'marquee-test-'));
-const PORT = 40000 + Math.floor(Math.random() * 10000);
-const BASE = `http://127.0.0.1:${PORT}`;
+// (A free port, from the system: see freePort in helpers.js.)
+let PORT;
+let BASE;
+const portReady = require('./helpers').freePort().then((p) => { PORT = p; BASE = `http://127.0.0.1:${p}`; });
 const YTDLP = process.env.YTDLP_PATH || 'yt-dlp';
 let hasYtdlp = true;
 try { execFileSync(YTDLP, ['--version'], { stdio: 'ignore' }); } catch { hasYtdlp = false; }
@@ -55,6 +57,7 @@ const anon = client();
 const ids = {};
 
 test.before(async () => {
+  await portReady;
   clip(path.join(ROOT, 'Movies', 'Test Clip (2020).mp4'));
   clip(path.join(ROOT, 'TV', 'Some Show', 'Season 01', 'Some Show - S01E01.mp4'));
   server = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {

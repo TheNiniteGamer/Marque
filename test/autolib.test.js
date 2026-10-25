@@ -10,8 +10,10 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'marquee-autolib-'));
-const PORT = 40000 + Math.floor(Math.random() * 10000);
-const BASE = `http://127.0.0.1:${PORT}`;
+// (A free port, from the system: see freePort in helpers.js.)
+let PORT;
+let BASE;
+const portReady = require('./helpers').freePort().then((p) => { PORT = p; BASE = `http://127.0.0.1:${p}`; });
 const drive = (n) => path.join(ROOT, `drive${n}`, 'Movies');
 let server = null;
 let cookie = '';
@@ -56,7 +58,8 @@ async function call(method, url, body) {
 const libraries = () => call('GET', '/api/libraries');
 const movies = async () => (await libraries()).find((l) => l.name === 'Movies');
 
-test.before(() => {
+test.before(async () => {
+  await portReady;
   clip(path.join(drive(1), 'One (2001).mp4'));
   clip(path.join(drive(2), 'Two (2002).mp4'));
   clip(path.join(drive(2), 'Three (2003).mp4'));

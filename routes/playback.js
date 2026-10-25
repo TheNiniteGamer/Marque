@@ -11,7 +11,7 @@ module.exports = function register(app) {
     fs, crypto, path, pipeline, media, subs, lib, hlsLib,
     SUB_DOWNLOADS, store, hwaccel, hls, keyframes, offline, offlineLib, previews, tokens, opensubs, parties, trickplay,
     transcodes, HttpError, json, readBody, sendFile, getItem, getShow, resolveArt,
-    subtitleVtt, castAddresses, remoteLimit, route,
+    subtitleVtt, castAddresses, remoteLimit, route, clientIp,
   } = app;
 
   // --- playback ---
@@ -103,14 +103,20 @@ module.exports = function register(app) {
     const start = Math.max(0, Number(url.searchParams.get('start')) || 0);
     const audioIndex = Math.max(0, Number(url.searchParams.get('audio')) || 0);
     const burn = burnParam(item, url);
-    if (hls.full(user.id, item.id)) hls.makeRoom(user.id, item.id); // (the same places as HLS)
+    // One conversion per player: a seek or a new audio track replaces that player's earlier one (its
+    // playback session, or for apps that don't send one, this person and title from this device),
+    // stopped now so it isn't counted; other devices keep theirs. Then the places shared with HLS.
+    const sid = /^[A-Za-z0-9_-]{6,64}$/.test(url.searchParams.get('sid') || '') ? url.searchParams.get('sid') : null;
+    const player = sid ? `sid:${sid}` : `${user.id}|${item.id}|${clientIp(req)}`;
+    for (const p of transcodes) if (p.meta?.player === player) { transcodes.delete(p); p.kill('SIGKILL'); }
+    if (hls.full(user.id, item.id)) hls.makeRoom(user.id, item.id);
     let finished = false;
     const run = (asked) => {
       const hevc = url.searchParams.get('hevc') === '1';
       const proc = media.transcode(item, { start, audioIndex, encoder: asked, burn, night: url.searchParams.get('night') === '1', hevc });
       // (What's really used: an NVIDIA card can't decode every video, and copied pictures use none.)
       const encoder = proc.encoder || 'software';
-      proc.meta = { itemId: item.id, userId: user.id, encoder: proc.encoder };
+      proc.meta = { itemId: item.id, userId: user.id, encoder: proc.encoder, player };
       transcodes.add(proc);
       let stderr = '';
       let sent = false;

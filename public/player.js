@@ -393,7 +393,7 @@ class Player {
       api(`/api/items/${this.item.id}/seekpoint?t=${req}${this.burnQuery()}${this.hevcQuery()}`).catch(() => ({ start: t })).then(({ start }) => {
         if (seq !== this.loadSeq || !this.root.isConnected) return;
         this.offset = start;
-        this.v.src = `/api/items/${this.item.id}/transcode?start=${req}&audio=${this.audio}${this.burnQuery()}${this.hevcQuery()}${this.tok('&')}`;
+        this.v.src = `/api/items/${this.item.id}/transcode?start=${req}&audio=${this.audio}${this.pb?.sid ? `&sid=${this.pb.sid}` : ''}${this.burnQuery()}${this.hevcQuery()}${this.tok('&')}`;
         this.applySubs();
         this.v.play().catch(() => this.spinner(false));
       });

@@ -11,8 +11,16 @@ function clip(file, seconds = 1) {
     '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', file]);
 }
 
+// A port nothing is using: the system picks one. (A random number sometimes matched another test
+// file's server, running at the same time, and the tests then talked to the wrong one.)
+const freePort = () => new Promise((resolve, reject) => {
+  const probe = require('node:net').createServer();
+  probe.once('error', reject);
+  probe.listen(0, '127.0.0.1', () => { const { port } = probe.address(); probe.close(() => resolve(port)); });
+});
+
 async function startServer(env) {
-  const port = 40000 + Math.floor(Math.random() * 10000);
+  const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
   const proc = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     env: { ...process.env, TMDB_API_KEY: '', TMDB_TOKEN: '', YTDLP_PATH: '/nonexistent', SCAN_INTERVAL: '0',
@@ -61,4 +69,4 @@ async function until(fn, ms = 20000) {
   }
 }
 
-module.exports = { clip, startServer, client, until };
+module.exports = { clip, startServer, client, until, freePort };

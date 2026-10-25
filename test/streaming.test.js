@@ -25,8 +25,10 @@ function boxBrightness(input, t, extra = []) {
 }
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'marquee-stream-'));
-const PORT = 40000 + Math.floor(Math.random() * 10000);
-const BASE = `http://127.0.0.1:${PORT}`;
+// (A free port, from the system: see freePort in helpers.js.)
+let PORT;
+let BASE;
+const portReady = require('./helpers').freePort().then((p) => { PORT = p; BASE = `http://127.0.0.1:${p}`; });
 const memStore = (data = {}) => ({ data: { settings: {}, ...data }, save() {} });
 const ff = (args) => execFileSync('ffmpeg', ['-v', 'error', '-y', ...args]);
 
@@ -68,6 +70,7 @@ async function until(fn, ms = 60000) {
 }
 
 test.before(async () => {
+  await portReady;
   const theme = path.join(ROOT, 'theme.wav');
   ff(['-f', 'lavfi', '-i', 'anoisesrc=d=30:c=pink:seed=7:a=0.3', '-f', 'lavfi', '-i', "aevalsrc='0.3*sin(2*PI*(300+200*sin(0.7*t))*t)':d=30",
     '-filter_complex', 'amix=inputs=2', '-ar', '44100', theme]);

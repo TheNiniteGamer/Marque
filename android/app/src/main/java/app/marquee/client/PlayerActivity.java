@@ -386,7 +386,8 @@ public class PlayerActivity extends Activity {
                 runOnUiThread(() -> {
                     offset = s;
                     pendingSeek = 0;
-                    String url = base + "/api/items/" + id + "/transcode?start=" + fmt(want) + "&audio=" + audioIndex + burnQuery();
+                    String url = base + "/api/items/" + id + "/transcode?start=" + fmt(want) + "&audio=" + audioIndex
+                        + (playback == null || playback.optString("sid").isEmpty() ? "" : "&sid=" + playback.optString("sid")) + burnQuery();
                     video.setVideoURI(Uri.parse(url), Net.headers(url));
                 });
             });

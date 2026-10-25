@@ -4,6 +4,25 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.20
+
+Fixes from a second look at the last review's fixes:
+- **Waiting for a database lasts through restarts.** When Marquee can't open its database or any
+  backup, it now leaves a note (`db.json.recovery-needed`) so it keeps waiting after a restart,
+  instead of finding no database the second time and offering a fresh setup to whoever opens it.
+  It carries on as normal once a backup restores or a good copy is put back; deleting the note is
+  how to start afresh on purpose.
+- **A database with a missing list no longer stops Marquee starting:** anything malformed is
+  reported and the previous copy is used, rather than crashing.
+- **The older converter can't go over the limit.** Seeking or changing the audio replaces that
+  player's conversion (it's stopped straight away), and another device always counts. Before, one
+  player seeking around could hold many conversions at once.
+- **The folder picker works when Marquee runs as a user with no name on the system** (some Docker
+  set-ups); it showed an error. GitHub's automatic tests found this one.
+- Android apps 1.16.1 (phone) and 1.11.1 (TV): they tell the server which playback a conversion
+  belongs to.
+- Tests: each test server gets a free port from the system (two sometimes got the same one).
+
 ## 0.24.19
 
 - **Android apps 1.16.0 (phone) and 1.11.0 (TV), signed with a new private key.** The key the apps

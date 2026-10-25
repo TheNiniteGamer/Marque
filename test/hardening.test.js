@@ -7,7 +7,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { startServer } = require('./helpers');
+const { execFileSync } = require('node:child_process');
+const { startServer, until } = require('./helpers');
 const { HlsManager, MAX_SESSIONS } = require('../lib/hls');
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'marquee-hardening-'));
@@ -57,4 +58,40 @@ test('a full server keeps its viewers and tells a newcomer it’s busy', () => {
     hls.others = () => 1;
     assert.equal(hls.full('new', 'film-x'), true);
   } finally { clearInterval(hls.timer); clearInterval(hls.pacer); }
+});
+
+test('the older converter: one place per player, and no more than the limit', async () => {
+  // A video big enough that a converter nobody reads from keeps running.
+  const film = path.join(ROOT, 'conv', 'Films', 'Long Film (2001).mkv');
+  fs.mkdirSync(path.dirname(film), { recursive: true });
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=25:duration=60', '-f', 'lavfi', '-i', 'sine=duration=60',
+    '-c:v', 'mpeg2video', '-q:v', '2', '-c:a', 'mp2', film]);
+  const srv = await startServer({ DATA_DIR: path.join(ROOT, 'conv', 'data'), TVMAZE_DISABLED: '1', HLS_MAX_SESSIONS: '2' });
+  const open = [];
+  try {
+    const admin = srv.client();
+    await admin('POST', '/api/auth/setup', { username: 'admin', password: 'password1' });
+    const lib = (await admin('POST', '/api/libraries', { name: 'Films', type: 'movie', paths: [path.dirname(film)] })).data.id;
+    const item = await until(async () => (await admin('GET', `/api/libraries/${lib}/items`)).data.items[0]);
+    const { token } = (await admin('GET', `/api/items/${item.id}/playback`)).data;
+    const active = async () => (await admin('GET', '/api/status')).data.activeTranscodes;
+    const start = async (extra) => {
+      const ac = new AbortController();
+      const r = await fetch(`${srv.base}/api/items/${item.id}/transcode?start=0&mt=${token}${extra}`, { signal: ac.signal });
+      open.push(ac);
+      return r.status;
+    };
+    // Seeking five times in one player: its earlier conversions are stopped, one place used.
+    for (let i = 0; i < 5; i++) assert.equal(await start('&sid=player-one'), 200);
+    assert.equal(await active(), 1);
+    // The same for an app that sends no session: by person, title and device.
+    for (let i = 0; i < 3; i++) assert.equal(await start(''), 200);
+    assert.equal(await active(), 2);
+    // A different player is a newcomer: the two places are taken by people watching.
+    assert.equal(await start('&sid=player-two'), 503);
+    assert.equal(await active(), 2);
+  } finally {
+    for (const ac of open) ac.abort();
+    await srv.stop();
+  }
 });
