@@ -103,6 +103,7 @@ module.exports = function register(app) {
     const start = Math.max(0, Number(url.searchParams.get('start')) || 0);
     const audioIndex = Math.max(0, Number(url.searchParams.get('audio')) || 0);
     const burn = burnParam(item, url);
+    if (hls.full(user.id, item.id)) hls.makeRoom(user.id, item.id); // (the same places as HLS)
     let finished = false;
     const run = (asked) => {
       const hevc = url.searchParams.get('hevc') === '1';

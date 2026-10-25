@@ -395,7 +395,7 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `GPU` | — | `.env` only: `nvidia`, `intel` or `amd` passes the graphics card into Docker |
 | `VAAPI_DEVICE` | `/dev/dri/renderD128` | Graphics device for VAAPI / Quick Sync (with two cards: `ls -l /dev/dri/by-path` shows which is which) |
 | `TRANSCODE_DIR` | system temp folder | Where adaptive-streaming segments are written while you watch |
-| `HLS_MAX_SESSIONS` | `6` | Adaptive streams converted at the same time |
+| `HLS_MAX_SESSIONS` | `6` | Videos converted at the same time (adaptive streams and the older converter together). When all are in use, a newcomer is told the server is busy rather than stopping someone watching. |
 | `CAST_URL` | — | Address cast devices use to reach Marquee |
 | `MARQUEE_NAME` | the PC's name | Shown by TVs and phones that find Marquee on the network |
 | `INTRO_SCAN_SECONDS` | `600` | How much of each episode's start is searched for the intro |

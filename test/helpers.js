@@ -19,7 +19,8 @@ async function startServer(env) {
       NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost', ...env, PORT: String(port), HOST: '127.0.0.1' },
     stdio: ['ignore', process.env.DEBUG ? 'inherit' : 'ignore', process.env.DEBUG ? 'inherit' : 'ignore'],
   });
-  for (let i = 0; i < 100; i++) {
+  // (Up to 30 s: with every test file starting servers at once on a busy machine, 10 wasn't always enough.)
+  for (let i = 0; i < 300; i++) {
     if (await fetch(`${base}/api/health`).then((r) => r.ok).catch(() => false)) break;
     await new Promise((r) => setTimeout(r, 100));
   }

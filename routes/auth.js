@@ -33,7 +33,7 @@ module.exports = function register(app) {
     const n = (process.env.MARQUEE_NAME || os.hostname() || '').trim();
     return n && !/^[0-9a-f]{12}$/.test(n) ? n.slice(0, 60) : null; // (a Docker container's id isn't a name)
   })();
-  route('GET', '/api/health', async (req, res) => json(res, 200, { ok: true, name: 'Marquee', version: require('../package.json').version, server: serverName }), 'public');
+  route('GET', '/api/health', async (req, res) => json(res, 200, { ok: true, name: 'Marquee', version: require('../package.json').version, server: serverName, ...(store.held ? { held: true } : {}) }), 'public');
 
   route('GET', '/api/auth/me', async (req, res, p, url, user) => {
     if (!user) return json(res, 401, { error: 'Not signed in', setupRequired: !auth.hasUsers() });
@@ -46,7 +46,7 @@ module.exports = function register(app) {
     // Before an admin exists, anyone reaching the page could claim the server; only allow that at home.
     if (!isPrivateIp(clientIp(req))) throw new HttpError(403, 'Create the first account from your home network, then sign in from anywhere.');
     const body = await readBody(req);
-    const user = await auth.createUser({ username: body.username, password: body.password, role: 'admin' });
+    const user = await auth.createUser({ username: body.username, password: body.password, role: 'admin' }, { firstOnly: true });
     // Watch history recorded before accounts existed (flat itemId -> progress) belongs to the first admin.
     const flat = Object.entries(store.data.progress).filter(([, v]) => v && typeof v.updatedAt === 'number');
     if (flat.length) {

@@ -90,3 +90,40 @@ test('the server restores the newest backup instead of starting empty', async ()
     assert.equal((await again('POST', '/api/auth/login', { username: 'mum', password: 'password1' })).status, 200);
   } finally { await srv.stop(); }
 });
+
+test('a file that reads but isn’t a working database is passed over for one that is', () => {
+  const { problemWith } = require('../lib/store');
+  const file = path.join(ROOT, 'shape', 'db.json');
+  const s = new Store(file);
+  s.data.users = [{ id: 'u1', username: 'mum', password: 'x' }];
+  s.data.libraries = [{ id: 'l1', name: 'Films', paths: ['/films'] }];
+  s.flush(); s.flush(); // (so the .bak is a good copy too)
+  for (const bad of ['[]', '{}', '{"libraries":5,"items":{},"shows":{}}', '{"libraries":[],"items":[],"shows":{}}',
+    '{"libraries":[{"name":"no id"}],"items":{},"shows":{}}', '{"libraries":[],"items":{"a":3},"shows":{}}', '{"libraries":[],"items":{},"shows":{},"users":[null]}']) {
+    assert.ok(problemWith(JSON.parse(bad)), `${bad} is refused`);
+    fs.writeFileSync(file, bad);
+    const r = quiet(() => new Store(file));
+    assert.equal(r.recoveredFrom, `${file}.bak`, `${bad}: the good copy is used`);
+    assert.equal(r.data.users[0].username, 'mum');
+    fs.copyFileSync(`${file}.bak`, file);
+  }
+  assert.equal(problemWith(JSON.parse(fs.readFileSync(file, 'utf8'))), null);
+});
+
+test('with no usable copy and no backup, the server waits instead of starting empty', async () => {
+  const data = path.join(ROOT, 'held', 'data');
+  fs.mkdirSync(data, { recursive: true });
+  fs.writeFileSync(path.join(data, 'db.json'), '{"libraries":"broken"}');
+  fs.writeFileSync(path.join(data, 'db.json.bak'), '[]');
+  const srv = await startServer({ DATA_DIR: data, BACKUP_DIR: path.join(ROOT, 'held', 'backups'), TVMAZE_DISABLED: '1' });
+  try {
+    const call = srv.client();
+    const me = await call('GET', '/api/auth/me');
+    assert.equal(me.status, 503);
+    assert.equal(me.data.held, true);
+    assert.equal((await call('POST', '/api/auth/setup', { username: 'stranger', password: 'password1' })).status, 503, 'nobody can claim it');
+    assert.equal((await call('GET', '/api/health')).data.held, true);
+  } finally { await srv.stop(); }
+  assert.equal(fs.readFileSync(path.join(data, 'db.json.bak'), 'utf8'), '[]', 'nothing was saved over the copies');
+  assert.ok(!fs.existsSync(path.join(data, 'db.json')), '(the damaged one was put aside)');
+});

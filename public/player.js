@@ -412,6 +412,8 @@ class Player {
       this.hlsRecoveries = 0;
       hls.on(Hls.Events.ERROR, (ev, d) => {
         if (!d.fatal || hls !== this.hls) return;
+        // (Every conversion place is taken by people watching: trying again won't help.)
+        if (d.response?.code === 503) return this.hlsFailed('busy');
         if (this.hlsRecoveries++ < 2 && hls.levels?.length) {
           if (d.type === Hls.ErrorTypes.MEDIA_ERROR) return hls.recoverMediaError();
           if (d.type === Hls.ErrorTypes.NETWORK_ERROR) return hls.startLoad();
@@ -445,7 +447,7 @@ class Player {
     }
     const t = this.time;
     this.destroyHls();
-    toast('Adaptive streaming failed — switching to Original quality');
+    toast(why === 'busy' ? 'The server is busy converting for other people — trying Original quality' : 'Adaptive streaming failed — switching to Original quality', why === 'busy');
     this.quality = 'original';
     const sel = $('[data-a=quality]', this.root); if (sel) sel.value = 'original';
     this.setModeFromQuality();

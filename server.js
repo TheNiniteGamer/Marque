@@ -185,6 +185,8 @@ const auth = new Auth(store);
 const health = new Health({ store, dataDir: DATA_DIR, transcodeDir: TRANSCODE_DIR, backups, updater, hwaccel, logs, arr, labelFor: hostLabel });
 const downloader = new Downloader(store, { dataDir: DATA_DIR, onFinished: (job) => scanner.enqueue(job.libraryId) });
 const transcodes = new Set();
+// (The HLS places are shared with these, apart from the asker's own of the same title.)
+hls.others = (userId, itemId) => [...transcodes].filter((p) => !(p.meta?.userId === userId && p.meta?.itemId === itemId)).length;
 
 // ---------- helpers ----------
 class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
@@ -475,7 +477,11 @@ function castAddresses() {
   const configured = (store.data.settings.castUrl || process.env.CAST_URL || '').replace(/\/+$/, '') || null;
   const lan = [];
   if (!fs.existsSync('/.dockerenv')) {
-    for (const list of Object.values(os.networkInterfaces())) {
+    // (Some systems refuse to list them, e.g. in a locked-down container: then there are none to
+    // offer, but the video must still play.)
+    let interfaces = {};
+    try { interfaces = os.networkInterfaces(); } catch (err) { console.warn(`[cast] couldn't list network addresses: ${err.message}`); }
+    for (const list of Object.values(interfaces)) {
       for (const a of list || []) if (a.family === 'IPv4' && !a.internal && isPrivateIp(a.address)) lan.push(`http://${a.address}:${PORT}`);
     }
   }
@@ -576,6 +582,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (viaHttpsProxy(req)) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
   try {
+    if (store.held && url.pathname.startsWith('/api/') && url.pathname !== '/api/health') {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: HELD_MESSAGE, held: true }));
+    }
     if (url.pathname.startsWith('/api/')) {
       if (req.method === 'OPTIONS') {
         // CORS preflight from cast receivers fetching playback files with a signed link.
@@ -679,19 +689,23 @@ function applyAutoLibraries() {
 
 // The database file existed but no copy of it could be read: put back the newest backup rather than
 // starting empty (which would look like a brand-new install).
+// The newest backup that restores. With none, Marquee waits (store.held) instead of starting empty:
+// an empty server would ask whoever opens it first to make the admin account, and would save over
+// the copies someone could still rescue by hand.
 async function recoverLostDatabase() {
-  const latest = backups.list()[0];
-  if (!latest) {
-    console.error('[store] No backup to restore from: starting with an empty database.');
-    return;
+  for (const b of backups.list()) {
+    try {
+      const r = await backups.restore(fs.createReadStream(path.join(backups.dir, b.name)), { safetyCopy: false });
+      console.error(`[store] Restored the database from the backup made ${r.restoredFrom}.`);
+      return;
+    } catch (err) {
+      console.error(`[store] Could not restore ${b.name}: ${err.message}`);
+    }
   }
-  try {
-    const r = await backups.restore(fs.createReadStream(path.join(backups.dir, latest.name)), { safetyCopy: false });
-    console.error(`[store] Restored the database from the backup made ${r.restoredFrom}.`);
-  } catch (err) {
-    console.error(`[store] Could not restore ${latest.name}: ${err.message}`);
-  }
+  store.held = true;
+  console.error(`[store] No backup could be restored. Marquee is waiting: put a backup (marquee-backup-….tar.gz) in ${backups.dir} and restart it, or move the db.json files out of ${DATA_DIR} to start afresh.`);
 }
+const HELD_MESSAGE = 'Marquee couldn’t open its database, or any backup of it, so it has stopped to keep them safe. An admin needs to put a backup in the backups folder and restart Marquee (the server’s log says where).';
 
 async function main() {
   if (!(await media.checkFfmpeg())) {

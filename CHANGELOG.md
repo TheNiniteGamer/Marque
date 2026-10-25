@@ -4,6 +4,24 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.18
+
+Fixes from a review of Marquee's safety and reliability:
+- **A damaged database is no longer used just because it opens.** Marquee now checks it's really
+  its database (the libraries, titles and accounts in the right shape) and otherwise uses the
+  previous copy or the newest backup that restores. If none can be used, Marquee waits with a
+  message instead of starting empty, so nobody can make themselves admin of an empty server and
+  the copies that are left aren't saved over.
+- **Two first-account requests at once can't both become admin,** and two people can't end up with
+  the same username by asking at the same moment.
+- **Someone watching is never stopped for a newcomer.** When every conversion place is taken
+  (six at once), a newcomer gets a place only from someone who's paused or gone for a minute, or
+  from their own earlier playback of the same title; otherwise they're told the server's busy (the
+  web player tries Original quality instead). The older converter for some players shares the
+  same places.
+- **Playback doesn't fail when the server can't list its network addresses** (used for casting).
+- **Tests run on GitHub after every push,** in the same setup as the server.
+
 ## 0.24.17
 
 - **TheTVDB for TV shows:** a third place to get show information, next to TMDB and TVmaze. It's

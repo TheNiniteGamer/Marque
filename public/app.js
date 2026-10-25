@@ -540,6 +540,8 @@ async function startApp() {
 (async function init() {
   const res = await fetch('/api/auth/me').catch(() => null);
   const data = res ? await res.json().catch(() => ({})) : {};
+  // (Its database couldn't be opened: nothing to sign in to until an admin restores a backup.)
+  if (data.held) { view.innerHTML = html`<div class="auth-wrap"><div class="auth-card"><div class="auth-brand">MARQUEE</div><h1>Marquee needs a hand</h1><p>${data.error}</p></div></div>`.s; return; }
   if (!res?.ok) return showAuth({ setupRequired: !!data.setupRequired, message: res ? '' : 'Cannot reach the server.' });
   state.user = data.user;
   state.away = data.away;
