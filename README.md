@@ -390,6 +390,7 @@ With Docker, the common ones are set in `.env`. The rest can go under `environme
 | `METADATA_LANGUAGE` | `en-US` | Default metadata language (also settable in *Settings → Metadata & subtitles*) |
 | `TVMAZE_DISABLED` | — | Set to `1` to stop using TVmaze |
 | `TVDB_API_KEY` / `TVDB_PIN` | — | TheTVDB project key and subscriber PIN (or set them in *Settings → Metadata*) |
+| `SCAN_PROBES` | `3` | New or changed files a scan looks at in parallel (just one while someone's watching) |
 | `TRANSCODE_PRESET` | `veryfast` | x264 preset used when video must be re-encoded |
 | `HWACCEL` | `auto` | Video converter: `auto`, `software`, `nvdec` (NVIDIA decoding and encoding), `nvenc` (NVIDIA encoding only), `vaapidec` (Intel/AMD decoding and encoding), `vaapi` (Intel/AMD encoding only), `qsv` (also in *Settings → Playback*) |
 | `GPU` | — | `.env` only: `nvidia`, `intel` or `amd` passes the graphics card into Docker |

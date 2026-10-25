@@ -129,7 +129,7 @@ const store = new Store(path.join(DATA_DIR, 'db.json'));
 store.data.settings ||= {};
 metadata.configure(() => store.data.settings);
 const matcher = new Matcher(store, path.join(DATA_DIR, 'images'));
-const scanner = new Scanner(store, DATA_DIR, matcher);
+const scanner = new Scanner(store, DATA_DIR, matcher, { watching: () => someoneWatching() });
 const updater = new Updater(store, __dirname);
 const hwaccel = new HwAccel(store);
 const TRANSCODE_DIR = path.resolve(process.env.TRANSCODE_DIR || path.join(os.tmpdir(), `marquee-transcode-${PORT}`));

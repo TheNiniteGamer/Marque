@@ -58,3 +58,14 @@ test('really gone: removed on a scan after the wait', async () => {
   await scan();
   assert.deepEqual(await titles(), ['Keeper']);
 });
+
+test('scans look at one file at a time while someone is watching', async () => {
+  const { pool } = require('../lib/scanner');
+  const peak = async (busy) => {
+    let now = 0, most = 0;
+    await pool([1, 2, 3, 4, 5, 6], 3, async () => { now++; most = Math.max(most, now); await new Promise((r) => setTimeout(r, 30)); now--; }, () => busy);
+    return most;
+  };
+  assert.equal(await peak(false), 3);
+  assert.equal(await peak(true), 1);
+});

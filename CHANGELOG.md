@@ -4,6 +4,12 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.25
+
+- **Scans go gently while someone's watching:** a scan finding new files looks at them one at a
+  time instead of three while anyone is watching, since the film is often playing from the same
+  drive. At full speed again once nobody is watching. (`SCAN_PROBES` changes the usual three.)
+
 ## 0.24.24
 
 - **A drive hiccup can't clear out part of a library.** When lots of titles (20 or more, and over a
