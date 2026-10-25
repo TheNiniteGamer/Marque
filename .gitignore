@@ -8,3 +8,8 @@ control/
 .marquee-commit
 backups/
 roku/out/
+
+# Signing keys live outside the repository (~/.config/marquee-signing): never add one here.
+*.keystore
+*.jks
+*.p12

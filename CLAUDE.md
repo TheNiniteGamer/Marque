@@ -28,8 +28,9 @@ never released publicly, so favour what works well in this house over general-pu
   TV app, which is a WebView.
 - **Android phone app** (`android/`) and **Android TV app** (`androidtv/`, built from the phone
   app's Java with its own manifest): WebViews around the web client plus native players. Built with
-  `build.sh` (just the Android SDK and a JDK, no Gradle), signed with the keystore in the repo so
-  updates install over the old app. Versions are set in each `build.sh`.
+  `build.sh` (just the Android SDK and a JDK, no Gradle; on the server PC in Docker, see
+  `android/README.md`), signed with keys kept outside the repo in `~/.config/marquee-signing` (never
+  commit a key). Versions are set in each `build.sh`.
 - **Roku channel** (`roku/`): SceneGraph/BrightScript. `roku/package.sh` builds
   `public/downloads/Marquee-Roku.zip`; the version is `minor_version` in `roku/manifest`.
 - **Keep the clients in step:** a feature in the web app should reach the Android, Android TV and

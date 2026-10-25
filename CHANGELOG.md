@@ -4,6 +4,15 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.19
+
+- **Android apps 1.16.0 (phone) and 1.11.0 (TV), signed with a new private key.** The key the apps
+  were signed with was in Marquee's public code, so someone could have signed a fake "update" with
+  it. The new key is kept only on the server. The apps carry Android's record of the hand-over from
+  the old key, so they **update as usual** (no reinstalling) on Android 9 and newer, and after that
+  those devices refuse anything signed only with the old key. Nothing else changes in the apps.
+- A test no longer depends on the computer's home folder (it failed on GitHub).
+
 ## 0.24.18
 
 Fixes from a review of Marquee's safety and reliability:

@@ -156,7 +156,10 @@ test('bulk actions: watched, My List and genres', async () => {
 });
 
 test('folders on other drives: shortcuts, typing the PC path, and what a folder holds', async () => {
-  const fsList = (await admin('GET', '/api/fs')).data;
+  // (From a folder of the test's own: the home folder can be anything, or unreadable, on another machine.)
+  const listed = await admin('GET', `/api/fs?path=${encodeURIComponent(ROOT)}`);
+  assert.equal(listed.status, 200, JSON.stringify(listed.data));
+  const fsList = listed.data;
   assert.ok(fsList.places.some((p) => p.path === DRIVE && p.label === 'E: drive'), 'shared drives are offered');
   // The PC's name for a folder works in the picker and when saving a library.
   const films = (await admin('GET', `/api/fs?path=${encodeURIComponent('e:/Films')}`)).data;

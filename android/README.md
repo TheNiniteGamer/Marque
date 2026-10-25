@@ -33,14 +33,35 @@ Your Marquee server hosts the app. On your phone, open Marquee in the browser an
 **Account → Get the Android app** (or open `http://YOUR-PC:32500/downloads/Marquee.apk`). Then open the
 downloaded file. Android will ask you to allow installing apps from your browser; allow it once.
 
-New versions install over the old one: every build is signed with the same sideload key
-(`marquee-sideload.keystore`). That key is only for sideloading, not the Play Store.
+New versions install over the old one. Builds are signed with a key kept **outside this
+repository**, in `~/.config/marquee-signing` on the machine that builds them (the server PC). The
+first key used to be in the repository, so it's public: since 1.16.0 (TV 1.11.0) the apps carry
+Android's record of the hand-over from that key to the new one (`lineage.bin`), so phones and TVs
+on Android 9 or newer take the update as normal and then refuse anything signed only with the old
+key. (Android 8 only understands the old key.)
+
+**Never lose that folder:** without it no build can update the installed apps; everyone would have
+to uninstall and reinstall. It holds `release.p12` and `password` (the new key), `old-2026.keystore`
+and `old-password` (the first key, still needed for Android 8), and `lineage.bin`. Keep a copy
+somewhere safe away from the server (a password manager attachment, the off-site backup).
 
 ## Build it yourself
 
 The app uses only what ships with Android: no Gradle and no libraries. You need:
 - a JDK (17 or newer),
 - the Android SDK with **platform 34** and **build-tools 34.0.0**, both installed by Android Studio.
+
+Builds need the signing folder above (`MARQUEE_SIGNING` points elsewhere if it isn't in
+`~/.config/marquee-signing`). On the server PC, without installing Java or the SDK, they run in
+Docker (`build.Dockerfile`), with the SDK in `~/android-sdk`:
+
+```bash
+docker build -t marquee-android-build -f android/build.Dockerfile android
+for app in android androidtv; do docker run --rm --user "$(id -u)" -e HOME=/tmp -e MARQUEE_SIGNING=/signing \
+  -v "$PWD:/src" -v ~/android-sdk:/sdk -v ~/.config/marquee-signing:/signing:ro -w /src/$app marquee-android-build ./build.sh; done
+```
+
+Or with a JDK and the SDK installed:
 
 ```bash
 ANDROID_HOME=~/Android/Sdk ./build.sh     # -> build/Marquee.apk
