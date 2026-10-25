@@ -184,6 +184,8 @@ const backups = new Backups(store, {
   onRestored: () => { auth.prune(); tokens.rotate(); scanner.enqueueAll(); },
 });
 const auth = new Auth(store);
+// A new password also stops the playback links handed out to that person (see auth.updateUser).
+auth.onPasswordChange = (userId) => tokens.revoke(userId);
 const health = new Health({ store, dataDir: DATA_DIR, transcodeDir: TRANSCODE_DIR, backups, updater, hwaccel, logs, arr, labelFor: hostLabel });
 const downloader = new Downloader(store, { dataDir: DATA_DIR, onFinished: (job) => scanner.enqueue(job.libraryId) });
 const transcodes = new Set();

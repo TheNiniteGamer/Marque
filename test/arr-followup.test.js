@@ -141,6 +141,16 @@ test('skipping approval waits for an admin when space is low or a weekly limit i
   assert.equal((await admin('PUT', '/api/request-rules', { stuckDays: -1 })).status, 400);
 });
 
+test('requests sent at the same moment can’t all fit under the weekly limit', async () => {
+  await admin('PUT', '/api/request-rules', { minFreeGb: 0, weekly: { movie: 1 } });
+  const before = radarr.sent.filter((x) => x.method === 'POST' && x.path === '/movie').length;
+  const all = await Promise.all([701, 702, 703].map((id) => kid('POST', '/api/requests', { kind: 'movie', title: `Film ${id}`, year: 2001, provider: 'tmdb', providerId: String(id) })));
+  assert.deepEqual(all.map((r) => r.data.sent).sort(), [false, false, true], 'one sent');
+  assert.equal(all.filter((r) => /has had 1 film this week/.test(r.data.held || '')).length, 2, 'the others wait for an admin');
+  assert.equal(radarr.sent.filter((x) => x.method === 'POST' && x.path === '/movie').length, before + 1);
+  await admin('PUT', '/api/request-rules', { weekly: { movie: 0 } });
+});
+
 test('look again, or switch to another quality and look again', async () => {
   const film = (await reqs()).find((x) => x.title === 'The Matrix');
   const n = radarr.sent.length;

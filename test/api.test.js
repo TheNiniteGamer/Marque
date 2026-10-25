@@ -69,9 +69,10 @@ test.before(async () => {
   await until(() => fetch(`${BASE}/api/health`).then((r) => r.ok).catch(() => false));
 });
 
-test.after(() => {
-  server?.kill();
-  fs.rmSync(ROOT, { recursive: true, force: true });
+test.after(async () => {
+  // (Waits for it to stop: it saves on the way out, and removing its folder meanwhile failed now and then.)
+  if (server && server.exitCode === null) await new Promise((resolve) => { server.once('exit', resolve); server.kill(); });
+  fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
 test('fresh server requires setup and rejects anonymous requests', async () => {

@@ -42,14 +42,17 @@ module.exports = function register(app) {
     // Someone who may skip approval can still choose to leave it with the requests ({ wait: true }).
     let autoSend = body.wait !== true && requests.autoApproves(user, kind) && arr.ready(kind);
     // Someone who skips approval still waits for an admin when space is low or they've had their week's worth.
-    const held = autoSend ? await requests.holdReason(store, arr, user, kind) : null;
+    // (A place in their weekly allowance is kept while it's sent: released once it has been, or not.)
+    const { reason: held, release } = autoSend ? await requests.holdReason(store, arr, user, kind) : { reason: null, release: () => {} };
     if (held) autoSend = false;
     let r;
-    try { r = requests.create(store, user, body, { autoSend, held }); } catch (err) { throw new HttpError(err.status || 400, err.message); }
-    // A new request from someone allowed to skip approval goes straight to Radarr / Sonarr.
-    if (autoSend && !before.has(r.id)) {
-      try { r = await requests.send(store, arr, r.id, { auto: true }); } catch { r = store.data.requests[r.id]; }
-    }
+    try {
+      try { r = requests.create(store, user, body, { autoSend, held }); } catch (err) { throw new HttpError(err.status || 400, err.message); }
+      // A new request from someone allowed to skip approval goes straight to Radarr / Sonarr.
+      if (autoSend && !before.has(r.id)) {
+        try { r = await requests.send(store, arr, r.id, { auto: true }); } catch { r = store.data.requests[r.id]; }
+      }
+    } finally { release(); }
     json(res, 200, { ...r, sent: !!(r.arr && !r.arr.error), arr: undefined, held: r.held || null });
   });
 

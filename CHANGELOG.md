@@ -4,6 +4,26 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.22
+
+Fixes from another review, mostly for things happening at the same moment:
+- **Account changes are all-or-nothing.** A new password is worked out first, then everything is
+  checked against how things are right then and applied together. Two admins removing each other's
+  admin at once can't leave nobody in charge, and a change that's refused (say, a username someone
+  else just took) no longer changes the password anyway.
+- **A temporary password must really be replaced:** sending no new password, or a short one, is
+  refused and the person still has to choose one.
+- **Changing a password stops that person's playback links** (casting, TV players), whoever changes
+  it, and nobody else's. Before, an admin changing someone's password left their links working,
+  while changing your own stopped everyone's.
+- **PIN guesses sent all at once still count as guesses:** after five, the profile locks as usual.
+- **Someone watching on another TV with the same profile and film isn't stopped** when the server
+  is full; only a paused or finished stream gives up its place.
+- **Several requests at once can't all slip under the weekly limit:** a place is kept for each
+  one while it's sent to Radarr or Sonarr, and given back if it isn't.
+- **A restore that can't save its database (say, a full disk) puts everything back:** the accounts,
+  library and artwork in use stay as they were, instead of half the backup being in place.
+
 ## 0.24.21
 
 A polish pass on the web app (and the Android TV app, which uses it):

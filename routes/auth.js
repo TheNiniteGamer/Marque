@@ -176,13 +176,15 @@ module.exports = function register(app) {
 
   route('POST', '/api/auth/password', async (req, res, p, url, user) => {
     const body = await readBody(req);
+    // (Checked before anything changes: an empty or short one mustn't count as having chosen one.)
+    if (typeof body.newPassword !== 'string' || body.newPassword.length < 8) throw new HttpError(400, 'Choose a new password of at least 8 characters');
     // After an admin's reset, the temporary password was just used to sign in: not asked again.
     if (!user.mustChangePassword && !(await auth.login(user.username, body.currentPassword))) throw new HttpError(400, 'Current password is incorrect');
-    if (user.mustChangePassword && body.newPassword && (await auth.login(user.username, body.newPassword))) throw new HttpError(400, 'Choose a password that isn’t the temporary one');
-    await auth.updateUser(user, { password: body.newPassword || '' });
+    if (user.mustChangePassword && (await auth.login(user.username, body.newPassword))) throw new HttpError(400, 'Choose a password that isn’t the temporary one');
+    // (Signs out their other devices and stops the playback links handed out to them.)
+    try { await auth.updateUser(user, { password: body.newPassword }, { keepSession: req.sessionKey }); } catch (err) { throw new HttpError(err.status || 400, err.message); }
     delete user.mustChangePassword;
-    auth.endSessionsFor(user.id, req.sessionKey); // sign out other devices
-    tokens.rotate(); // and playback links handed out before (they last up to 12 hours)
+    store.save();
     json(res, 200, { ok: true });
   });
 
@@ -200,7 +202,6 @@ module.exports = function register(app) {
         removePin: !!body.removePin, keepSession: target.id === me.id ? req.sessionKey : null,
       });
     } catch (err) { throw new HttpError(err.status || 400, err.message); }
-    tokens.rotate(); // playback links handed out to them before stop working
     console.log(`[users] ${me.username} reset the password of ${target.username}`);
     json(res, 200, { user: { ...publicUser(target), locks: auth.lockInfo(target) }, temporaryPassword: temporary });
   }, 'admin');
@@ -222,8 +223,7 @@ module.exports = function register(app) {
     const target = getUser(id);
     const body = await readBody(req);
     if (target.id === me.id && body.role === 'user') throw new HttpError(400, 'You cannot remove your own admin role');
-    await auth.updateUser(target, body);
-    if (body.password) auth.endSessionsFor(target.id, target.id === me.id ? req.sessionKey : null);
+    await auth.updateUser(target, body, { keepSession: target.id === me.id ? req.sessionKey : null });
     json(res, 200, publicUser(target));
   }, 'admin');
 
@@ -232,7 +232,7 @@ module.exports = function register(app) {
     if (target.id === me.id) throw new HttpError(400, 'You cannot delete your own account');
     auth.deleteUser(target);
     removePhoto(target.id);
-    tokens.rotate(); // playback links they were given stop working too
+    // (Playback links handed out to them stop working: they name an account that's gone.)
     json(res, 200, { ok: true });
   }, 'admin');
 };

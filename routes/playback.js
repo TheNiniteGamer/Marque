@@ -109,7 +109,7 @@ module.exports = function register(app) {
     const sid = /^[A-Za-z0-9_-]{6,64}$/.test(url.searchParams.get('sid') || '') ? url.searchParams.get('sid') : null;
     const player = sid ? `sid:${sid}` : `${user.id}|${item.id}|${clientIp(req)}`;
     for (const p of transcodes) if (p.meta?.player === player) { transcodes.delete(p); p.kill('SIGKILL'); }
-    if (hls.full(user.id, item.id)) hls.makeRoom(user.id, item.id);
+    if (hls.full()) hls.makeRoom();
     let finished = false;
     const run = (asked) => {
       const hevc = url.searchParams.get('hevc') === '1';

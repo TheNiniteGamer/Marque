@@ -257,3 +257,20 @@ test('pausing scans stops one part-way without removing what it had not reached,
   await until(async () => !scanner.status().scanning && !store.data.items.gone);
   assert.equal(Object.keys(store.data.items).length, 40, 'scanned in full afterwards');
 });
+
+test('a restore that can’t save its database (a full disk) puts everything back as it was', async () => {
+  const { b, store } = manager('disk-full');
+  const art = path.join(b.dataDir, 'images', 'poster.jpg');
+  fs.mkdirSync(path.dirname(art), { recursive: true });
+  fs.writeFileSync(art, 'restored');
+  store.data.users = [{ id: 'old-account', username: 'from-the-backup' }];
+  const made = await b.create('manual');
+  // Now: other accounts and other artwork.
+  fs.writeFileSync(art, 'current');
+  store.data.users = [{ id: 'now', username: 'current' }];
+  store.flush = () => { throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' }); };
+  await assert.rejects(b.restore(fs.createReadStream(path.join(b.dir, made.name)), { safetyCopy: false }), (err) => err.status === 500 && /disk is full/.test(err.message));
+  assert.deepEqual(store.data.users.map((u) => u.username), ['current'], 'the accounts in use are kept');
+  assert.equal(fs.readFileSync(art, 'utf8'), 'current', 'and the artwork');
+  assert.ok(!fs.readdirSync(b.dataDir).some((f) => /\.old-\d+$/.test(f)), 'nothing left over');
+});
