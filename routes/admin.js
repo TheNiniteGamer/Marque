@@ -12,7 +12,7 @@ module.exports = function register(app) {
     ENCODER_NAMES, store, matcher, updater, hwaccel, hls, opensubs, activity,
     maintenance, intro, backups, auth, transcodes, rokus, HttpError, json, readBody, trickplay, keyframes, offline,
     readRaw, sendFile, getItem, viaHttpsProxy, getTarget, route, getLibrary, path, fromHostPath, health, isRemote, previews,
-    INTRO_SOUND,
+    INTRO_SOUND, timings,
   } = app;
 
   // The opening sound: any audio file, made into a short MP3 without the silence at its start (so
@@ -159,6 +159,12 @@ module.exports = function register(app) {
 
   // --- logs (admin) ---
   route('GET', '/api/logs', async (req, res, p, url) => json(res, 200, { entries: logs.recent({ all: url.searchParams.has('all') }) }), 'admin');
+  // How quickly Marquee has been answering (lib/timings.js), with what's running in the background.
+  route('GET', '/api/speed', async (req, res) => json(res, 200, {
+    ...timings.report(),
+    jobs: { scanning: app.scanner.status().scanning || false, conversions: transcodes.size + hls.active, rechecking: matcher.rechecking ? `${matcher.rechecking.library} (${matcher.rechecking.done}/${matcher.rechecking.total})` : null },
+  }), 'admin');
+  route('POST', '/api/speed/reset', async (req, res) => { timings.reset(); json(res, 200, timings.report()); }, 'admin');
 
   // --- maintenance (admin): cache sizes and clean-up ---
   route('GET', '/api/maintenance', async (req, res) => json(res, 200, maintenance.sizes()), 'admin');

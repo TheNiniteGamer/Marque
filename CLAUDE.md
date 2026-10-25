@@ -43,7 +43,8 @@ never released publicly, so favour what works well in this house over general-pu
 - Text in the app is plain and friendly, written for family members, not technicians, with
   British spellings ("colour", "organise").
 - `npm test` runs every test (`node --test`). Commit only when it reports `# fail 0`; add tests
-  for server changes.
+  for server changes. `test/ui/run.sh` checks the web app in a real browser (Docker only); add a
+  check there for web app changes a person would notice.
 - **Releases:** bump `package.json`, add a section at the top of `CHANGELOG.md` (what changed, in
   plain words), update the README if a feature changes, and bump and rebuild whichever apps changed
   (Roku zip, APKs in `public/downloads/`).

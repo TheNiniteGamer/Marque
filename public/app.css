@@ -1158,3 +1158,9 @@ button.avatar.static:hover { box-shadow: 0 0 0 2px #fff; }
   .av-preview { width: 120px; margin: 0 auto; }
   .av-faces { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
 }
+
+/* Settings → Logs → Speed */
+.speed-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.speed-table td, .speed-table th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.speed-table th { color: var(--faint); font-weight: 600; }
+.speed-table code { word-break: break-all; }

@@ -47,6 +47,7 @@ const { Optimizer } = require('./lib/optimize');
 const { AutoSubs } = require('./lib/autosubs');
 const { Upcoming } = require('./lib/upcoming');
 const { Rokus } = require('./lib/rokus');
+const { Timings } = require('./lib/timings');
 const { Health } = require('./lib/health');
 const { Previews } = require('./lib/previews');
 const { KINDS: ENCODER_NAMES } = require('./lib/hwaccel');
@@ -183,6 +184,7 @@ const backups = new Backups(store, {
   labelFor: hostLabel,
   onRestored: () => { auth.prune(); tokens.rotate(); scanner.enqueueAll(); },
 });
+const timings = new Timings();
 const auth = new Auth(store);
 // A new password also stops the playback links handed out to that person (see auth.updateUser).
 auth.onPasswordChange = (userId) => tokens.revoke(userId);
@@ -521,7 +523,7 @@ function getTarget(id, user) {
 // access: 'public' (no login), 'user' (any logged-in user), 'admin', 'download' (admin or users allowed to download)
 const routes = [];
 const route = (method, pattern, handler, access = 'user') =>
-  routes.push({ method, access, re: new RegExp(`^${pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)')}$`), handler });
+  routes.push({ method, access, what: `${method} ${pattern}`, re: new RegExp(`^${pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)')}$`), handler });
 
 // Route groups (each file registers its routes with `route`).
 const app = {
@@ -535,18 +537,54 @@ const app = {
   trickplay, keyframes, activity, maintenance, intro, watcher, backups, auth, downloader, arr, optimizer, autoSubs, upcoming, rokus,
   transcodes, HttpError, json, readBody, readRaw, MIME, sendFile, getItem,
   getShow, getLibrary, getUser, librarySummary, validateLibraryInput, removeLibraryData, resolveArt, subtitleVtt,
-  isPrivateIp, isTailscaleIp, TRUST_PROXY, clientIp, viaHttpsProxy, noteRemoteOrigin, mediaTokenUser, castAddresses, isRemote,
+  timings, isPrivateIp, isTailscaleIp, TRUST_PROXY, clientIp, viaHttpsProxy, noteRemoteOrigin, mediaTokenUser, castAddresses, isRemote,
   remoteLimit, getTarget, route,
 };
 for (const group of ['auth', 'library', 'playback', 'admin', 'downloads', 'requests']) require(`./routes/${group}`)(app);
 
 // ---------- server ----------
-function serveStatic(req, res, pathname) {
+// The page names its scripts and styles with a stamp of each file's contents (app.js?v=…),
+// so a browser keeps them until they change instead of asking about every one of them on every
+// visit (17 round trips: slow from a phone away from home). The page itself is always checked.
+const stamps = new Map(); // file -> { key, stamp }
+function stampOf(file) {
+  let st;
+  try { st = fs.statSync(file); } catch { return null; }
+  const key = `${st.size}-${st.mtimeMs}`;
+  let c = stamps.get(file);
+  if (c?.key !== key) {
+    c = { key, stamp: crypto.createHash('sha1').update(fs.readFileSync(file)).digest('hex').slice(0, 10) };
+    stamps.set(file, c);
+  }
+  return c.stamp;
+}
+let indexPage = null; // { key, html }
+function sendIndex(req, res) {
+  const file = path.join(PUBLIC_DIR, 'index.html');
+  const html = fs.readFileSync(file, 'utf8');
+  const out = html.replace(/(<(?:script|link)\b[^>]*?\s(?:src|href)=")(\/[^"?#]+\.(?:js|css|svg))(")/g, (m, a, url, b) => {
+    const stamp = stampOf(path.join(PUBLIC_DIR, url.slice(1)));
+    return stamp ? `${a}${url}?v=${stamp}${b}` : m;
+  });
+  const key = crypto.createHash('sha1').update(out).digest('hex').slice(0, 16);
+  if (indexPage?.key !== key) indexPage = { key, html: out, gz: zlib.gzipSync(out, { level: 9 }) };
+  const etag = `W/"i-${key}"`;
+  const headers = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ETag: etag, Vary: 'Accept-Encoding' };
+  if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); return res.end(); }
+  const gz = acceptsGzip(req);
+  const body = gz ? indexPage.gz : Buffer.from(indexPage.html);
+  res.writeHead(200, { ...headers, ...(gz ? { 'Content-Encoding': 'gzip' } : {}), 'Content-Length': body.length });
+  res.end(req.method === 'HEAD' ? undefined : body);
+}
+
+function serveStatic(req, res, pathname, query) {
   const rel = safeDecode(pathname).replace(/^\/+/, '');
   if (rel === 'sounds/intro.mp3' && fs.existsSync(INTRO_SOUND)) return sendFile(req, res, INTRO_SOUND, { type: 'audio/mpeg', headers: { 'Cache-Control': 'no-cache' } });
-  let file = path.join(PUBLIC_DIR, rel);
-  if (!file.startsWith(PUBLIC_DIR + path.sep) || !rel || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(PUBLIC_DIR, 'index.html');
-  sendFile(req, res, file, { headers: { 'Cache-Control': 'no-cache' } });
+  const file = path.join(PUBLIC_DIR, rel);
+  if (!file.startsWith(PUBLIC_DIR + path.sep) || !rel || rel === 'index.html' || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return sendIndex(req, res);
+  // A stamped address only ever means those exact contents (see sendIndex): kept for a year.
+  const stamped = query?.get('v') && query.get('v') === stampOf(file);
+  sendFile(req, res, file, { headers: { 'Cache-Control': stamped ? 'public, max-age=31536000, immutable' : 'no-cache' } });
 }
 
 const MUST_CHANGE_ALLOWED = new Set(['GET /api/auth/me', 'POST /api/auth/password', 'POST /api/auth/logout', 'GET /api/health']);
@@ -629,12 +667,18 @@ const server = http.createServer(async (req, res) => {
           if (r.access === 'admin' && store.data.settings.adminAtHomeOnly && isRemote(req)) throw new HttpError(403, 'Admin settings can only be used at home (Settings → Remote access)');
           if (r.access === 'download' && !canDownload(user)) throw new HttpError(403, 'You are not allowed to download videos');
         }
-        return await r.handler(req, res, params, url, user);
+        // Timed (Settings → Logs → Speed), apart from playback files: those stream for as long as
+        // someone watches.
+        if (r.access === 'media') return await r.handler(req, res, params, url, user);
+        const t0 = performance.now();
+        try { return await r.handler(req, res, params, url, user); } finally {
+          timings.record(r.what, performance.now() - t0, { status: res.statusCode, user: user?.username || null });
+        }
       }
       throw new HttpError(404, 'Not found');
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'Method not allowed');
-    serveStatic(req, res, url.pathname);
+    serveStatic(req, res, url.pathname, url.searchParams);
   } catch (err) {
     const status = err.status || 500;
     if (status === 500) console.error(`[http] ${req.method} ${url.pathname}:`, err);

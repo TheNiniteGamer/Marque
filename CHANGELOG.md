@@ -4,6 +4,18 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.23
+
+- **Quicker to open away from home:** the page now names its scripts with a stamp of their
+  contents, so a browser keeps them until Marquee is updated instead of checking each of its 17
+  files on every visit. That saves a round trip per file over a phone connection.
+- **Settings → Logs → Speed:** how quickly Marquee has been answering since it started. It lists any
+  answer that took over a second, the busiest kinds of request, the longest moment the server was
+  too busy to answer anyone, and what's running in the background. So "it feels slow" can be
+  checked rather than guessed at.
+- **The web app is checked in a real browser on GitHub** after every change: Home, a library and its
+  ⋯ menu, search, empty and missing pages, a film's page, playing a film, and the phone layout.
+
 ## 0.24.22
 
 Fixes from another review, mostly for things happening at the same moment:

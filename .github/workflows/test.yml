@@ -1,5 +1,6 @@
 # Runs every test on each push, inside the same Docker image the server uses (Node 22 and
-# Jellyfin's ffmpeg), so a passing run here means the same as `npm test` on the server PC.
+# Jellyfin's ffmpeg), so a passing run here means the same as `npm test` on the server PC; then
+# checks the web app in a real browser against that image (test/ui/run.sh).
 name: Tests
 
 on:
@@ -17,3 +18,5 @@ jobs:
         run: docker build -t marquee-ci .
       - name: Run the tests
         run: docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src --entrypoint sh marquee-ci -c 'node --test test/*.test.js'
+      - name: Check the web app in a browser
+        run: test/ui/run.sh marquee-ci

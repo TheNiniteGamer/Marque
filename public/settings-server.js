@@ -572,7 +572,32 @@ function logsSection() {
         <button class="btn small" id="logs-copy" title="Copy these messages, e.g. to send to whoever helps you">Copy</button>
       </div>
       <div id="logs-list" class="logs-list muted">Loading…</div>
+    </div>
+    <h2 style="margin:28px 0 12px" id="speed">Speed</h2>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <span class="muted" id="speed-summary">Loading…</span>
+        <button class="btn small" id="speed-reset" title="Start counting again from now">Start again</button>
+      </div>
+      <div id="speed-body"></div>
     </div>`;
+}
+
+// What's been slow (lib/timings.js), in plain words: answers over a second, and stalls (the server
+// busy working something out instead of answering anyone).
+async function loadSpeed() {
+  const s = await api('/api/speed');
+  const since = new Date(s.since).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const stall = s.stalls.maxMs;
+  const busy = [s.jobs.scanning && 'scanning', s.jobs.conversions && `${s.jobs.conversions} conversion${s.jobs.conversions === 1 ? '' : 's'}`, s.jobs.rechecking && `re-checking ${s.jobs.rechecking}`].filter(Boolean);
+  $('#speed-summary').textContent = `Since ${since}: ${s.slow.length ? `${s.slow.length} answer${s.slow.length === 1 ? '' : 's'} took over a second` : 'every answer under a second'} · longest stall ${stall < 100 ? 'none worth noting' : `${(stall / 1000).toFixed(1)} s`}${busy.length ? ` · now: ${busy.join(', ')}` : ''}`;
+  const when = (t) => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  $('#speed-body').innerHTML = html`
+    ${s.slow.length ? html`<h3 class="st-sub" style="margin:14px 0 6px">Slow answers</h3>
+      <table class="speed-table"><tbody>${s.slow.slice(0, 15).map((x) => html`<tr><td>${when(x.at)}</td><td><code>${x.what}</code></td><td>${(x.ms / 1000).toFixed(1)} s</td><td class="muted">${x.user || ''}</td></tr>`)}</tbody></table>` : ''}
+    ${s.routes.length ? html`<details class="help" style="margin-top:12px"><summary>Busiest kinds of request</summary>
+      <table class="speed-table"><thead><tr><th>Request</th><th>Times</th><th>Usually</th><th>Longest</th></tr></thead><tbody>
+      ${s.routes.map((r) => html`<tr><td><code>${r.what}</code></td><td>${r.count}</td><td>${r.avgMs} ms</td><td>${r.maxMs} ms</td></tr>`)}</tbody></table></details>` : ''}`.s;
 }
 
 function bindLogsSection() {
@@ -597,6 +622,8 @@ function bindLogsSection() {
     navigator.clipboard?.writeText(text).then(() => toast('Copied'), () => toast("Couldn't copy", true));
   };
   load().catch((err) => { $('#logs-list').textContent = err.message; });
+  loadSpeed().catch((err) => { $('#speed-summary').textContent = err.message; });
+  $('#speed-reset').onclick = async () => { await api('/api/speed/reset', { method: 'POST' }); loadSpeed(); toast('Counting from now'); };
 }
 
 // ---------- overnight conversions: pause, carry on, stop for tonight (Settings and Activity) ----------

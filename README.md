@@ -508,6 +508,7 @@ Dockerfile, docker-compose.yml, *.bat   container image and Windows helpers
 
 ```bash
 npm test     # unit tests + integration tests that boot a real server
+test/ui/run.sh   # the web app in a real browser (needs Docker)
 ```
 
 The integration tests need ffmpeg. The download test also needs yt-dlp; it is skipped when yt-dlp
