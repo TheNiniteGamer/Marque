@@ -82,6 +82,19 @@ const until = async (fn, ms = 20_000) => {
     await until(() => page.evaluate(() => (document.querySelector('video')?.currentTime || 0) > 1), 30_000);
   });
 
+  await check('pressing Back while a film is still opening leaves no player behind', async () => {
+    await open('#/');
+    // (A slow answer, as from a busy server or a TV remote pressed quickly.)
+    await page.route(`**/api/items/${film.id}`, async (r) => { await new Promise((x) => setTimeout(x, 1500)); await r.continue(); });
+    await page.evaluate((id) => { location.hash = `#/play/${id}`; }, film.id);
+    await page.waitForTimeout(200);
+    await page.evaluate(() => { location.hash = '#/'; });
+    await page.waitForTimeout(2500);
+    await page.unroute(`**/api/items/${film.id}`);
+    const players = await page.locator('.player').count();
+    if (players) throw new Error(`${players} player(s) still open on Home`);
+  });
+
   await check('phones get the bar along the bottom', async () => {
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, storageState: await ctx.storageState() });
     const p = await phone.newPage();

@@ -60,6 +60,7 @@ sub init()
 
     m.started = false
     m.done = false
+    m.loadingAt = -1 ' where the stream being opened starts, until it plays
     m.mode = ""
     m.audio = 0
     m.burn = invalid
@@ -393,6 +394,7 @@ end sub
 ' (Re)loads the stream at a position: on start, and when the sound track or drawn-in subtitles change.
 sub load(at as Float)
     x = m.item
+    m.loadingAt = at
     c = CreateObject("roSGNode", "ContentNode")
     c.title = m.heading.text
     if m.mode = "direct" then
@@ -422,6 +424,7 @@ sub onState()
     showSpinner(s = "buffering")
     if s = "buffering" then m.stallTimer.control = "start" else m.stallTimer.control = "stop"
     if s = "playing" then
+        m.loadingAt = -1
         m.message.text = ""
         m.ctlPlay.uri = "pkg:/images/pl_pause.png"
         m.bigPlay.visible = false
@@ -507,6 +510,7 @@ sub onServerCheck(event as Object)
 end sub
 
 sub onReconnectPlayback(event as Object)
+    if m.done or not m.reconnecting then return
     r = event.getData()
     if r.status = 200 and r.data <> invalid then m.pb = r.data
     m.reconnecting = false
@@ -1136,6 +1140,8 @@ sub report(stopped as Boolean, position = -1 as Float)
     at = m.video.position
     if m.reconnecting and m.lastGood >= 0 then at = m.lastGood
     if position >= 0 then at = position
+    ' Still opening (or left before it started): the position is where it was going to start.
+    if position < 0 and m.loadingAt >= 0 and not m.reconnecting then at = m.loadingAt
     if at <= 0 and not stopped then return
     if stopped then m.done = true
     mqApi("/api/items/" + m.item.id + "/progress", "onReported", "POST", { position: at, paused: m.video.state = "paused", stopped: stopped, client: "Roku", mode: m.mode })
@@ -1166,7 +1172,8 @@ end sub
 ' Stop everything before leaving the player.
 sub leave()
     report(true)
-    for each t in [m.reportTimer, m.hideTimer, m.holdTimer, m.commitTimer, m.idleTimer, m.countTimer]
+    m.reconnecting = false ' (a reconnect in progress mustn't start playing on a closed screen)
+    for each t in [m.reportTimer, m.hideTimer, m.holdTimer, m.commitTimer, m.idleTimer, m.countTimer, m.reconnectTimer, m.stallTimer]
         t.control = "stop"
     end for
     m.video.control = "stop"

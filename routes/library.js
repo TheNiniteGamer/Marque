@@ -238,7 +238,10 @@ module.exports = function register(app) {
     const adminStop = session?.stopBy ? { reason: 'admin', message: `${session.stopBy} stopped this from the Activity page.` } : null;
     // Players also report while paused (for the Activity page); the resume point only changes when it moved.
     const prev = store.data.progress[user.id]?.[item.id];
-    if (body.paused && prev && !body.stopped && Math.abs((prev.position || 0) - position) < 1) {
+    // A player still on its way to the resume point (or closed before it got there) reports 0: that
+    // mustn't wipe where they'd got to. (Every app did this; older ones still do.)
+    const notStarted = position < 1 && prev?.position > 15 && !prev.watched;
+    if (notStarted || (body.paused && prev && !body.stopped && Math.abs((prev.position || 0) - position) < 1)) {
       if (store.timer) store.save(); // a position still waiting to be written goes now
       const stop = adminStop || screenTime.blocked(store, user);
       return json(res, 200, { ...lib.progressOf(store, user, item.id), ...(stop ? { stop } : {}) });

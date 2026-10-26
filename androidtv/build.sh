@@ -15,8 +15,8 @@ BT="$SDK/build-tools/${BUILD_TOOLS:-34.0.0}"
 JAR="$SDK/platforms/android-34/android.jar"
 [ -x "$BT/aapt2" ] && [ -f "$JAR" ] || { echo "Need build-tools 34.0.0 and platform android-34 in $SDK"; exit 1; }
 
-VERSION_NAME="${VERSION_NAME:-1.11.1}"
-VERSION_CODE="${VERSION_CODE:-19}"
+VERSION_NAME="${VERSION_NAME:-1.11.2}"
+VERSION_CODE="${VERSION_CODE:-20}"
 OUT=build
 rm -rf "$OUT"; mkdir -p "$OUT/res" "$OUT/gen" "$OUT/classes" "$OUT/dex"
 

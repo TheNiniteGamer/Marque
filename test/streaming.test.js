@@ -269,6 +269,24 @@ test('going back more than a minute converts again from there, once the old segm
   } finally { mgr.stopAll(); }
 });
 
+test('after going back, skipping just past the old segments starts converting there', async () => {
+  const file = path.join(ROOT, 'skip.mp4');
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=10:d=240', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', file]);
+  const mgr = new hls.HlsManager(path.join(ROOT, 'hls-skip'), { active: 'software', reportFailure() {} });
+  const item = { id: 'skip', file, media: { duration: 240, bitrate: 3e5, video: { codec: 'h264', pixFmt: 'yuv420p', width: 320, height: 180 }, audio: [] } };
+  const opts = { quality: '360p', sid: 'unit-test-skip' };
+  try {
+    await mgr.segment(item, opts, 30);
+    const s = [...mgr.sessions.values()][0];
+    await until(() => mgr.status()[0]?.paused, 20000); // made a dozen ahead, to about 42
+    const old = Math.max(...fs.readdirSync(s.dir).map((f) => Number(/^seg-(\d+)\.ts$/.exec(f)?.[1] ?? -1)));
+    await mgr.segment(item, opts, 2); // back to the start: a new job from 2
+    assert.equal(s.start, 2);
+    await mgr.segment(item, opts, old + 2); // just past what the first job made
+    assert.equal(s.start, old + 2, 'converting from there, not catching up from 2');
+  } finally { mgr.stopAll(); }
+});
+
 test('a graphics card that keeps failing is dropped for the CPU', () => {
   const hw = new HwAccel(memStore());
   hw.active = 'nvenc';

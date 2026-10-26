@@ -8,6 +8,8 @@ let player = null;
 // Whether the server answers (a player that loses its stream checks this before giving up on it).
 const serverUp = () => fetch('/api/health', { cache: 'no-store' }).then((r) => r.ok).catch(() => false);
 function closePlayer() { if (player) { player.destroy(); player = null; } }
+// A tab or browser closed mid-film: its place is saved (the reports send with keepalive).
+window.addEventListener('pagehide', () => player?.report(true));
 
 // HEVC (x265) this browser decodes itself (Safari; Chrome and Edge with a graphics card that can).
 let probeVideo = null;
@@ -41,9 +43,12 @@ function screenTimeNotice(b) {
   $('[data-close]', m.el).focus();
 }
 
-async function viewPlay({ params: [id], query }) {
+async function viewPlay({ params: [id], query, seq }) {
   closePlayer();
+  // (Left, or another title picked, while this one was loading: the newer page wins.)
+  const stale = () => seq !== renderSeq;
   let item = await api(`/api/items/${id}`);
+  if (stale()) return;
   if (!item.media) { toast('This file cannot be played', true); return history.back(); }
   if (item.watchBlock) { screenTimeNotice(item.watchBlock); return history.back(); } // bedtime, or today's time used up
   let start = query.has('t') ? Number(query.get('t')) || 0 : 0;
@@ -52,6 +57,7 @@ async function viewPlay({ params: [id], query }) {
   const partyId = query.get('party');
   if (partyId) {
     const p = await api(`/api/parties/${partyId}`).catch((err) => { toast(err.message, true); return null; });
+    if (stale()) return;
     if (p) start = partyPosition(p, p.serverNow - Date.now());
   }
   // Inside the Android app, videos open in the phone's native player (watch parties stay in the web player).
@@ -67,7 +73,9 @@ async function viewPlay({ params: [id], query }) {
   if (item.versions?.length > 1) {
     const chosen = item.versions.find((v) => v.id === query.get('v')) || chooseVersion(item.versions);
     if (chosen && chosen.id !== item.id) item = { ...(await api(`/api/items/${chosen.id}`)), progress: item.progress };
+    if (stale()) return;
   }
+  closePlayer();
   player = new Player(item, start, { partyId });
 }
 
@@ -189,6 +197,7 @@ class Player {
       </div>`.s;
     $('#player-root').append(this.root);
     this.v = $('video', this.root);
+    this.pendingStart = start; // (closed before it loads: the resume point stays where it was)
     if (playerPref('nightMode')) this.setNight(true);
     this.range = $('.p-range', this.root);
     this.range.max = this.duration || 0;
@@ -1161,7 +1170,7 @@ class Player {
     this.v.pause();
     this.v.removeAttribute('src'); // stops the download and lets the server kill ffmpeg
     this.v.load();
-    if (this.pb?.sid && this.quality !== 'original') fetch(`/api/hls/${this.pb.sid}`, { method: 'DELETE', keepalive: true }).catch(() => {});
+    if (this.pb?.sid && this.mode === 'hls') fetch(`/api/hls/${this.pb.sid}`, { method: 'DELETE', keepalive: true }).catch(() => {});
     this.root.remove();
     document.title = 'Marquee';
   }

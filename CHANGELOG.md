@@ -4,6 +4,33 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.26
+
+Fixes from a review of the code, mostly about watch history.
+
+- **Upgrades keep their history.** When Radarr or Sonarr replaces a file with a better copy, it
+  deletes the old one first and copies the new one in, which can take minutes. A scan in between
+  used to remove the title and the new copy then started unwatched. Marquee now remembers removed
+  titles for two days and gives a replacement that turns up later the old one's progress, My List
+  place, collections and fixes.
+- **Renaming lots of films at once keeps their history.** Since 0.24.24, 20 or more files renamed
+  together (Radarr's "Rename files", a new naming format) were held as "missing" and then removed,
+  history and all, instead of being recognised as renames. They're matched straight away now.
+- **A renamed file keeps what was made from it.** When only the name changes (Sonarr adding the
+  episode title, say), its overnight copy, downloaded subtitles, intro and credits markers and
+  episode numbering come along, instead of being made again.
+- **A show whose folder is renamed** ("Bluey" to "Bluey (2018)") keeps its details, fixes, place on
+  My List and chosen languages.
+- **Leaving a video while it's still opening no longer resets it to the start.** Every app did this
+  (the Android app on every start, briefly); the server now ignores a "0:00" from a player that
+  hasn't got going, so older apps are covered too, and the apps themselves are fixed.
+- **Web app:** pressing Play then Back (or another title) quickly could leave a hidden video playing
+  in the background. Closing a browser tab mid-film now saves where you were.
+- **Skipping forward after going back** in a converted stream starts converting where you skipped
+  to, instead of waiting for the earlier part to be converted first (which could take minutes).
+- **Roku:** pressing Back while it's reconnecting after a server restart stops the reconnect.
+- Android phone app 1.16.2, Android TV app 1.11.2, Roku channel 1.18.
+
 ## 0.24.25
 
 - **Scans go gently while someone's watching:** a scan finding new files looks at them one at a

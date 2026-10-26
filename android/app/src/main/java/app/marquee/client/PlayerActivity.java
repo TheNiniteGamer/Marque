@@ -92,6 +92,7 @@ public class PlayerActivity extends Activity {
     private boolean skipFading;
     private double offset;       // seconds: where a converted stream starts in the real timeline
     private double pendingSeek;  // seconds: seek to this once a direct stream is ready
+    private double loadingAt = -1; // seconds: where the stream being opened starts (-1 once it plays)
     double duration;
     int audioIndex;
     String subId;
@@ -350,6 +351,8 @@ public class PlayerActivity extends Activity {
     private void open(double t) {
         t = Math.max(0, duration > 0 ? Math.min(t, duration - 2) : t);
         spinner.setVisibility(View.VISIBLE);
+        loadingAt = t;
+        lastReport = System.currentTimeMillis(); // (the first report waits until it has had a chance to start)
         String id = item.optString("id");
         if (offlineFile != null) {
             offset = 0;
@@ -451,6 +454,7 @@ public class PlayerActivity extends Activity {
         applySpeed();
         applyNight();
         if (seekable() && pendingSeek > 0) video.seekTo((int) (pendingSeek * 1000));
+        loadingAt = -1;
         if (direct && !hls && audioIndex > 0) selectDirectAudio(audioIndex);
         video.start();
         if (resumePaused) { resumePaused = false; video.pause(); }
@@ -553,7 +557,8 @@ public class PlayerActivity extends Activity {
     }
 
     // ---------------------------------------------------------------- playback
-    double now() { return offset + video.getCurrentPosition() / 1000.0; }
+    // (While a stream is opening, the player says 0: the position is where it's going to start.)
+    double now() { return loadingAt >= 0 ? loadingAt : offset + video.getCurrentPosition() / 1000.0; }
 
     void seekTo(double t) {
         if (item == null) return;
