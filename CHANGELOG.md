@@ -4,6 +4,15 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.27
+
+- **Windows: `GPU=intel` or `GPU=amd` no longer stops Marquee starting.** Docker Desktop can only pass
+  an NVIDIA card to Marquee, so on Windows those settings are now skipped with a note instead of
+  making the container fail. Two cards (`GPU=nvidia,intel`) are now understood on Windows too, as
+  they were on Linux; on Windows only the NVIDIA one is used.
+- **The README is rewritten:** getting started on Linux and Windows side by side, setting-up guides,
+  and what Marquee can do in short themed sections instead of one long table.
+
 ## 0.24.26
 
 Fixes from a review of the code, mostly about watch history.

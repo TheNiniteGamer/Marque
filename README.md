@@ -1,522 +1,541 @@
 # Marquee
 
-A small, self-hosted media server inspired by Plex. Point it at your movie and TV folders, and it
-organizes them into a browsable library you can stream to any browser on your network. Everyone in
-the house gets their own account and their own watch history, and there's a built-in YouTube
-downloader.
+Marquee is a home media server, inspired by Plex, for one family and a few close friends. Point it
+at your film and TV folders and it turns them into a library with posters, summaries and cast, which
+everyone in the house can watch on a browser, phone, Android TV box or Roku. Each person gets their
+own account, watch history and Continue Watching, and there's a built-in YouTube downloader.
 
-On **Linux** (Debian, Ubuntu…), see **[docs/LINUX.md](docs/LINUX.md)**: install Docker, then
-`./marquee.sh start` does what the Windows scripts below do, including one-click updates. It also
-covers moving an existing Windows install over.
+**What you get**
 
-## Quick start on Windows (Docker)
+- A Netflix-style home screen, with rows for Continue Watching, My List, new arrivals, collections
+  and "Because you watched…".
+- Playback that just works on every device. Files are played as they are when the device can, and
+  converted on the fly (on the graphics card, if you have one) when it can't.
+- Apps for **Android phones**, **Android TV / Google TV / Fire TV** and **Roku**. TVs sign in with a
+  code instead of a password.
+- Family features: profiles with PINs, kids' rating limits, bedtime and daily screen time,
+  requests ("can we get…?") that can go straight to Radarr and Sonarr, and watching together.
+- Housekeeping that looks after itself: automatic matching, nightly backups, overnight conversions
+  of awkward files, skip-intro markers, subtitles and one-click updates.
+
+It runs in Docker on **Linux** or **Windows**. Nothing is reachable from outside your home unless
+you switch it on.
+
+## Getting started
+
+### On Linux (Debian, Ubuntu…)
+
+Follow **[docs/LINUX.md](docs/LINUX.md)**: install Docker, put your folders in `.env`, then run
+`./marquee.sh start`. That guide also covers graphics cards, folder permissions and moving an
+existing Windows install across.
+
+### On Windows
 
 1. **Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)** and start it once.
-   Let it finish setting up (it may ask to enable WSL 2 and restart).
-2. **Get Marquee:** on GitHub click **Code → Download ZIP** and extract it, or
+   Let it finish setting up (it may ask to turn on WSL 2 and restart).
+2. **Get Marquee.** On GitHub, click **Code → Download ZIP** and extract it, or run
    `git clone https://github.com/TheNiniteGamer/Marque.git`.
-3. **Double-click `start-marquee.bat`.** The first time, Notepad opens your settings file. Point it
-   at your folders, using forward slashes:
+3. **Double-click `start-marquee.bat`.** The first time, Notepad opens your settings file (`.env`).
+   Point it at your folders, using forward slashes:
    ```ini
    MOVIES_DIR=D:/Movies
    TV_DIR=D:/TV Shows
    YOUTUBE_DIR=D:/YouTube
    ```
    Save and close Notepad. Marquee builds (a few minutes the first time), starts, and opens
-   **http://localhost:32500** in your browser.
-4. **Create your admin account** on the first screen. Your Movies, TV Shows and YouTube libraries
-   are already set up and scanned.
+   **http://localhost:32500**.
+4. **Create your admin account** on the first screen. Your Movies, TV Shows and YouTube libraries are
+   already set up and being scanned.
 
-| Script | What it does |
-| --- | --- |
-| `start-marquee.bat` | Starts Marquee (and Docker Desktop if needed), then opens the browser |
-| `stop-marquee.bat` | Stops Marquee. Users, libraries and watch history are kept. |
-| `update-marquee.bat` | Gets the latest version from GitHub (works for `git clone` and ZIP installs), rebuilds with the newest ffmpeg and yt-dlp, and restarts. Your `.env`, users and libraries are kept. |
-| `marquee-logs.bat` | Shows the server log, for troubleshooting |
+**Phones, TVs and other computers** open `http://YOUR-PC-NAME:32500`. If they can't connect, allow
+Docker Desktop through Windows Firewall on private networks. Marquee starts again by itself whenever
+Docker Desktop is running. To start Docker Desktop with Windows, turn on *Settings → General → Start
+Docker Desktop when you sign in*.
 
-All of them run `marquee.ps1`, which you can also use directly, e.g.
-`powershell -ExecutionPolicy Bypass -File marquee.ps1 InstallHelper`.
+### Starting, stopping and updating
 
-Marquee restarts on its own whenever Docker Desktop is running. To start Docker Desktop with
-Windows, turn on *Settings → General → Start Docker Desktop when you sign in*.
+| Windows | Linux | What it does |
+| --- | --- | --- |
+| `start-marquee.bat` | `./marquee.sh start` | Starts Marquee (and Docker Desktop on Windows), and opens the browser on Windows |
+| `stop-marquee.bat` | `./marquee.sh stop` | Stops Marquee. Users, libraries and watch history are kept. |
+| `update-marquee.bat` | `./marquee.sh update` | Gets the latest version (from a `git clone` or a ZIP install), rebuilds with the newest ffmpeg and yt-dlp, and restarts |
+| `marquee-logs.bat` | `./marquee.sh logs` | Shows what the server is doing, for troubleshooting |
 
-**Phones, TVs and other computers** can use `http://YOUR-PC-NAME:32500`. If they can't connect,
-allow Docker Desktop through Windows Firewall on private networks.
+The `.bat` files run `marquee.ps1`, which you can also use directly, e.g.
+`powershell -ExecutionPolicy Bypass -File marquee.ps1 InstallHelper`. To change a setting later,
+edit `.env` and run the start script again. Settings added by newer versions are appended to your
+`.env` for you, with an explanation of each.
 
-### Movies (or TV) spread over several drives
+## Setting it up
 
-One library can combine folders from several drives. They show up as a single collection, and
-each folder is labelled in Settings with its file count. In `.env`, remove the `#` in front of the
-extra slots and fill them in:
+### Your folders
+
+**One library, several drives.** In `.env`, remove the `#` in front of the extra slots and fill them
+in. There are up to four film and four TV folders:
 
 ```ini
 MOVIES_DIR=D:/Movies
 MOVIES_DIR_2=E:/Movies
-MOVIES_DIR_3=F:/More Movies
 TV_DIR=D:/TV Shows
 TV_DIR_2=E:/TV Shows
 ```
 
-Run `start-marquee.bat` again, and the new folders join your existing Movies / TV Shows library on
-their own. There are up to 4 movie and 4 TV folders. If a drive is unplugged, its movies and watch
-history are kept, and the folder is marked *offline* in Settings until it's back.
+Run the start script again and the new folders join your existing library. Each folder is listed in
+*Settings → Libraries* with how many files it has. If a drive is unplugged, its titles and their
+watch history are kept, and the folder is marked *offline* until it's back.
 
-You can also manage folders by hand in **Settings → Libraries → Edit** on a library, using
-**＋ Add another folder** and **Browse…**. Folders you remove there stay removed, even if they're
-still listed in `.env`.
-
-### Other drives
-
-To add folders from any drive in the web interface (instead of listing each folder in `.env`),
-share the whole drive with Marquee once. In `.env` (if your `.env` is older than these settings,
-running `start-marquee.bat` adds them at the end of it for you):
+**Whole drives, picked in the web page.** To choose folders in *Settings → Libraries → Browse…*
+instead of listing each one in `.env`, share whole drives with Marquee once:
 
 ```ini
 DRIVE_1=E:/
 DRIVE_2=F:/
 ```
 
-Run `start-marquee.bat` again. **Settings → Libraries → Add library → Browse…** then lists *E: drive* and
-*F: drive* on the left, and you can pick any folder on them (or type a path like `E:/Movies`).
-Marquee only writes to these drives where you tell it to (converted copies, backup copies,
-subtitle files); add `DRIVES_ACCESS=ro` to `.env` to make them read-only. The picker shows how many videos a folder holds, counting
-the folders inside it — a library always includes everything below the folder you pick, so
-`TV/Kids/Bluey/Season 1/…` and `TV/Anime/Naruto/…` are found as the shows *Bluey* and *Naruto*.
+The folder picker then lists *E: drive* and *F: drive*, shows how many videos each folder holds, and
+accepts typed paths like `E:/Movies`. A library includes everything below the folder you pick, so
+`TV/Kids/Bluey/…` and `TV/Anime/Naruto/…` become the shows *Bluey* and *Naruto*. Marquee only writes
+to these drives where you ask it to (converted copies, backup copies, subtitle files). Add
+`DRIVES_ACCESS=ro` to make them read-only.
 
-**Changing other settings later:** edit `.env`, then run `start-marquee.bat` again.
+You can also add and remove folders on a library with **Edit** in *Settings → Libraries*. Folders
+you remove there stay removed, even if `.env` still lists them.
 
 ### Watching away from home
 
-Marquee is only reachable on your home network until you switch on one of these. Nothing is opened
-to the internet unless you do.
+Marquee only answers on your home network until you switch one of these on.
 
-**Tailscale (recommended, free).** This gives you a private HTTPS address that only your own
-devices can use, with no router setup.
-1. Create an account at [tailscale.com](https://tailscale.com). In the admin console, open
-   **DNS** and turn on **HTTPS Certificates**.
-2. Create an auth key under **Settings → Keys** and paste it into `.env` as `TS_AUTHKEY=…`.
-3. Run `start-marquee.bat`. Marquee joins your tailnet as `marquee`.
+**Tailscale (recommended, free).** This gives your own devices a private, secure address, with no
+router changes.
+1. Create an account at [tailscale.com](https://tailscale.com). In the admin console, open **DNS**
+   and turn on **HTTPS Certificates**.
+2. Create an auth key under **Settings → Keys** and put it in `.env` as `TS_AUTHKEY=…`.
+3. Run the start script. Marquee joins your Tailscale network as `marquee`.
 4. Install the Tailscale app on your phone or laptop and sign in. Then open
-   `https://marquee.<your-tailnet>.ts.net`. The exact address is in the Tailscale app under
-   *Machines*, and in **Settings → Remote access** once you've used it. The Android app works with
-   it too.
+   `https://marquee.<your-tailnet>.ts.net`. The exact address is in the Tailscale app and, once
+   you've used it, in *Settings → Remote access*.
 
-To let people **without** Tailscale in (e.g. family on their own devices), set
-`TAILSCALE_PUBLIC=true`. This uses Tailscale Funnel, so anyone with the link can reach your sign-in
-page. You may also need to allow Funnel in Tailscale's access controls.
+Already running Tailscale on the server PC itself (say, to share your whole home network)? That
+works too: phones on Tailscale use the normal home address, and Marquee still counts them as away
+from home.
 
-**Cloudflare Tunnel (for your own domain).** In Cloudflare Zero Trust, create a tunnel and add a
-public hostname pointing to `http://marquee:32500`. Paste the tunnel token into `.env` as
-`CLOUDFLARE_TUNNEL_TOKEN=…`, then run `start-marquee.bat`.
+To let people **without** Tailscale in, set `TAILSCALE_PUBLIC=true`. This uses Tailscale Funnel, so
+anyone with the link can reach your sign-in page. You may need to allow Funnel in Tailscale's access
+controls.
 
-Either way, the extra container starts just because its key is set in `.env`. To turn it off,
-clear the key and run `start-marquee.bat` again.
+**Cloudflare Tunnel (your own domain).** In Cloudflare Zero Trust, create a tunnel with a public
+hostname pointing to `http://marquee:32500`. Put its token in `.env` as
+`CLOUDFLARE_TUNNEL_TOKEN=…`, then run the start script.
+
+Either helper starts just because its key is in `.env`. Clear the key and run the start script
+again to turn it off. Don't forward Marquee's port on your router.
 
 ### Radarr and Sonarr
 
-Marquee can hand approved requests to [Radarr](https://radarr.video) (films) and
-[Sonarr](https://sonarr.tv) (shows), which find and download them; when the file lands in a library
-folder, the request is marked as here and whoever asked gets a notification.
+Marquee can pass approved requests to [Radarr](https://radarr.video) (films) and
+[Sonarr](https://sonarr.tv) (shows), which find and download them. When the file arrives, the
+request is marked as here and whoever asked gets a notification. Works with Radarr 3–5 and Sonarr 3
+and 4.
 
-1. **Settings → Radarr & Sonarr.** If they run as normal programs on the same PC as Marquee's Docker,
-   the address is `http://host.docker.internal:7878` (Radarr) and `http://host.docker.internal:8989`
-   (Sonarr). The API key is in Radarr / Sonarr under *Settings → General*. Press **Connect**.
-2. **Quality profile:** what requests are added with. Each profile is listed with the biggest picture
-   it lets in ("HD-1080p · up to 1080p"); one that allows 4K is flagged, since those files are several
-   times bigger. A 1080p profile is picked for you when you connect.
-3. **Folder:** Radarr's / Sonarr's root folder for downloads. It must be a folder a Marquee library
-   uses (each is labelled with its library), and its drive must be shared with Docker (see
-   *Other drives*), or downloads won't show up.
-4. **Seasons (Sonarr):** which seasons a show gets when its request goes straight through: first
-   season only (the default), latest season, new episodes from now on, or every season.
-5. **Who can skip approval:** for each person, separately for films and for shows. Their requests go
-   straight to Radarr / Sonarr; everyone else's wait for you. Your own (admins') go straight through
-   too. Anyone who can skip approval chooses each time they ask: **Download now** or **Add to
-   requests** (it waits like anyone else's, to decide later); the last choice is remembered. When you approve one yourself you can pick a different profile, and for a show the
-   seasons, or *Approve only* to mark it approved without sending it.
+In **Settings → Radarr & Sonarr**:
+1. **Connect.** If Radarr and Sonarr run as normal programs on the same PC, the addresses are
+   `http://host.docker.internal:7878` and `http://host.docker.internal:8989`. Their API keys are in
+   their own *Settings → General*.
+2. **Quality profile.** The profile requests are added with. Each shows the biggest picture it lets
+   in, and ones that allow 4K are flagged (those files are several times bigger). A 1080p profile is
+   picked for you.
+3. **Folder.** Radarr's or Sonarr's root folder for new downloads. It must be a folder one of
+   Marquee's libraries uses, and on a drive shared with Docker, or downloads won't show up.
+4. **Seasons (Sonarr).** What a show gets when its request goes straight through: the first season
+   (the default), the latest season, new episodes from now on, or everything.
+5. **Who can skip approval,** for films and shows separately. Their requests go straight through,
+   as admins' do, and they can choose each time between **Download now** and **Add to requests**.
+   Everyone else's wait for you. When you approve one, you can pick a different profile (and seasons),
+   or *Approve only* to mark it approved without sending it.
 
-The Requests page then shows how each is getting on: *Looking for a copy*, *Downloading · 45% ·
-20 min left*, *Not out yet (expected 2027-03-12)*, *7 of 62 episodes downloaded*. If Radarr / Sonarr
-can't be reached, the request waits with the reason and a **Try again** button, admins get a
-notification, and the health check says so. Works with Radarr 3–5 and Sonarr 3 and 4.
+The Requests page shows how each one is getting on: *Looking for a copy*, *Downloading · 45% · 20
+min left*, *Not out yet (expected 2027-03-12)*, *7 of 62 episodes downloaded*. If Radarr or Sonarr
+can't be reached, the request waits with a **Try again** button and admins are told.
 
-- **Shows:** whoever asked hears when the first episodes arrive ("more on the way"), and that it's
-  here only once Sonarr has every episode it was asked for.
-- **More seasons:** *＋ More seasons* on a show's page lists its seasons (with how many episodes of
-  each are here) to ask for the rest. Sonarr then gets just those seasons; it follows the same
-  approval rules as any request.
-- **Limits** (same settings page): keep some free space (requests that would skip approval wait for
-  you when the download folder has less, 100 GB by default), how many films and shows each person
-  may get each week without approval, and after how many days something not found is flagged to
-  you (7 by default), with **Look again** and **Try another quality** on the request.
+- **Shows:** whoever asked hears when the first episodes arrive, and that it's all here once Sonarr
+  has every episode it was asked for. *＋ More seasons* on a show's page asks for the rest, season
+  by season.
+- **Limits:** a free-space floor (requests that would skip approval wait for you when the download
+  folder has less than 100 GB free, by default), a weekly allowance per person, and after how many
+  days something not found is flagged (7 by default), with **Look again** and **Try another
+  quality**.
 
-### Backups
+### Graphics card
 
-Marquee backs itself up every night at 03:00 into the `backups` folder next to
-`docker-compose.yml`. You can change the folder with `BACKUP_DIR` in `.env`, and point it at
-another drive or a synced folder (OneDrive/Dropbox) for extra safety.
-- **What's in a backup:** users and passwords, watch history, My List, libraries, your edits and
-  custom artwork, downloaded posters, and settings. Your media files are not included.
-- **Format:** each backup is a `.tar.gz` you can open with 7-Zip.
-- **Settings → Backups:** change the time, how many automatic backups to keep (default 7), back up
-  now, download a backup, or restore one. You can restore from the list or by uploading a file,
-  e.g. to move Marquee to a new PC.
-- **Safety copy:** before restoring, Marquee saves a backup of how things are now, so a restore can
-  be undone.
-- **Checked:** each backup is read back as soon as it's written, so a full or failing drive shows
-  up straight away (the health check says so) rather than on the day you need the backup.
-- **Restoring any time:** a restore stops a library scan that's running and scans again after,
-  and damaged files are refused before anything changes.
-- **Kept forever:** backups you make yourself are never deleted automatically.
-- **A second copy somewhere else:** *Settings → Backups → Also keep a copy somewhere else* copies
-  every backup to another folder as well (another drive, a network share, or a OneDrive / Google
-  Drive / Dropbox folder, which then copies it off the PC), keeping the newest 14 there by default.
-  In Docker, share that folder's drive first (see *Other drives*). If a copy fails (a drive
-  unplugged, a share offline), Settings and the health check say so.
+A graphics card converts video much faster than the processor, and copes with several viewers at
+once.
 
-### Graphics card (faster video conversion)
+1. In `.env`, set `GPU=nvidia` for an NVIDIA card (Windows or Linux), or `GPU=intel` / `GPU=amd` for
+   Intel or AMD graphics, including Intel Arc cards (**Linux only**: Docker Desktop on Windows can
+   only pass an NVIDIA card through, so on Windows these are skipped with a note). With two cards
+   on Linux, e.g. NVIDIA for other programs and an Intel Arc for Marquee, set `GPU=nvidia,intel`,
+   pick the Intel one in *Settings → Playback* and point `VAAPI_DEVICE` at it.
+2. Run the start script again.
+3. *Settings → Playback* shows which converter is in use, or why a card couldn't be used.
 
-Videos your browser can't play as they are get converted while you watch. A graphics card does
-this much faster than the CPU, and can handle several viewers at once.
-1. In `.env`, set `GPU=nvidia` (an NVIDIA card on Windows or Linux), or `GPU=intel` / `GPU=amd`
-   (built-in graphics or an Intel Arc card, **Linux hosts only**: Docker Desktop on Windows can't
-   pass these through). NVIDIA, Intel and AMD cards decode and resize the video too, not just
-   encode it, so the CPU is left almost free. With two cards (say NVIDIA for AI and an Intel Arc
-   for Marquee), pick the Intel one in *Settings → Playback* and point `VAAPI_DEVICE` at it.
-2. Run `start-marquee.bat` again.
-3. *Settings → Playback* shows which converter is in use, and why a card isn't used if it
-   couldn't start. Marquee tests each card with a short encode at start-up, and falls back to the
-   CPU on its own if the card fails during playback (or at start-up), then tries the card again
-   after 10 minutes (less often if it keeps failing) and goes back to it once it works.
-
-On Windows, NVIDIA needs Docker Desktop's WSL 2 backend (the default) and a current NVIDIA
-driver; nothing needs to be installed inside WSL. Without Docker, ffmpeg needs to be built with
-NVENC / VAAPI / QSV support. Set `HWACCEL=nvdec|nvenc|vaapidec|vaapi|qsv|software` to force a choice.
+The card decodes and resizes the video as well as encoding it, so the processor stays almost free.
+Marquee tests each card when it starts, falls back to the processor by itself if the card fails, and
+tries the card again later. On Windows, NVIDIA needs only Docker Desktop's WSL 2 backend (the
+default) and a current NVIDIA driver. `HWACCEL=nvdec|nvenc|vaapidec|vaapi|qsv|software` forces a
+choice.
 
 ### Overnight conversions
 
-DVD rips (MPEG-2), 4K and HEVC files make the server convert them every time a 1080p TV, a Roku
-or a browser plays them. *Settings → Overnight conversions* makes a 1080p H.264 copy of each at
-night instead, on the graphics card. It **pauses whenever anyone is watching anything** (and carries
-on where it was afterwards; on the graphics card it lets go of the card's memory while paused), shows **how long it has left**, and admins can **Pause**, **Carry on**
-or **Stop for tonight** (the copy under way is thrown away; it starts again the next night) from
-this page or the Activity page.
-The copy is another version of the title: each TV plays whichever copy it can play as it is (a 4K
-TV still gets the original), and watch progress, intro skipping and subtitle files are shared. The
-originals are never changed.
-- **Which files:** DVD rips and older formats, 4K files, HEVC/AV1 up to 1080p, or anything else the
-  1080p TVs can't play as it is (where only the sound or the file type was the trouble, the picture
-  is copied, not converted).
+DVD rips, 4K and HEVC files have to be converted every time a 1080p TV, a Roku or a browser plays
+them. *Settings → Overnight conversions* makes a 1080p copy of each at night instead, so they play
+as they are from then on.
+
+- **It never gets in the way.** It pauses whenever anyone is watching anything, and carries on
+  afterwards. It shows how long it has left, and admins can **Pause**, **Carry on** or **Stop for
+  tonight** here or on the Activity page.
+- **The copy is another version of the title.** Each device plays whichever version it can play as
+  it is (a 4K TV still gets the original). Watch progress, skip-intro and subtitles are shared. The
+  originals are never changed.
+- **Which files:** DVD rips and older formats, 4K files, HEVC/AV1, and anything else the 1080p TVs
+  can't play. Where only the sound or the file type was the trouble, the picture is copied rather
+  than converted. Copies keep every sound track (as stereo) and text subtitles.
 - **When and how much:** the hours it may run (01:00–07:00 by default; *Start now* runs it for six
-  hours), and the space the copies may take (200 GB by default).
-- **Where:** *Where copies are kept* in the same page: the copies folder (`OPTIMIZED_DIR` in `.env`,
-  `./optimized` next to `docker-compose.yml` by default), **next to the originals** (in a
-  `.marquee-converted` folder beside each film or episode, which the library, Radarr, Sonarr and
-  Plex all skip; so the copies are spread over the drives the films are on), or **a folder you
-  pick** (in Docker, on a drive shared with `DRIVE_1`… — see *Other drives*). It shows the free space
-  there. After changing it, *Move them here* moves the copies already made, even to another drive;
-  until then they keep playing from where they are. A DVD film's copy is about 1–2 GB, a 4K film's
-  1080p copy about 4–8 GB.
-- Copies keep every sound track (as stereo) and text subtitles; picture subtitles (DVD / Blu-ray)
-  stay with the original, which can still be picked from the title's versions.
+  hours) and the space the copies may take (200 GB by default).
+- **Where:** in the copies folder (`OPTIMIZED_DIR`, `./optimized` by default), **next to the
+  originals** (in a hidden `.marquee-converted` folder that the library, Radarr, Sonarr and Plex all
+  skip), or **a folder you pick** (on a shared drive). *Move them here* moves copies already made. A
+  DVD film's copy is about 1–2 GB, and a 4K film's about 4–8 GB.
 
-### Casting to a TV
+### Backups
 
-- **Chromecast / Google TV:** the cast button appears in the player in **Chrome or Edge**, when
-  Marquee is opened as `http://localhost:32500` on the server PC or over HTTPS (Tailscale /
-  Cloudflare). Google only allows casting from secure pages, so it doesn't appear on plain
-  `http://192.168…` addresses.
-- The TV fetches the video from Marquee itself, so it needs an address it can reach.
-  `start-marquee.bat` passes this PC's network address automatically. If casting doesn't start,
-  set it in *Settings → Playback*, e.g. `http://192.168.1.20:32500`. A Tailscale address only
-  works for casting with `TAILSCALE_PUBLIC=true`, because the TV isn't on your tailnet.
-- **AirPlay:** Safari on Mac, iPhone and iPad shows its AirPlay button in the player.
-- Casting uses a signed link that lasts 12 hours and only opens that one video.
+Marquee backs itself up every night at 03:00, into the `backups` folder next to
+`docker-compose.yml` (`BACKUP_DIR` in `.env` changes it).
 
-### Watching on a TV (Roku, Android TV, TV browsers)
+- **What's in a backup:** users and passwords, watch history, My List, libraries, your edits and
+  artwork, and settings. Not your media files. Each backup is a `.tar.gz` that 7-Zip can open.
+- **Settings → Backups:** change the time and how many to keep (7 by default), back up now,
+  download one, or restore one, from the list or by uploading it (e.g. to move to a new PC).
+- **Safe to restore:** Marquee saves how things are first, so a restore can be undone, and damaged
+  files are refused before anything changes. Backups you make yourself are never deleted
+  automatically.
+- **Checked:** each backup is read back as soon as it's written, so a full or failing drive shows up
+  now, not on the day you need it.
+- **A second copy elsewhere:** *Also keep a copy somewhere else* copies every backup to another
+  drive, a network share or a OneDrive / Google Drive / Dropbox folder (the newest 14 by default).
+  If that copy fails, Settings and the health check say so.
 
-- **Android TV / Google TV / Fire TV:** install `Marquee-TV.apk` (Account → *Watch on a TV* has the
+Backups contain password hashes and your keys, so keep them somewhere private.
+
+### TVs and casting
+
+- **Android TV / Google TV / Fire TV:** install `Marquee-TV.apk` (*Account → Watch on a TV* has the
   link; see [`androidtv/README.md`](androidtv/README.md)).
-- **Roku:** add the channel in Roku's developer mode with `Marquee-Roku.zip` (same place; see
-  [`roku/README.md`](roku/README.md)).
-- **A TV's own web browser** works too: Marquee switches to TV mode by itself on most TVs.
-
-**Signing in:** the TV shows a **code**. On your phone or computer, open
-`http://YOUR-PC:32500/#/link` (or **Account → Watch on a TV**), type the code, and the TV signs in
-as you a few seconds later. Nobody types a password with a remote (*Sign in with a password
-instead* is there if you need it). Linked TVs are listed on that page, where you can unlink them.
+- **Roku:** add the channel in the Roku's developer mode with `Marquee-Roku.zip` (see
+  [`roku/README.md`](roku/README.md)). After that, *Settings → Server & updates → Roku TVs* updates
+  every Roku from Marquee.
+- **A TV's own web browser** works too: Marquee switches to TV mode by itself.
+- **Signing in:** the TV shows a code. On your phone, open **Account → Watch on a TV** (or
+  `http://YOUR-PC:32500/#/link`) and type it in. The TV signs in as you a few seconds later.
+  Linked TVs are listed on that page, where you can unlink them.
+- **Chromecast / Google TV:** the cast button appears in the player in Chrome and Edge when Marquee
+  is opened over HTTPS (Tailscale / Cloudflare) or as `http://localhost:32500` on the server. Google
+  doesn't allow casting from plain `http://192.168…` addresses. The TV fetches the video from
+  Marquee, so if casting doesn't start, set the server's address in *Settings → Playback*.
+- **AirPlay:** Safari on a Mac, iPhone or iPad shows its AirPlay button in the player.
 
 ### Updating
 
-Marquee checks GitHub for new versions twice a day. Admins see a green dot on their avatar when an
-update is available. **Settings → Server & updates** shows what's new, and has **Check now** and
-**Update** buttons.
+Marquee checks for new versions twice a day. Admins see a green dot on their picture when one is
+available, and **Settings → Server & updates** shows what's new, with **Check now** and **Update**.
 
-Updating doesn't interrupt anyone. Pressing **Update** downloads and builds the new version while
-Marquee keeps running; it then restarts into it (about a minute) once nobody's watching: no one
-playing, and no one paused for less than 15 minutes. While it waits, the page says how many people
-are watching and offers **Restart now anyway**; **Update and restart now** skips the wait from the
-start. If a restart does happen mid-film, the web player, the phone and Android TV apps and the
-Roku channel show "Reconnecting to Marquee…", wait for it (up to a minute and a half), and carry on
-from the same moment.
+**Updating doesn't interrupt anyone.** Pressing **Update** builds the new version while Marquee
+keeps running, then restarts into it (about a minute) once nobody's watching: nobody playing, and
+nobody paused for under 15 minutes. While it waits, the page says how many are watching and offers
+**Restart now anyway**. If a restart does happen mid-film, every player shows "Reconnecting to
+Marquee…" and carries on from the same moment. Tick **Install updates by itself at night** to have
+them installed between 2 and 5 am, when nobody's watching. Big releases are marked **Significant
+update** and listed in [CHANGELOG.md](CHANGELOG.md).
 
-To have updates installed by themselves, tick **Install updates by itself at night**: between 2
-and 5 am (the server's time), when one is available and nobody's watching, Marquee updates itself,
-at most once a night.
+The **Update** button needs the *update helper*, a small background task on the server PC (the app
+runs inside Docker and can't rebuild itself). The start script offers to turn it on the first time;
+answer **Y**.
+- **Windows:** a scheduled task, "Marquee Updater", that runs while you're signed in. Remove it with
+  `marquee.ps1 RemoveHelper` or in Task Scheduler.
+- **Linux:** a system service, `marquee-updater` (`./marquee.sh install-helper` / `remove-helper`).
+- **Without it:** run the update script on the server PC. It does the same thing.
 
-Big releases are labelled **Significant update** in Settings → Server & updates, and listed in
-[CHANGELOG.md](CHANGELOG.md). For maintainers: a commit is marked by an `Update-Type: significant`
-line in its message, or a subject starting with `[Significant]`.
+The helper and the app talk only through the `control` folder. The app never gets access to Docker.
 
-**Update now** needs the *update helper*, a small background task on the server PC. The app runs
-inside Docker and can't rebuild itself, so the helper does it. The first time you run
-`start-marquee.bat`, it asks whether to turn the helper on; answer **Y**.
-- **What it is:** a Windows scheduled task named "Marquee Updater" that starts when you sign in.
-- **What it does:** it waits until you press *Update*, then downloads the new version and
-  rebuilds it, waits for Marquee's go-ahead (nobody watching), and restarts Marquee into it. The web
-  page shows progress and reloads by itself when the update is done.
-- **Turning it off:** run `marquee.ps1 RemoveHelper`, or delete the task in Task Scheduler.
-- **On Linux** it's a system service, `marquee-updater`, installed by `./marquee.sh install-helper`
-  (which `./marquee.sh start` offers); `./marquee.sh remove-helper` removes it.
-- **Without the helper:** run `update-marquee.bat` on the server PC. It does exactly the same thing.
+## What it can do
 
-The helper and the app talk only through the `control` folder next to `docker-compose.yml`. The app
-never gets access to Docker itself.
+### Watching
 
-## Features
+- **Plays as it is whenever it can.** Direct play with instant seeking when the device supports the
+  file. MKVs with ordinary H.264 video keep their original picture (only the sound is converted),
+  and HEVC plays unconverted in browsers that can decode it. Everything else is converted on the
+  fly, and if one way of playing fails, Marquee falls back to another by itself.
+- **Quality:** *Original*, *Auto* (adaptive, the default away from home) or a fixed 1080p / 720p /
+  480p / 360p. Seeking anywhere starts within seconds. Admins can cap the quality for people away
+  from home, so one viewer can't use up your upload.
+- **HDR:** HDR10, HLG and Dolby Vision keep their colours when converted, instead of looking grey.
+  Devices that show HDR themselves get the file as it is.
+- **Skip Intro, Skip Recap and Up Next:** theme songs, recaps and end credits are found by comparing
+  episodes' sound. Skipping can be automatic, and Up Next offers the next episode at the credits.
+  Admins can adjust the markers by hand.
+- **The player:** seek-bar thumbnails, playback speed, picture-in-picture, sound-track and subtitle
+  choice, night mode (clearer dialogue, quieter loud scenes) and keyboard shortcuts. "Are you still
+  watching?" appears after three episodes play by themselves.
+- **Subtitles:** `.srt`/`.vtt` files, subtitles inside the file, and DVD / Blu-ray picture subtitles
+  (drawn into the video). Missing ones can be found on OpenSubtitles.com from the player, or fetched
+  automatically in each person's languages, once an admin adds a free API key.
+- **Versions:** two copies of a film (say 4K and 1080p) are one title, and each device plays the copy
+  it can play as it is. Discs ripped with MakeMKV become one film plus its extras.
+- **Watch together:** 👥 in the player makes a link. Everyone who opens it stays in sync.
+- **Phone downloads:** the Android app saves films and episodes for offline viewing, as the original
+  file or a smaller copy the server makes. Progress goes back to the server once you're online.
 
-| Feature | What Marquee does |
-| --- | --- |
-| **Look** | An **opening animation** (with sound where the browser allows it, and in the Android apps) when Marquee opens; any key skips it, and *Account* can turn it or its sound off. Admins can upload their own sound in *Settings → Home screen*. A red-and-black design: a top bar, a featured banner on the home page (with its trailer playing quietly when there is one), rows that scroll sideways (Continue Watching, My List, New in each library, collections, "Because you watched …", genres), wide cards with titles on the artwork, and a **More info** pop-up with episodes, extras and **More like this**. Works on phones (with a bar along the bottom) and in the Android app. |
-| **TV apps** | A **Roku** channel and an **Android TV** app, signed in by typing the code the TV shows into your phone. Both have profiles, title pages with cast, extras and More like this, ✱ options, sorting and filters, collections, requests, notifications and their own settings; Android TV also has voice search and puts Continue Watching on the TV's home screen. TV mode in the web interface: bigger highlights, the remote's arrows move between titles, Back closes pop-ups.  Rokus are updated from *Settings → Server & updates → Roku TVs*, without uploading the zip to each one. |
-| **Hover previews** | On a computer, resting the pointer on a title opens a larger card playing its trailer quietly, or (without a trailer) a 30-second clip from the title itself that the server makes the first time it's wanted, with Play, My List and More info. The home page's banner plays one too. On/off in *Settings → Playback*. |
-| **Accounts** | Sign-in screen, with an admin account created on first run. Admins add users, choose which libraries each one can see, and decide who can use the downloader. Each user has their own watch history, Continue Watching and resume points. Admins can **reset a password** (a temporary one they must change when they sign in) and **unlock** someone locked out by wrong passwords or PINs. |
-| **Libraries** | Movie and TV Show libraries, each combining one or more folders, which can be on different drives. Everything inside the folders is found, including shows in folders of their own (`Kids/Bluey/…`). Add, edit and remove them in Settings with a built-in folder picker that lists your drives, accepts typed paths and shows how many videos a folder holds; whole drives can be shared with Docker (see *Other drives*). |
-| **Scanning** | Probes new or changed files with `ffprobe`, removes deleted ones, and rescans periodically. If a drive is offline, its items and watch history are kept. |
-| **Filename matching** | `Movie (Year).ext`, release-style names like `Movie.2019.1080p.BluRay.x264`, `Show/Season 01/Show - S01E02 - Title.ext`, `1x02`, `S01E01-E02`, Specials folders. |
-| **Online metadata** | Posters, backgrounds, summaries, genres, ratings, cast and episode titles. TV shows use **TVmaze** (no key needed). Movies and TV can also use **TMDB**: paste a free API key in *Settings → Metadata & subtitles*. Shows can also use **TheTVDB**, where Sonarr gets its episode numbers (a project key, plus a subscriber PIN for a user-supported key): choose it for a show with *⋯ → Fix match*, or tick *Look up new shows on TheTVDB first*. Pick the metadata language there too. New items are matched automatically. |
-| **Fix match / refresh** | When a title is matched wrong: *⋯ → Fix match…*, search, and pick the right result from a list with posters. *Refresh metadata* and *Unmatch* are in the same menu. For a show, use the show's ⋯ menu (or *Fix show match…* on any of its episodes). |
-| **Fix episode** | When a file's name has the wrong numbers (DVD order, specials, a double episode named as one) and it shows another episode's title and picture: *⋯ → Fix episode…* on the episode, and pick the episode it really is from the show's list (which also shows which file each episode is now), or type the season and episode. It's kept when files are rescanned; *Use the file name's numbers* undoes it. |
-| **Edit anything** | Change the title, sort title, year, tagline, summary and genres of a movie, show or episode. Set a poster or background by **uploading an image**, pasting a URL, or choosing from the matched source's alternatives. Your edits always win: refreshes and rescans never overwrite them, and each field can be reset to automatic. |
-| **Artwork** | Local `poster.jpg` / `fanart.jpg` / `<name>-poster.jpg`, online artwork, your own uploads, or a frame grabbed from the video. |
-| **Browsing** | Home screen with Continue Watching, My List and Recently Added. Library grids with sort, genre filter, title filter, an Unwatched filter, adjustable poster size, an A–Z jump bar and **Shuffle**. Show pages with seasons, cast lists, clickable genres, and live search (press `/`) that also finds actors ("tom hanks"), genres and moods ("funny", "scary"), years and decades ("90s comedy") and words from the story ("christmas"), and forgives spelling mistakes ("batmn"). The scroll position is kept when you go back. |
-| **My List & menus** | A **⋯** menu on every poster: play, mark watched/unwatched, add to **My List** (a per-user watchlist), remove from Continue Watching, and, for admins, edit / fix match / refresh. |
-| **Versions** | Two copies of a film (`Film (Year) - 4K.mkv` and `Film (Year) - 1080p.mp4`) are one title: each device plays the copy it can play as it is (4K for a 4K TV box, 1080p for phones, 1080p TVs and browsers), with a picker on the film's page. Discs ripped with MakeMKV (`Name_t00.mkv`, `_t01`…) become one film and its extras. **Settings → Formats & space** shows what the space goes on and which titles need converting for which players, and why. |
-| **HDR** | HDR10, HLG and Dolby Vision films keep their colours when the server converts them (tone mapping to ordinary colours), instead of looking grey and washed out; thumbnails and previews too. The Docker image uses Jellyfin's build of ffmpeg, which does this on an NVIDIA graphics card (or quickly on the CPU), and handles Dolby Vision profile 5 files from streaming services. Players that show HDR themselves get the file as it is. |
-| **Streaming** | **Direct Play** with instant seeking when the browser supports the file. MKVs with H.264 video (the usual kind) stream with their **original picture, not converted**: cut into segments at the file's keyframes (found once per file, the first time it's played), so seeking works as with any video and only the sound is converted. HEVC (x265) plays without converting in browsers that decode it (Safari; Chrome and Edge on PCs whose graphics card can). Everything else ffmpeg converts **on the fly**. Falls back automatically if a way of playing fails. The Android apps and the Roku play MP4 and MKV files as they are when the device can, and the Roku keeps the original picture when only the sound needs converting. |
-| **Quality / adaptive streaming** | Pick **Original**, **Auto** or a fixed 1080p / 720p / 480p / 360p in the player. *Auto* uses HLS adaptive streaming, which switches quality to suit the connection. It is the default when you're away from home. Segments are made on demand, so seeking anywhere starts within seconds. |
-| **Graphics card conversion** | NVIDIA (NVENC), Intel Quick Sync and Intel/AMD VAAPI, detected automatically, with fallback to the CPU. An NVIDIA card also **decodes and resizes** the video (NVDEC), so converting even 4K HEVC leaves the CPU almost free; what the card can't decode falls back to the CPU for decoding only. |
-| **Skip intro, Up Next at the credits** | Theme songs and end credits are found automatically by comparing the audio of episodes in a season. A **Skip Intro** button appears during the intro (`S`), or turn on automatic skipping under *Account*. When the credits start, **Up Next** offers the next episode (with *Watch credits* to stay). Admins can fix either by hand: *⋯ → Edit intro & credits…*, or ✂ in the player. |
-| **Seek preview thumbnails** | Pictures above the seek bar while you hover or drag. They're made the first time a video is opened (a few seconds to a minute or two for a film). |
-| **Kids profiles & ratings** | Titles carry their maturity rating (PG-13, TV-14, 12A…, from TMDB for your country, or set by hand with *⋯ → Edit*), shown as a badge. Give a profile a limit in *Settings → Users* (and choose whether unrated titles show): anything above it disappears everywhere for that profile. |
-| **Screen time** | For each profile (*Settings → Users*): a **bedtime** (every night or only on school nights, Sunday to Thursday) and a **daily limit**. Enforced by the server on every TV, phone and browser: nothing starts outside them, and what's playing stops with a message when bedtime starts or the time's used up. The profile's Account page shows what's left today. Every player also asks **“Are you still watching?”** after three episodes have played by themselves. |
-| **Downloads on the phone** | The Android app saves movies and episodes to watch offline: the original file when the phone plays it, or a 1080p / 720p / 480p copy the server makes first. *Downloads* lists them; progress goes back to the server when you're online again. |
-| **Personal touches** | Sound and subtitle languages are remembered per show; 👍 / 👎 on titles steers suggestions ("Because you liked …"); a **Top 10 in your house this week** row; cast photos and **actor pages**; who's in it shows when you pause. |
-| **Requests** | Anyone can ask for a film or show (looked up on TMDB / TVmaze, or typed in) with a note, or for **more seasons** of a show that's here; admins approve, decline or mark it added on the Requests page. It's marked as here by itself when it turns up, and whoever asked gets a notification. With **Radarr / Sonarr** connected, approved requests are sent to them (with a chosen quality profile and, for shows, seasons), chosen people's requests skip approval (films and shows separately, within free-space and weekly limits), each request shows its download progress, and anything not found after a few days is flagged. |
-| **Notifications** | A bell with new episodes of shows you watch (or have on My List) and news about your requests; the phone app shows them as phone notifications. |
-| **Health check** | Settings shows disk space, offline folders, backups (and whether they're copied off the PC), update and graphics-card problems at a glance; admins are notified when something turns bad. |
-| **Skip Recap** | "Previously on…" recaps are found automatically and get a Skip Recap button. |
-| **Night mode** | Clearer dialogue and quieter loud scenes, on every player (Account → Player, or ☾ in the player). |
-| **Who's watching?** | Profiles for a shared TV or tablet, each with a picture (a built-in face on a colour, or an uploaded photo: click yours on the *Account* page; admins can set anyone's in *Settings → Users*): anyone who sets a PIN (*Account*) can be switched to with it, and admins can let children's accounts be picked without one. *Switch profile* is in the account menu; *Account → Ask “Who's watching?”* shows the picker when Marquee opens on that device. Five wrong PINs lock a profile for 10 minutes. |
-| **Activity** | *Activity* (admins): a card for each person watching (what, on which device, at home or away, how far in) saying whether it plays as it is or is being converted, on the graphics card or the CPU, and **why** (e.g. "DTS sound, MKV file", or the away-from-home limit), with a **Stop** button (their player stops and says you stopped it); background work (overnight conversions with time left and Pause / Stop for tonight, library scans, subtitle fetching, intro finding…); everything watched in the last 24 hours; and the server's CPU and memory use. |
-| **Casting** | Chromecast / Google TV from Chrome and Edge, AirPlay from Safari. Includes subtitles, resume position and next episode. |
-| **Watch together** | 👥 in the player makes a watch party and gives you a link. Everyone with an account who opens it stays in sync: play, pause, skipping and the next episode. |
-| **Subtitles** | Sidecar `.srt`/`.vtt`, embedded text subtitles, and Blu-ray / DVD picture subtitles (PGS, VobSub), which the server draws into the video. Missing ones can be found on **OpenSubtitles.com** from the player (*Subtitles → Search online…*) once an admin adds a free API key in *Settings → Metadata & subtitles*, or **fetched automatically** in the languages your family picked on their Account pages (newest titles first, within OpenSubtitles' daily allowance; a subtitle made for the same file is preferred, machine-translated ones never used). |
-| **Coming soon** | A home-page row of new episodes of shows in your libraries (from Sonarr's calendar, or TMDB / TVmaze for shows people have been watching) and films on their way in Radarr, with when they arrive. On the web and the Roku; *Settings → Home screen* can turn it off. |
-| **Anime numbering** | Episodes numbered straight through (“[Group] Frieren - 30”, “One Piece - 1071”) are placed in the season TMDB / TVmaze has them in, when the number doesn't exist in its own season; the running number shows next to the episode. A show's *⋯ → Episode numbering…* sets it by hand (counted straight through, or by season). |
-| **Quality limit away from home** | *Settings → Playback*: cap the quality for people watching through Tailscale, Cloudflare or from outside, so one viewer can't use up your upload. Tailscale devices count as away even when they use the house address; people at home count as home through a reverse proxy in the house. |
-| **Collections** | Film series from TMDB (e.g. “The Matrix Collection”) are grouped automatically, and admins can make their own with *⋯ → Add to collection…* or by selecting titles (**☑ Select**). Collections are listed in separate **Movies, TV and YouTube** sections (worked out from their titles, or chosen with *Show under*). Each collection has an **order**: release date, **episode number in the title** (“Ep 12”, “S2E5”, “Part 3”…), title, date added, reversed, or **arranged by hand**. **⌕ Find series** turns videos like “Hardcore Survival Ep 1, Ep 2…” into collections. A collection's page has a **‹ back** button to the page you came from (Movies, Home…). Movies in a collection show as the collection on the home page and in libraries; switch a library to *All titles* (or untick it under *Account*) to see every movie on its own. Admins can override anything: rename (TMDB ones too), add or remove titles, pick the cover (*⋯ → Use as the collection's cover*), hide TMDB collections, *Reset to TMDB*, and **⇅ Arrange** each section. |
-| **Franchises** | Film worlds that span several series, films and TV shows are found automatically from TMDB's keywords and studios: the **Marvel Cinematic Universe**, **Star Wars**, **DC**, **X-Men**, **Spider-Man**, the **Wizarding World**, **Middle-earth**, **Star Trek**, the **MonsterVerse**, **The Conjuring Universe**, **Planet of the Apes**, **Rocky & Creed**, and the studios **Pixar**, **Walt Disney Animation**, **DreamWorks Animation**, **Illumination** and **Studio Ghibli**. They have their own section in Collections and a row on the home page. A franchise's page shows **how many you've seen** and a button to **start, continue or watch the next one**, with its titles in rows by series. Admins can arrange a **story order**, which the next-up button follows. A title's page shows the franchise it's part of and **More from …**. Franchises can be renamed, added to, hidden or reset like TMDB collections, and any collection can be shown under *Franchises*. |
-| **Select several** | **☑ Select** in a library, collection, My List or search: click titles (Shift+click for a range, Ctrl+A for all), then add them to a collection or a new one, mark watched/unwatched, add to My List, add or remove a genre, or refresh metadata — all at once. |
-| **Extras** | Trailers, featurettes and behind-the-scenes clips show on their movie or show page instead of in the library (see the folder layout below). |
-| **New files appear by themselves** | Marquee notices files added, removed or renamed in your folders within about 15 seconds, including on Windows drives in Docker. Files still being copied are picked up once they're finished. |
-| **Logs and housekeeping** | *Settings → Server & updates → Logs* shows recent warnings and errors with plain-language explanations. *Settings → Server & updates* shows the space caches use; unused cached files are cleaned up daily. The database is saved crash-safely (with a `.bak` copy) and restored from the newest backup if it's ever unreadable. |
-| **Accurate matching** | Each match gets a score from the title (ignoring punctuation, “The”, “II” vs “2”, original-language titles), the year, and for movies the **running time** (so a 2-hour file isn't matched to the 90-minute film or remake with the same name). Poor matches are never applied. Doubtful ones are listed under *Settings → Libraries → Library problems → Matches that need a check*, with the best guesses as posters to pick from in one click, or *✓ It's right*. **Ids in names** match exactly: `Heat (1995) {tmdb-949}`, `[imdbid-tt0113277]`, or `{tvdb-81189}` on a show folder. **Re-check matches** looks up a whole library again with these rules (matches you picked or confirmed are kept). |
-| **Library problems** | *Settings → Libraries → Library problems* lists offline folders, unreadable files, matches that need a check, titles with no online match, duplicates and missing episodes. |
-| **Player** | Seek bar with hover time, skip, volume, **playback speed**, **picture-in-picture**, fullscreen, keyboard shortcuts, audio track choice, subtitles (sidecar `.srt`/`.vtt` or embedded), and an Up Next countdown. Autoplay and default subtitles can be set per browser under *Account*. |
-| **YouTube downloader** | Paste a video or playlist link, pick a library and quality. Saves an MP4 that plays directly, the thumbnail as its poster, English subtitles when available, and the video's details: its title, description, upload date, channel, a link to the original and its chapters (shown as marks on the seek bar). It is never matched to the wrong movie. **Nothing is downloaded twice**: a link you already have is caught, with *Download again* to override. Admins can set **download hours** (e.g. overnight) and a **speed limit**. Failed downloads are **retried automatically** and continue where they stopped. **yt-dlp updates itself** daily, and you get a notice when a download finishes. |
+### Finding something to watch
 
-Only download videos you have the right to save. Respect the site's terms and copyright.
+- **Home screen:** a featured banner (playing its trailer quietly), Continue Watching, My List, new in
+  each library, collections, franchises, "Because you watched…", a **Top 10 in your house this
+  week**, and **Coming soon** (new episodes and films on their way, from Sonarr and Radarr).
+- **Hover previews:** resting the pointer on a title plays its trailer, or a short clip from the title.
+- **Search** (press `/`) finds titles, actors ("tom hanks"), genres and moods ("funny"), years and
+  decades ("90s comedy") and words from the story ("christmas"), and forgives spelling mistakes.
+- **Libraries:** sorting, genre and title filters, unwatched only, card sizes, an A–Z bar and
+  **Shuffle**. Actor pages, 👍 / 👎 to steer suggestions, and sound and subtitle choices remembered
+  for each show.
+- **Collections:** film series from TMDB are grouped automatically, and you can make your own, in
+  any order you like (including by episode number in the title, "Ep 12", "Part 3"). **⌕ Find series**
+  turns numbered videos into collections.
+- **Franchises:** the Marvel Cinematic Universe, Star Wars, DC, the Wizarding World, Middle-earth,
+  Star Trek, Pixar, Studio Ghibli and others are found automatically. Each page shows how many you've
+  seen and what to watch next, in release or story order.
 
-## Running without Docker
+### The family
 
-Requires Node.js 18+ and `ffmpeg` / `ffprobe`. For downloads, also install
-[yt-dlp](https://github.com/yt-dlp/yt-dlp#installation).
+- **Accounts:** each person has their own history, My List and resume points, and sees only the
+  libraries you share with them. Admins can reset passwords and unlock accounts.
+- **Who's watching?** Profiles with pictures for a shared TV, each with an optional PIN. Children's
+  profiles can be picked without one. Five wrong PINs lock a profile for 10 minutes.
+- **Kids' ratings:** titles carry their age rating (PG-13, TV-14, 12A…). Give a profile a limit and
+  anything above it disappears everywhere for them.
+- **Screen time:** a bedtime (every night, or school nights only) and a daily limit per profile,
+  enforced on every TV, phone and browser. What's playing stops with a message when time's up.
+- **Requests:** anyone can ask for a film or show, or more seasons, with a note. Admins approve or
+  decline, or Radarr and Sonarr take it from there (see above). It's marked as here when it turns up.
+- **Notifications:** new episodes of shows you watch, and news about your requests. The phone app
+  shows them as phone notifications.
+- **The look:** a red-and-black design with an opening animation (any key skips it; *Account* turns
+  it off; admins can upload their own sound), which works on phones, TVs and in the apps.
 
-```bash
-npm start                 # → http://localhost:32500
-```
+### Looking after the library
 
-`npm run sample` creates a demo library in `./sample-media` with synthetic clips covering every
-playback path.
+- **New files appear by themselves** within about 15 seconds, and files still being copied are
+  picked up once finished. When Radarr or Sonarr renames a file or upgrades it to a better copy,
+  its watch history, My List place and fixes follow it.
+- **Matching:** posters, backgrounds, summaries, cast and episode titles from **TMDB** (with a free
+  key), **TVmaze** (no key needed) and **TheTVDB** (where Sonarr gets its episode numbers). Matches
+  are scored on the title, year and running time, so a remake isn't mistaken for the original, and
+  doubtful ones are listed for a one-click check. An id in a file or folder name matches exactly:
+  `Heat (1995) {tmdb-949}`.
+- **Fixing things:** *⋯ → Fix match* to pick the right title, *Fix episode* for files named with the
+  wrong numbers, *Episode numbering* for anime numbered straight through, and *Edit* to change any
+  title, summary, genre, rating or artwork. Your edits always win over refreshes and rescans.
+- **Artwork:** local `poster.jpg` / `fanart.jpg`, online artwork, your own uploads, or a frame from
+  the video.
+- **Extras:** trailers, featurettes and behind-the-scenes clips show on their film or show page
+  rather than in the library.
+- **☑ Select:** pick several titles and add them to a collection, mark them watched, add a genre or
+  refresh them, all at once.
+- **YouTube downloader:** paste a video or playlist link, pick a library and quality. It saves an
+  MP4 with its thumbnail, subtitles, description and chapters, never downloads the same video twice,
+  retries failed downloads, and can be limited to certain hours or a speed. Only download videos you
+  have the right to save.
 
-## Recommended folder layout
+### Keeping an eye on it
+
+- **Activity** (admins): who's watching what, on which device, whether it's being converted and why,
+  with a **Stop** button; background work (overnight conversions, scans, subtitles); the last 24
+  hours of viewing; and the server's processor and memory use.
+- **Health check:** disk space, offline folders, backups, updates and graphics-card problems at a
+  glance. Admins are notified when something goes wrong.
+- **Library problems:** offline folders, unreadable files, doubtful matches, unmatched titles,
+  duplicates and missing episodes.
+- **Formats & space:** what the space goes on, and which titles each kind of device has to convert.
+- **Logs and Speed:** recent warnings and errors in plain words, and how quickly Marquee has been
+  answering, so "it feels slow" can be checked rather than guessed at.
+- **A dashboard summary:** with `DASHBOARD_KEY` set, a wall dashboard such as Homepage can show
+  who's watching, conversions, requests and library sizes.
+
+## Folder layout
 
 ```
 Movies/
   The Matrix (1999)/The Matrix (1999).mkv
   The Matrix (1999)/The Matrix (1999).en.srt
   The Matrix (1999)/poster.jpg
-  Heat (1995).mp4
-  The Matrix (1999)/The Matrix (1999)-trailer.mkv          (an extra: also -featurette, -behindthescenes,
-  The Matrix (1999)/Extras/Making of.mkv                     -deleted, -interview, -scene, -short; or folders
-TV Shows/                                                     Extras, Trailers, Featurettes, Behind The Scenes…)
+  The Matrix (1999)/The Matrix (1999)-trailer.mkv   (an extra; also -featurette, -behindthescenes,
+  The Matrix (1999)/Extras/Making of.mkv              -deleted, -interview, -scene, -short, or folders
+  Heat (1995).mp4                                     named Extras, Trailers, Featurettes…)
+TV Shows/
   Breaking Bad/
     poster.jpg
     Season 01/Breaking Bad - S01E01 - Pilot.mkv
     Featurettes/Inside the episode.mkv
 ```
 
-For titles that are hard to find by name, add the database id in curly braces and it matches exactly:
-`Movies/Heat (1995) {tmdb-949}/Heat.mkv`, `Heat (1995) [imdbid-tt0113277].mkv`, or a show folder
-like `TV Shows/The Office (US) {tvdb-73244}/`. The id is found on the title's page at themoviedb.org,
+Release-style names (`Movie.2019.1080p.BluRay.x264`), `1x02`, double episodes (`S01E01-E02`) and
+Specials folders are understood too. For titles that are hard to find by name, add the database id
+in curly brackets: `Heat (1995) {tmdb-949}/`, `Heat (1995) [imdbid-tt0113277].mkv`, or a show
+folder like `The Office (US) {tvdb-73244}/`. The id is on the title's page at themoviedb.org,
 imdb.com or thetvdb.com.
 
-## Configuration (environment variables)
+## Settings reference
 
-With Docker, the common ones are set in `.env`. The rest can go under `environment:` in
-`docker-compose.yml`.
+With Docker, the common settings go in `.env` (each is explained there). Others can be added under
+`environment:` in `docker-compose.yml`.
 
-| Variable | Default | Purpose |
+| Setting | Default | What it does |
 | --- | --- | --- |
-| `PORT` / `HOST` | `32500` / `0.0.0.0` | Where the server listens |
-| `DATA_DIR` | `./data` (`/data` in Docker) | Database, thumbnails, caches |
+| `PORT` / `HOST` | `32500` / `0.0.0.0` | Where the server listens (`MARQUEE_PORT` in `.env`) |
+| `DATA_DIR` | `./data` (`/data` in Docker) | Database, thumbnails and caches |
 | `MEDIA_ROOT` | home folder (`/media` in Docker) | Where the folder picker starts |
-| `AUTO_LIBRARIES` | — | Libraries to set up from config: `Name:movie\|show:/path1,/path2;…`. Checked on every start, so new folders are added. |
-| `MEDIA_LABELS` | — | Display names for container folders: `/media/movies=D:/Movies\|…` (set by Docker Compose) |
-| `SCAN_INTERVAL` | `30` | Minutes between automatic rescans (`0` disables). While new files are noticed on their own (`WATCH_INTERVAL`), full rescans run at most every 6 hours. |
-| `DASHBOARD_KEY` | — | Lets a wall dashboard (e.g. Homepage) read a summary from `/api/dashboard` (who's watching, conversions, requests, library sizes), sent as an `X-Dashboard-Key` header. Off when empty. |
-| `TMDB_API_KEY` / `TMDB_TOKEN` | — | TMDB key from the environment (easier: set it in *Settings → Metadata & subtitles*) |
-| `METADATA_LANGUAGE` | `en-US` | Default metadata language (also settable in *Settings → Metadata & subtitles*) |
-| `TVMAZE_DISABLED` | — | Set to `1` to stop using TVmaze |
-| `TVDB_API_KEY` / `TVDB_PIN` | — | TheTVDB project key and subscriber PIN (or set them in *Settings → Metadata*) |
-| `SCAN_PROBES` | `3` | New or changed files a scan looks at in parallel (just one while someone's watching) |
-| `TRANSCODE_PRESET` | `veryfast` | x264 preset used when video must be re-encoded |
-| `HWACCEL` | `auto` | Video converter: `auto`, `software`, `nvdec` (NVIDIA decoding and encoding), `nvenc` (NVIDIA encoding only), `vaapidec` (Intel/AMD decoding and encoding), `vaapi` (Intel/AMD encoding only), `qsv` (also in *Settings → Playback*) |
-| `GPU` | — | `.env` only: `nvidia`, `intel` or `amd` passes the graphics card into Docker |
-| `VAAPI_DEVICE` | `/dev/dri/renderD128` | Graphics device for VAAPI / Quick Sync (with two cards: `ls -l /dev/dri/by-path` shows which is which) |
-| `TRANSCODE_DIR` | system temp folder | Where adaptive-streaming segments are written while you watch |
-| `HLS_MAX_SESSIONS` | `6` | Videos converted at the same time (adaptive streams and the older converter together). When all are in use, a newcomer is told the server is busy rather than stopping someone watching. |
-| `CAST_URL` | — | Address cast devices use to reach Marquee |
-| `MARQUEE_NAME` | the PC's name | Shown by TVs and phones that find Marquee on the network |
+| `AUTO_LIBRARIES` | — | Libraries set up from config: `Name:movie\|show:/path1,/path2;…`. Checked at every start, so new folders are added. |
+| `MEDIA_LABELS` | — | Your real folder names for the ones inside Docker (set by Docker Compose) |
+| `SCAN_INTERVAL` | `30` | Minutes between full rescans (`0` turns them off). While new files are noticed by themselves, full rescans run at most every 6 hours. |
+| `WATCH_INTERVAL` | `15` | Seconds between checks for new or removed files (`0` turns this off). On large or slow drives, checks space themselves out. |
+| `SCAN_PROBES` | `3` | New files a scan looks at together (one while someone's watching) |
+| `TMDB_API_KEY` / `TMDB_TOKEN` | — | TMDB key (easier to set in *Settings → Metadata & subtitles*) |
+| `TVDB_API_KEY` / `TVDB_PIN` | — | TheTVDB project key and subscriber PIN (or in *Settings → Metadata*) |
+| `METADATA_LANGUAGE` | `en-US` | Language for summaries and titles (also in Settings) |
+| `TVMAZE_DISABLED` | — | `1` stops using TVmaze |
+| `GPU` | — | `.env` only: `nvidia`, `intel`, `amd` or `nvidia,intel` passes the graphics card into Docker |
+| `HWACCEL` | `auto` | Video converter: `auto`, `software`, `nvdec`, `nvenc`, `vaapidec`, `vaapi` or `qsv` (also in *Settings → Playback*) |
+| `VAAPI_DEVICE` | `/dev/dri/renderD128` | Intel/AMD graphics device (with two cards, `ls -l /dev/dri/by-path` shows which is which) |
+| `TRANSCODE_PRESET` | `veryfast` | How hard the processor works when it converts video |
+| `TRANSCODE_DIR` | system temp folder | Where streaming segments are written while you watch |
+| `HLS_MAX_SESSIONS` | `6` | Videos converted at once. When all are in use, a newcomer is told the server is busy rather than stopping someone else. |
 | `INTRO_SCAN_SECONDS` | `600` | How much of each episode's start is searched for the intro |
-| `WATCH_INTERVAL` | `15` | Seconds between checks for new or removed files (`0` turns this off; scans then run every `SCAN_INTERVAL`). On large or slow drives the checks space themselves out, waiting at least 10× as long as a check took. |
-| `YTDLP_PATH` | `yt-dlp` | Location of yt-dlp |
-| `DOWNLOAD_CONCURRENCY` | `1` | Downloads that run at the same time |
-| `FFMPEG_PATH` / `FFPROBE_PATH` | `ffmpeg` / `ffprobe` | Custom binary locations |
+| `CAST_URL` | — | Address cast devices use to reach Marquee (the Windows script fills it in) |
+| `MARQUEE_NAME` | the PC's name | Shown by TVs and phones that find Marquee on the network |
+| `DASHBOARD_KEY` | — | Lets a wall dashboard read `/api/dashboard`, sent as an `X-Dashboard-Key` header. Off when empty. |
+| `TRUST_PROXY` | on | `0` if Marquee isn't behind a proxy you control (see *Security*) |
+| `YTDLP_PATH` / `DOWNLOAD_CONCURRENCY` | `yt-dlp` / `1` | The YouTube downloader, and how many downloads run at once |
+| `FFMPEG_PATH` / `FFPROBE_PATH` | `ffmpeg` / `ffprobe` | Custom program locations |
 
-## Security notes
+## Security
 
-- Passwords are hashed with scrypt. Sessions use `HttpOnly`, `SameSite=Lax` cookies and last 30
-  days. Repeated failed sign-ins from one address are rate-limited. Changing a password signs out
-  your other devices.
-- Non-admin users only see the libraries shared with them. Folder paths, the folder picker and
-  server settings are admin-only.
-- Marquee serves plain HTTP, which is fine on a home network. To reach it from outside, use the
-  built-in Tailscale or Cloudflare Tunnel options (see *Watching away from home*) or another HTTPS
-  reverse proxy. Don't forward the port on your router.
-- Behind a tunnel, Marquee uses the real visitor's address (from `X-Forwarded-For`, trusted only
-  from local proxies) for sign-in rate limits. It marks cookies `Secure` and sends HSTS. The very
-  first admin account can only be created from the home network or your own Tailscale devices.
-  Set `TRUST_PROXY=0` if Marquee isn't behind a proxy you control.
-- **Admin settings only at home** (Settings → Remote access): away from home, admins can still
-  watch, but Settings, users and the other admin pages only answer on the home network, so a
-  leaked admin password can't change anything from outside. Recommended once Marquee is reachable
+- Passwords are hashed with scrypt, and new ones need at least 8 characters. Sessions use
+  `HttpOnly`, `SameSite=Lax` cookies that last 30 days. Changing a password signs out your other
+  devices.
+- Sign-ins are limited per address and per username, and PINs lock after repeated wrong tries.
+- People only see the libraries shared with them. Folder paths, the folder picker and server
+  settings are for admins only. *Admin settings only at home* (*Settings → Remote access*) makes
+  those pages answer only on the home network, so a leaked admin password can't change anything
   from outside.
-- Changes are refused when a browser says they come from another site (`Sec-Fetch-Site`), on top
-  of `SameSite=Lax` cookies. TVs put a media key (pictures and videos only) in addresses rather
-  than their sign-in. Sign-ins are limited per address and per username; PINs lock after repeated
-  wrong tries.
-- The web pages send a Content-Security-Policy (only Marquee's own scripts, plus Google's Cast SDK,
-  can run; no framing), and server error details stay in Settings → Server & updates → Logs rather than the browser.
-  New passwords need at least 8 characters.
-- Backups contain password hashes and your TMDB key: keep them somewhere private (that includes
-  the second copy you may keep in a cloud folder).
-- On Linux hosts (not needed on Windows), the container runs as uid 999, also in your own group.
-  `./marquee.sh check` makes sure it can write to your YouTube, backups and converted-copies folders
-  (see [docs/LINUX.md](docs/LINUX.md#folder-permissions)).
+- Marquee serves plain HTTP, which is fine at home. From outside, use Tailscale, Cloudflare Tunnel or
+  another HTTPS proxy, and never forward the port on your router. Behind a tunnel, Marquee uses the
+  real visitor's address for sign-in limits (trusted only from local proxies), marks cookies
+  `Secure` and sends HSTS. The very first admin account can only be made from home or your own
+  Tailscale devices.
+- Changes are refused when a browser says they come from another site. TVs put a media key
+  (pictures and videos only) in their addresses instead of their sign-in.
+- Pages only run Marquee's own scripts (plus Google's Cast SDK) and can't be framed. Error details
+  stay in *Settings → Server & updates → Logs*, not in the browser.
+- On Linux the container runs as its own user, also in your group. `./marquee.sh check` makes sure
+  it can write to your YouTube, backups and copies folders (see
+  [docs/LINUX.md](docs/LINUX.md#folder-permissions)).
 
 ## Keyboard shortcuts
 
 Press `?` anywhere for the full list.
 
-- **Anywhere:** `/` search · `g` then `h` go home · `g` then `l` My List
-- **Player:** `Space`/`K` play/pause · `←`/`J` back 10 s · `→`/`L` forward 30 s · `↑`/`↓` volume ·
-  `M` mute · `F` fullscreen · `C` subtitles · `N` next episode · `<`/`>` speed ·
+- **Anywhere:** `/` search · `g` then `h` home · `g` then `l` My List
+- **Player:** `Space`/`K` play or pause · `←`/`J` back 10 s · `→`/`L` forward 30 s · `↑`/`↓` volume ·
+  `M` mute · `F` full screen · `C` subtitles · `N` next episode · `<`/`>` speed ·
   `P` picture-in-picture · `S` skip intro · `Esc` close
-- **TV remote (TV mode):** arrows move · OK opens · Back closes or goes back · in the player OK
-  plays/pauses and the media keys work
+- **TV remote:** arrows move · OK opens · Back closes or goes back · in the player, OK plays or pauses
+  and the media keys work
 
-## Architecture
+## For developers
 
-```
-server.js           HTTP server (node:http, no framework): shared helpers, the router with route-level access control, start-up
-routes/             the REST API by area: auth.js (sign-in, profiles, users), library.js, playback.js, admin.js, downloads.js
-lib/auth.js         users, scrypt passwords, cookie sessions, library permissions
-lib/downloader.js   yt-dlp job queue (progress parsing, cancel/retry, self-update)
-lib/parse.js        filename → title/year/show/season/episode, sidecar subs, local art
-lib/scanner.js      folder walking, ffprobe, show grouping, TMDB enrichment
-lib/media.js        ffprobe/ffmpeg: probe, thumbnails, direct-play check, live transcode, seek points
-lib/keyframes.js    where each file's keyframes are (for streaming the original picture in segments)
-lib/hdr.js          HDR detection and tone mapping to ordinary colours when converting
-lib/picture.js      deinterlacing and square pixels (DVDs) when converting
-lib/report.js       Formats & space: which titles each kind of player has to convert, and why
-lib/hwaccel.js      encoder choice (NVDEC+NVENC / NVENC / QSV / VAAPI / x264), start-up tests, fallback
-lib/hls.js          adaptive streaming: VOD playlists, on-demand segment conversion per session
-lib/requests.js     requests ("can we get …?"): asking, the admin's list, sending to Radarr / Sonarr, noticing when a title arrives
-lib/arr.js          Radarr and Sonarr: connecting, quality profiles (and their size cap), adding films and shows, download progress
-lib/optimize.js     overnight conversions: 1080p copies of DVD rips / 4K / HEVC, offered as versions ("<id>~o")
-lib/autosubs.js     automatic subtitles from OpenSubtitles in the family's languages
-lib/screentime.js   kids' bedtime and daily limit
-lib/upcoming.js     "Coming soon": Sonarr / Radarr calendars, next episodes from TMDB / TVmaze
-lib/notifications.js  each person's notifications (new episodes, requests, health)
-lib/health.js       the health check (disk space, folders, backups, updates, errors)
-lib/previews.js     preview clips for hovering over titles (made on first use, in the background)
-lib/offline.js      copies for the phone app's downloads (MP4s made in the background, kept a week)
-lib/ratings.js      maturity ratings as ages, and what each profile is allowed to see
-lib/intro.js        intro and credits detection (Chromaprint audio fingerprints compared across a season)
-lib/tokens.js       signed, expiring playback links for cast devices and native players
-lib/watcher.js      notices folder changes (polls folder times; works on Docker bind mounts and network drives)
-lib/collections.js  automatic (TMDB) and hand-made collections, order rules (episode numbers in titles), sections, series finder, franchise pages
-lib/franchises.js   the franchise and studio catalogue (MCU, Star Wars, Pixar…), matched from TMDB keywords, studios and film series
-lib/party.js        watch together: shared play state pushed to members over Server-Sent Events
-lib/opensubtitles.js  subtitle search/download from OpenSubtitles.com
-lib/problems.js     library health check (offline folders, duplicates, missing episodes…)
-lib/trickplay.js    seek preview thumbnail sheets
-lib/activity.js     "now playing" sessions for the Activity page
-lib/library.js      per-user API shaping: hubs, continue watching / up next, search, watch state
-lib/search.js       search: titles, cast, genres, years, story; spelling mistakes
-lib/metadata.js     metadata providers (TMDB, TVmaze, TheTVDB), image downloads
-lib/matcher.js      matching, refresh/unmatch, user edits and custom artwork (edits > metadata > file name)
-lib/subtitles.js    SRT→VTT, cue time-shifting
-lib/store.js        JSON-file database with atomic writes
-public/             single-page web client (vanilla JS, no build step; index.html loads the files in order and
-                    they share one scope): core.js (templates, api, helpers), app.js (state, pages, router),
-                    cards.js (cards, rows, hover previews), detail.js ("More info" pop-up), player.js,
-                    menus.js (item menus, edit / fix-match / subtitle dialogs, shortcuts), collections.js,
-                    manage.js (accounts, users, downloads), requests.js, select.js (☑ Select and bulk actions),
-                    settings.js (the Settings pages) with settings-libraries.js, settings-media.js and
-                    settings-server.js (their panels), cast.js (Google Cast), tv.js (TV mode: moving with a remote),
-                    fonts/ (Archivo and Figtree, SIL Open Font License),
-                    vendor/hls.js (Apache-2.0, for adaptive streaming in browsers without native HLS)
-android/            the Android app (WebView + native player), built without Gradle
-androidtv/          the Android TV app: android/'s code with a TV manifest and banner
-roku/               the Roku channel (BrightScript / SceneGraph)
-Dockerfile, docker-compose.yml, *.bat   container image and Windows helpers
-```
+### Running without Docker
 
-## Tests
+Needs Node.js 22 and `ffmpeg` / `ffprobe` (and [yt-dlp](https://github.com/yt-dlp/yt-dlp#installation)
+for downloads). There are no npm packages to install.
 
 ```bash
-npm test     # unit tests + integration tests that boot a real server
-test/ui/run.sh   # the web app in a real browser (needs Docker)
+npm start           # → http://localhost:32500
+npm run sample      # a demo library in ./sample-media covering every way of playing
 ```
 
-The integration tests need ffmpeg. The download test also needs yt-dlp; it is skipped when yt-dlp
-isn't installed.
+### Tests
+
+```bash
+npm test            # unit tests, plus integration tests that start a real server (need ffmpeg)
+test/ui/run.sh      # the web app in a real browser (needs Docker)
+```
+
+The download test also needs yt-dlp, and is skipped without it. GitHub runs both on every change.
+
+### How it's built
+
+```
+server.js           HTTP server (node:http, no framework): shared helpers, the router with access control, start-up
+routes/             the API by area: auth.js (sign-in, profiles, users), library.js, playback.js, requests.js,
+                    admin.js, downloads.js
+lib/store.js        the database: one JSON file, written atomically, with recovery from backups
+lib/auth.js         users, scrypt passwords, cookie sessions, library permissions
+lib/tokens.js       signed, expiring playback links for cast devices and native players
+lib/scanner.js      folder walking, ffprobe, show grouping; history follows renamed and replaced files
+lib/watcher.js      notices folder changes (works on Docker folders and network drives)
+lib/parse.js        file name → title / year / show / season / episode, sidecar subtitles, local art
+lib/matcher.js      matching, refresh / unmatch, edits and custom artwork (edits > metadata > file name)
+lib/metadata.js     TMDB, TVmaze and TheTVDB, image downloads
+lib/library.js      what each person sees: home rows, Continue Watching / Up Next, watch state
+lib/search.js       search: titles, cast, genres, years, story; spelling mistakes
+lib/collections.js  automatic and hand-made collections, ordering, sections, the series finder, franchise pages
+lib/franchises.js   the franchise and studio catalogue (MCU, Star Wars, Pixar…)
+lib/media.js        ffprobe / ffmpeg: probing, thumbnails, direct-play checks, live conversion, seek points
+lib/hls.js          adaptive streaming: playlists, segments converted on demand for each viewer
+lib/keyframes.js    where each file's keyframes are (for streaming the original picture in segments)
+lib/hwaccel.js      choosing the converter (NVIDIA / Intel / AMD / processor), start-up tests, fallback
+lib/hdr.js          HDR detection and tone mapping
+lib/picture.js      deinterlacing and square pixels (DVDs)
+lib/optimize.js     overnight conversions (offered as versions, "<id>~o")
+lib/offline.js      copies for the phone app's downloads
+lib/intro.js        intro, recap and credits detection (audio fingerprints compared across a season)
+lib/trickplay.js    seek-bar thumbnails          lib/previews.js   hover preview clips
+lib/subtitles.js    SRT → VTT, timing shifts      lib/opensubtitles.js   OpenSubtitles.com
+lib/autosubs.js     automatic subtitles in the family's languages
+lib/requests.js     requests: asking, approving, sending to Radarr / Sonarr, noticing arrivals
+lib/arr.js          Radarr and Sonarr: connecting, quality profiles, adding titles, download progress
+lib/upcoming.js     Coming soon: Sonarr / Radarr calendars, next episodes from TMDB / TVmaze
+lib/notifications.js  each person's notifications
+lib/ratings.js      age ratings, and what each profile may see    lib/screentime.js   bedtime and daily limits
+lib/party.js        watch together (play state shared over Server-Sent Events)
+lib/activity.js     who's watching, for the Activity page
+lib/downloader.js   the yt-dlp queue (progress, cancel / retry, self-update)
+lib/backup.js       nightly backups, restoring, the second copy   lib/tar.js   reading and writing .tar.gz
+lib/updates.js      update checks, and the update helper (through the control folder)
+lib/rokus.js        finding Rokus and sending them the channel
+lib/health.js       the health check       lib/problems.js   library problems     lib/report.js   Formats & space
+lib/maintenance.js  daily clean-up of unused cached files    lib/logs.js   recent warnings and errors
+lib/timings.js      the Speed report
+public/             the web app (plain JavaScript, no build step; index.html loads the files in order and they
+                    share one scope): core.js (templates, api, helpers), app.js (state, pages, router), cards.js,
+                    detail.js, player.js, menus.js, collections.js, manage.js, requests.js, select.js,
+                    settings*.js, cast.js, tv.js (TV mode), fonts/ (Archivo and Figtree, SIL Open Font Licence),
+                    vendor/hls.js (Apache-2.0)
+android/            the Android app (WebView plus a native player), built without Gradle
+androidtv/          the Android TV app: android/'s code with a TV manifest and banner
+roku/               the Roku channel (BrightScript / SceneGraph)
+marquee.sh          the Linux control script     marquee.ps1, *.bat   the Windows ones
+Dockerfile, docker-compose*.yml   the container image, and the graphics-card add-ons
+```
 
 ## Not yet supported
 
-Music and photo libraries. Hardware conversion, casting and the TV apps are tested here only against
-ffmpeg, a simulated Cast SDK, the BrightScript compiler and Android's build tools (not on real TVs),
-so please report problems with specific graphics cards or TVs.
+Music and photo libraries. Graphics-card conversion is tested here on NVIDIA, and the TV apps on an
+NVIDIA Shield and TCL Roku TVs, so please report problems with other cards or TVs.

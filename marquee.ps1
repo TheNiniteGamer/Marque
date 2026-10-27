@@ -71,7 +71,7 @@ function Sync-EnvFile {
   foreach ($para in $paras) {
     $lines = @($para -split "\n" | Where-Object { $_.Trim() })
     $keys = @($lines | Where-Object { $_ -cmatch $keyRe } | ForEach-Object { [void]($_ -cmatch $keyRe); $Matches[1] })
-    $missing = @($keys | Where-Object { -not $have.ContainsKey($_) })
+    $missing = @($keys | Where-Object { -not $have.ContainsKey($_) } | Select-Object -Unique)
     if (-not $missing.Count) { continue }
     $keep = $lines | Where-Object { -not ($_ -cmatch $keyRe) -or $missing -contains $Matches[1] }
     $blocks += ($keep -join "`r`n")
@@ -97,12 +97,19 @@ function Set-RemoteProfiles {
 Set-RemoteProfiles
 
 # A graphics card for video conversion (GPU=nvidia, intel or amd in .env) adds its compose file.
+# Docker Desktop can only pass an NVIDIA card to a container: Intel and AMD graphics need Linux, and
+# asking for them anyway would stop Marquee starting, so it carries on without (and says why).
+$script:GpuNote = ''
 function Set-GpuFiles {
   $files = @('docker-compose.yml')
-  switch ((Get-Setting 'GPU' '').ToLower()) {
-    'nvidia' { $files += 'docker-compose.nvidia.yml' }
-    'intel' { $files += 'docker-compose.intel-amd.yml' }
-    'amd' { $files += 'docker-compose.intel-amd.yml' }
+  $script:GpuNote = ''
+  # (Two can be named, e.g. GPU=nvidia,intel.)
+  foreach ($gpu in ((Get-Setting 'GPU' '').ToLower() -split '[,\s]+' | Where-Object { $_ })) {
+    if ($gpu -eq 'nvidia') { $files += 'docker-compose.nvidia.yml' }
+    elseif ($gpu -in 'intel', 'amd') {
+      if ($OnWindows) { $script:GpuNote = "GPU=$gpu in .env only works when Marquee runs on Linux; on Windows only an NVIDIA card can be used." }
+      elseif ($files -notcontains 'docker-compose.intel-amd.yml') { $files += 'docker-compose.intel-amd.yml' }
+    }
   }
   $env:COMPOSE_PATH_SEPARATOR = ';'
   $env:COMPOSE_FILE = ($files -join ';')
@@ -239,6 +246,7 @@ function Start-Marquee {
       $script:DotEnv = Read-DotEnv
     }
   }
+  if ($script:GpuNote) { Say $script:GpuNote }
   Say 'Building and starting Marquee (the first time takes a few minutes)...'
   Invoke-Compose @('up', '-d', '--build') 'Starting Marquee'
   Say 'Waiting for Marquee to come up...'
