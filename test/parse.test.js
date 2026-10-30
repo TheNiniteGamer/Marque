@@ -50,6 +50,18 @@ test('episode: 1x02 format and multi-episode', () => {
   assert.equal(multi.episodeEnd, 2);
 });
 
+test('episode: a year as the season number (daily and yearly shows)', () => {
+  const ep = (f) => { const e = parseEpisode(f); return [e.show, e.showYear, e.season, e.episode, e.episodeEnd, e.title]; };
+  assert.deepEqual(ep('Show S2024E05.mkv'), ['Show', null, 2024, 5, null, null]);
+  assert.deepEqual(ep('The.Daily.Show.S2024E120.1080p.WEB.mkv'), ['The Daily Show', null, 2024, 120, null, null]);
+  assert.deepEqual(ep('Show/Season 2024/Show - S2024E05 - Title.mkv'), ['Show', null, 2024, 5, null, 'Title']);
+  assert.deepEqual(ep('Show/Season 2024/Episode 05.mkv').slice(2, 4), [2024, 5], 'from the season folder');
+  assert.deepEqual(ep('Show/S2024/Show S2024E05E06.mkv').slice(2, 5), [2024, 5, 6]);
+  // A date after the episode isn't more episodes.
+  assert.deepEqual(ep('Show/Show - S2024E05-2024-03-15.mkv').slice(2, 5), [2024, 5, null]);
+  assert.deepEqual(ep('Show/Show - S01E05-2024-03-15.mkv').slice(2, 5), [1, 5, null]);
+});
+
 test('episode: a number starting the title is the title, not more episodes', () => {
   const titled = (f) => { const e = parseEpisode(`Show/Season 1/${f}`); return [e.episode, e.episodeEnd, e.title]; };
   assert.deepEqual(titled('Doctor Who (2005) - S03E07 - 42.mkv'), [7, null, '42']);
