@@ -4,6 +4,70 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.28
+
+Fixes from a review of how the family uses Marquee, and security fixes.
+
+**For the family**
+- **Watching again:** a show you've finished offers *Watch again from the start* (it used to have
+  no Play button), and a rewatch carries on episode by episode. A film or episode you're part-way
+  through rewatching shows in Continue Watching and resumes on every TV.
+- **Specials don't lose your place.** Watching one of a show's films or specials (Season 0) no
+  longer makes "Up next" the next special.
+- **New episodes come to the front of Continue Watching.** A show you'd caught up with moves up when
+  its new episode arrives, instead of staying where you last watched it, and comes back if you'd
+  removed it from the row.
+- **Undo** after marking a title, a season, a whole show or a selection watched or unwatched.
+- **On the TV,** a title's own ⋯ menu can now remove it from Continue Watching (cards there have no ⋯).
+- **Kids' profiles no longer see titles Marquee hasn't identified,** such as a folder with a
+  squashed name that didn't match online, or a doubtful match whose age rating may belong to another
+  film. They appear once matched, or when you give them a rating (⋯ → Edit). Home videos you've
+  marked as not a film, and YouTube videos, follow "titles without a rating" as before.
+- **Households:** *Settings → Users* has a *Household* for each account. "Who's watching?" only lists
+  profiles from the same household, so a friend's TV no longer shows (or lets them switch into) your
+  children's profiles. Leave it empty for your family; give friends' accounts their own name.
+- **Subtitles:** "forced" subtitles (just the bits in another language) now show when subtitles are
+  off, and full subtitles are picked ahead of them. DVD and Blu-ray subtitles are now offered on the
+  overnight copies too (drawn in from the original). A title with only picture or forced subtitles
+  still gets text ones fetched automatically.
+- **Android app updates no longer do nothing.** On some phones (a Samsung Fold among them) "Update"
+  downloaded the new app and then nothing happened, because newer Android versions can stop an app
+  being reopened by its installer. The app now hears back from Android in a way that can't be
+  blocked, and if Android's install screen still doesn't appear, or the update fails, it says so and
+  offers **Install through the browser**. "Later" asks again after a week. (This update itself has
+  to be installed once through the browser on a phone that's stuck: open Marquee in the browser,
+  then *Account → TVs and apps → Android phone and tablet app*.)
+- **Phone browsers:** the player's buttons no longer run off the side of the screen.
+- **A long pause no longer ends a converted video.** Coming back to it carries on where you were
+  (web player and Android app), as it does after a server restart.
+- **Requests** for shows are recognised when they arrive, even when Marquee matched the show on a
+  different site from the one it was asked for on, or under a name like "The Office (US)".
+
+**Overnight conversions**
+- **Carry on after a restart** (an update, the weekly restart) instead of starting that title
+  again. Marquee is given 30 seconds to stop cleanly (in `docker-compose.yml`).
+- **A copy that comes out shorter than the original, or missing a sound track, is thrown away**
+  rather than replacing the original on the TVs.
+
+**Security and robustness**
+- **Guessing passwords:** many sign-in attempts sent at once are now counted before any is checked,
+  and the current-password check for changing a PIN or password has the same limits.
+- **Forwarded addresses are only believed from a proxy on this PC or Docker network,** not from
+  any device in the house, so nobody can pose as someone else to the sign-in limits or set the
+  outside address shown in Settings. A proxy elsewhere in the house now counts its visitors as away.
+- **Rokus are remembered at the address they really connect from** (Marquee sends them the
+  developer password when updating).
+- **Phone downloads keep to screen time** (bedtime and the daily limit), like streaming.
+- **A conversion nobody is reading** (a player that vanished) is stopped after 30 minutes.
+- **Subtitles inside a file** are extracted once when two people ask at the same time, at low priority.
+- **Requests** approved twice at once are sent to Radarr or Sonarr only once, and withdrawing a
+  request several people asked for only removes you from it.
+- **Seasons numbered by year** (`S2024E05`) are understood. A date after the episode number is no
+  longer read as more episodes.
+- **Artwork** that fails to download keeps the old picture. A damaged cookie no longer causes an error.
+  Watch-together members can't take over each other's place.
+- Android phone app 1.16.3, Android TV app 1.11.3, Roku channel 1.19.
+
 ## 0.24.27
 
 - **Windows: `GPU=intel` or `GPU=amd` no longer stops Marquee starting.** Docker Desktop can only pass

@@ -81,4 +81,5 @@ The code therefore uses static nested classes and lambdas only. Keep it that way
 | `PlayerActivity` | Native player (`VideoView`/`MediaPlayer`). Direct stream or server `/transcode`, subtitles drawn from the server's WebVTT, progress reported to `/api/items/:id/progress` |
 | `PlayerControls` | The player's controls (`res/layout/activity_player.xml`), on phones by touch and on TVs by remote; sizes in `values/` and `values-television/dimens.xml` |
 | `Updater` | Updates the app from the server's `/downloads/apps.json` |
+| `UpdateReceiver` | Android's installer answering about an update (a broadcast, so Android can't block it) |
 | `PlaybackPlan` | Decides direct play vs. convert, using the phone's real decoders (`MediaCodecList`) |

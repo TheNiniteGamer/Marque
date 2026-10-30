@@ -191,8 +191,9 @@ them. *Settings → Overnight conversions* makes a 1080p copy of each at night i
 as they are from then on.
 
 - **It never gets in the way.** It pauses whenever anyone is watching anything, and carries on
-  afterwards. It shows how long it has left, and admins can **Pause**, **Carry on** or **Stop for
-  tonight** here or on the Activity page.
+  afterwards, even after Marquee restarts. It shows how long it has left, and admins can **Pause**,
+  **Carry on** or **Stop for tonight** here or on the Activity page. A copy that comes out shorter
+  than the original, or missing a sound track, is thrown away rather than used.
 - **The copy is another version of the title.** Each device plays whichever version it can play as
   it is (a 4K TV still gets the original). Watch progress, skip-intro and subtitles are shared. The
   originals are never changed.
@@ -286,8 +287,10 @@ The helper and the app talk only through the `control` folder. The app never get
   choice, night mode (clearer dialogue, quieter loud scenes) and keyboard shortcuts. "Are you still
   watching?" appears after three episodes play by themselves.
 - **Subtitles:** `.srt`/`.vtt` files, subtitles inside the file, and DVD / Blu-ray picture subtitles
-  (drawn into the video). Missing ones can be found on OpenSubtitles.com from the player, or fetched
-  automatically in each person's languages, once an admin adds a free API key.
+  (drawn into the video, from the original when you're watching an overnight copy). "Forced"
+  subtitles (just the bits in another language) show even with subtitles off. Missing ones can be
+  found on OpenSubtitles.com from the player, or fetched automatically in each person's languages,
+  once an admin adds a free API key.
 - **Versions:** two copies of a film (say 4K and 1080p) are one title, and each device plays the copy
   it can play as it is. Discs ripped with MakeMKV become one film plus its extras.
 - **Watch together:** 👥 in the player makes a link. Everyone who opens it stays in sync.
@@ -317,9 +320,14 @@ The helper and the app talk only through the `control` folder. The app never get
 - **Accounts:** each person has their own history, My List and resume points, and sees only the
   libraries you share with them. Admins can reset passwords and unlock accounts.
 - **Who's watching?** Profiles with pictures for a shared TV, each with an optional PIN. Children's
-  profiles can be picked without one. Five wrong PINs lock a profile for 10 minutes.
+  profiles can be picked without one. Five wrong PINs lock a profile for 10 minutes. Give friends'
+  accounts their own **household** (*Settings → Users*), so their TVs only list their own profiles.
 - **Kids' ratings:** titles carry their age rating (PG-13, TV-14, 12A…). Give a profile a limit and
-  anything above it disappears everywhere for them.
+  anything above it disappears everywhere for them. Films and shows that aren't matched yet stay
+  hidden from them until they are, or until you give them a rating (⋯ → Edit).
+- **Watching again:** a finished show offers *Watch again from the start*, and a rewatch carries on
+  in order. Specials (a show's films) don't move your place. Marking a show, season or several
+  titles watched shows an **Undo**.
 - **Screen time:** a bedtime (every night, or school nights only) and a daily limit per profile,
   enforced on every TV, phone and browser. What's playing stops with a message when time's up.
 - **Requests:** anyone can ask for a film or show, or more seasons, with a note. Admins approve or
