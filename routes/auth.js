@@ -61,10 +61,9 @@ module.exports = function register(app) {
     const ip = clientIp(req);
     const body = await readBody(req);
     const name = String(body.username || '').slice(0, 64);
-    const where = isRemote(req) ? 'away' : 'home';
-    if (auth.isLimited(ip, name, where)) throw new HttpError(429, 'Too many failed attempts. Try again in a few minutes.');
-    const user = await auth.login(name, body.password);
-    if (!user) { auth.recordFailure(ip, name, where); throw new HttpError(401, 'Wrong username or password'); }
+    const user = await auth.checkPassword(ip, name, body.password, isRemote(req) ? 'away' : 'home');
+    if (user === null) throw new HttpError(429, 'Too many failed attempts. Try again in a few minutes.');
+    if (!user) throw new HttpError(401, 'Wrong username or password');
     auth.createSession(req, res, user);
     json(res, 200, { user: publicUser(user) });
   }, 'public');
@@ -120,10 +119,18 @@ module.exports = function register(app) {
     const token = auth.switchSession(req, res, target);
     json(res, 200, { user: publicUser(target), ...(token ? { token } : {}) });
   });
+  // Your current password, asked for before your password or PIN changes: within the same limits
+  // as signing in, so a device left signed in can't be used to try one password after another.
+  const checkCurrent = async (req, user, password) => {
+    const ok = await auth.checkPassword(clientIp(req), user.username, password, isRemote(req) ? 'away' : 'home');
+    if (ok === null) throw new HttpError(429, 'Too many wrong passwords. Try again in a few minutes.');
+    if (!ok) throw new HttpError(400, 'Current password is incorrect');
+  };
+
   // Set or remove your own PIN (needs your password).
   route('POST', '/api/auth/pin', async (req, res, p, url, user) => {
     const body = await readBody(req);
-    if (!(await auth.login(user.username, body.currentPassword))) throw new HttpError(400, 'Current password is incorrect');
+    await checkCurrent(req, user, body.currentPassword);
     await auth.setPin(user, body.pin || null);
     json(res, 200, { user: publicUser(user) });
   });
@@ -181,7 +188,7 @@ module.exports = function register(app) {
     // (Checked before anything changes: an empty or short one mustn't count as having chosen one.)
     if (typeof body.newPassword !== 'string' || body.newPassword.length < 8) throw new HttpError(400, 'Choose a new password of at least 8 characters');
     // After an admin's reset, the temporary password was just used to sign in: not asked again.
-    if (!user.mustChangePassword && !(await auth.login(user.username, body.currentPassword))) throw new HttpError(400, 'Current password is incorrect');
+    if (!user.mustChangePassword) await checkCurrent(req, user, body.currentPassword);
     if (user.mustChangePassword && (await auth.login(user.username, body.newPassword))) throw new HttpError(400, 'Choose a password that isn’t the temporary one');
     // (Signs out their other devices and stops the playback links handed out to them.)
     try { await auth.updateUser(user, { password: body.newPassword }, { keepSession: req.sessionKey }); } catch (err) { throw new HttpError(err.status || 400, err.message); }

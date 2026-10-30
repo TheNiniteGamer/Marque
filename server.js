@@ -438,26 +438,55 @@ function isTailscaleIp(ip) {
   const t = /^100\.(\d+)\./.exec(a);
   return (!!t && +t[1] >= 64 && +t[1] <= 127) || /^fd7a:115c:a1e0:/i.test(a);
 }
-// Behind Tailscale serve / Cloudflare Tunnel / a reverse proxy, the real visitor is the last address
-// the proxy added to X-Forwarded-For. Only trusted when the request came from a local proxy.
-const TRUST_PROXY = process.env.TRUST_PROXY !== '0';
-function clientIp(req) {
-  const direct = req.socket.remoteAddress || 'unknown';
-  const xff = req.headers['x-forwarded-for'];
-  // (Not from a Tailscale device: it could claim to be at home.)
-  if (TRUST_PROXY && xff && isPrivateIp(direct) && !isTailscaleIp(direct)) {
-    const parts = String(xff).split(',').map((x) => x.trim()).filter(Boolean);
-    if (parts.length) return parts[parts.length - 1];
+// The Docker networks Marquee is on: a proxy beside it in Docker (Tailscale, Cloudflare Tunnel)
+// comes from one of these, and one on the PC itself from the network's gateway. In a container,
+// every network it's attached to; run straight on the PC (or sharing its network), only Docker's
+// own bridges there, never the home network. Read again every minute (networks can be added).
+const ipv4Number = (a) => (/^\d{1,3}(\.\d{1,3}){3}$/.test(a) ? a.split('.').reduce((n, x) => n * 256 + Number(x), 0) : null);
+let dockerNets = { at: 0, list: [] };
+function dockerNetworks() {
+  if (Date.now() - dockerNets.at < 60_000) return dockerNets.list;
+  let interfaces = {};
+  try { interfaces = os.networkInterfaces(); } catch { /* none to go by */ }
+  const bridge = (name) => /^(docker\d+|br-[0-9a-f]+)$/.test(name);
+  const onPc = !fs.existsSync('/.dockerenv') || Object.keys(interfaces).some(bridge);
+  const list = [];
+  for (const [name, addrs] of Object.entries(interfaces)) {
+    if (onPc && !bridge(name)) continue;
+    for (const a of addrs || []) {
+      const bits = Number(String(a.cidr).split('/')[1]);
+      if (a.family !== 'IPv4' || a.internal || !(bits >= 8 && bits <= 32)) continue;
+      const mask = (~0 << (32 - bits)) >>> 0;
+      list.push({ net: (ipv4Number(a.address) & mask) >>> 0, mask });
+    }
   }
-  return direct;
+  dockerNets = { at: Date.now(), list };
+  return list;
+}
+// A request through a proxy on this PC or beside it in Docker: the only places the forwarded
+// headers (X-Forwarded-For, -Proto, -Host) are believed from. Any other device at home could make
+// them up, to look like someone else to the sign-in limits, or like a visitor from outside.
+function fromLocalProxy(req) {
+  const a = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+  if (a === '::1' || a.startsWith('127.')) return true;
+  const n = ipv4Number(a);
+  return n != null && dockerNetworks().some((d) => ((n & d.mask) >>> 0) === d.net);
+}
+// Behind Tailscale serve / Cloudflare Tunnel / a reverse proxy, the real visitor is the last address
+// the proxy added to X-Forwarded-For. Only trusted from a local proxy (see fromLocalProxy).
+const TRUST_PROXY = process.env.TRUST_PROXY !== '0';
+const forwardedFor = (req) => (TRUST_PROXY && req.headers['x-forwarded-for'] && fromLocalProxy(req)
+  ? String(req.headers['x-forwarded-for']).split(',').map((x) => x.trim()).filter(Boolean).pop() || null : null);
+function clientIp(req) {
+  return forwardedFor(req) || req.socket.remoteAddress || 'unknown';
 }
 const viaHttpsProxy = (req) => String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
 
 // Remember the address Marquee is reached at from outside (shown in Settings → Remote access).
-// Only from someone signed in, through a proxy on this PC or its Docker network: the address is
-// shown to the admin as the one to use, so a stranger mustn't be able to set it with made-up headers.
-function noteRemoteOrigin(req) {
-  if (!viaHttpsProxy(req) || !isPrivateIp(req.socket.remoteAddress)) return;
+// Only from an admin signed in through a proxy on this PC or its Docker network: the address is
+// shown to the admin as the one to use, so nobody else must be able to set it with made-up headers.
+function noteRemoteOrigin(req, user) {
+  if (user?.role !== 'admin' || !viaHttpsProxy(req) || !fromLocalProxy(req)) return;
   const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase();
   if (!host || /^(localhost|\d+\.\d+\.\d+\.\d+|\[)/.test(host)) return;
   const origin = `https://${host}`;
@@ -497,13 +526,14 @@ function castAddresses() {
 // ---------- helpers shared by several route groups ----------
 // The admin can cap the quality for viewers away from home (Settings → Transcoding), so one remote
 // viewer can't use up the home upload. Away = from a Tailscale device or outside the network, or
-// through an HTTPS proxy that doesn't say who's behind it. A proxy in the house (Nginx Proxy Manager)
-// passes on the visitor's home address, so people at home count as home through it.
+// through an HTTPS proxy that doesn't say who's behind it (or isn't one Marquee believes, see
+// fromLocalProxy). A proxy on this PC (Nginx Proxy Manager) passes on the visitor's home address,
+// so people at home count as home through it.
 // Returns null (no limit) or { maxHeight, originalAllowed }.
 function isRemote(req) {
   const ip = clientIp(req);
   if (isTailscaleIp(ip) || !isPrivateIp(ip)) return true;
-  return viaHttpsProxy(req) && !(TRUST_PROXY && req.headers['x-forwarded-for']);
+  return viaHttpsProxy(req) && !forwardedFor(req);
 }
 function remoteLimit(req, item) {
   const q = hlsLib.QUALITIES.find((x) => x.id === store.data.settings.remoteMaxQuality);
@@ -655,7 +685,9 @@ const server = http.createServer(async (req, res) => {
             res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
           }
         }
-        if (user) { noteRemoteOrigin(req); rokus.seen(req, clientIp(req)); }
+        // (A Roku is remembered at the address it really connected from, never one a request names:
+        // Marquee later sends it the developer password.)
+        if (user) { noteRemoteOrigin(req, user); rokus.seen(req, req.socket.remoteAddress); }
         // A temporary password from an admin: nothing but choosing their own (and signing out) until then.
         if (user?.mustChangePassword && !MUST_CHANGE_ALLOWED.has(`${method} ${url.pathname}`)) {
           throw Object.assign(new HttpError(403, 'Choose a new password first'), { mustChangePassword: true });
