@@ -18,6 +18,8 @@ services:
     image: marquee:latest
     container_name: marquee
     restart: unless-stopped
+    # Time to stop cleanly (an overnight conversion saves what it's done, to carry on after).
+    stop_grace_period: 30s
     logging: *logging
     ports:
       - "${MARQUEE_PORT:-32500}:32500"

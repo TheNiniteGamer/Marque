@@ -156,7 +156,7 @@ async function viewShow({ params: [id], query, seq }) {
   let current = show.seasons.find((s) => s.episodes) && seasonKey(show.seasons.find((s) => s.episodes));
   const up = show.upNext;
   const resuming = up?.progress?.position && !up.progress.watched;
-  const upLabel = up ? `${resuming ? 'Resume' : 'Play'} ${epLabel(up).replace(' · ', ':')}` : null;
+  const upLabel = up ? (up.again ? 'Watch again from the start' : `${resuming ? 'Resume' : 'Play'} ${epLabel(up).replace(' · ', ':')}`) : null;
   document.title = `${show.title} · Marquee`;
 
   const episodeRow = (e) => { knownItems.set(e.id, e); return html`
@@ -192,7 +192,8 @@ async function viewShow({ params: [id], query, seq }) {
     $('#season-watch').textContent = allWatched ? 'Mark season unwatched' : 'Mark season watched';
     $('#season-body').innerHTML = html`<div class="episodes">${season.episodes.map(episodeRow)}</div>`.s;
     $('#season-watch').onclick = async () => {
-      await api(`/api/shows/${id}/watched`, { method: 'POST', body: { season: season.season, watched: !allWatched } });
+      const r = await api(`/api/shows/${id}/watched`, { method: 'POST', body: { season: season.season, watched: !allWatched } });
+      undoToast(allWatched ? 'Season marked as unwatched' : 'Season marked as watched', r.undo);
       router();
     };
     if ($('#season-dl')) $('#season-dl').onclick = () => window.MarqueeAndroid.downloadMany(JSON.stringify(season.episodes.map((e) => e.id)));
@@ -264,7 +265,11 @@ async function viewShow({ params: [id], query, seq }) {
     history.replaceState(null, '', `#/show/${id}?season=${current}`);
     renderSeason();
   };
-  $('#show-watch').onclick = async () => { await api(`/api/shows/${id}/watched`, { method: 'POST', body: { watched: !allWatched } }); router(); };
+  $('#show-watch').onclick = async () => {
+    const r = await api(`/api/shows/${id}/watched`, { method: 'POST', body: { watched: !allWatched } });
+    undoToast(allWatched ? 'Whole show marked as unwatched' : 'Whole show marked as watched', r.undo);
+    router();
+  };
   if ($('#more-seasons')) $('#more-seasons').onclick = () => openMoreSeasons(show);
   viewEl.onclick = async (e) => {
     const b = e.target.closest('[data-watch]'); if (!b) return;

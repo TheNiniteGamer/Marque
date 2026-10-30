@@ -277,38 +277,27 @@ public class PlayerActivity extends Activity {
         for (int i = 0; prefAudio == null && !audioLang.isEmpty() && tracks != null && i < tracks.length(); i++) {
             if (PlaybackPlan.sameLang(tracks.optJSONObject(i).optString("lang"), audioLang)) { audioIndex = i; break; }
         }
-        JSONObject langSub = null;
-        for (int pass = 0; prefSubs == null && !subLang.isEmpty() && list != null && pass < 2 && langSub == null; pass++) {
-            for (int i = 0; i < list.length() && langSub == null; i++) {
-                JSONObject c = list.optJSONObject(i);
-                if (c.has("burn") == (pass == 1) && PlaybackPlan.sameLang(c.optString("lang"), subLang)) langSub = c;
-            }
-        }
+        JSONObject langSub = prefSubs == null && !subLang.isEmpty() ? bestSub(list, c -> PlaybackPlan.sameLang(c.optString("lang"), subLang)) : null;
+        boolean subsChosen = true;
         if (langSub != null) {
             setSubtitles(langSub.optString("id"), false);
         } else if (prefSubs != null && !"off".equals(prefSubs) && list != null) {
-            JSONObject pick = null;
-            for (int pass = 0; pass < 2 && pick == null; pass++) {
-                for (int i = 0; i < list.length() && pick == null; i++) {
-                    JSONObject c = list.optJSONObject(i);
-                    if (c.has("burn") == (pass == 1) && prefSubs.equals(c.optString("lang"))) pick = c;
-                }
-            }
+            JSONObject pick = bestSub(list, c -> prefSubs.equals(c.optString("lang")));
             if (pick != null) setSubtitles(pick.optString("id"), false);
+            else subsChosen = false;
         } else if (subsOn && prefSubs == null && list != null && list.length() > 0) {
-            // Text subtitles first: picture ones (Blu-ray / DVD) need the video converted.
             String lang = Locale.getDefault().getLanguage();
-            JSONObject pick = null;
-            for (int pass = 0; pass < 2 && pick == null; pass++) {
-                for (int i = 0; i < list.length() && pick == null; i++) {
-                    JSONObject candidate = list.optJSONObject(i);
-                    String l = candidate.optString("lang", "");
-                    if (candidate.has("burn") == (pass == 1) && !l.isEmpty() && l.toLowerCase(Locale.ROOT).startsWith(lang)) pick = candidate;
-                }
-            }
+            JSONObject pick = bestSub(list, c -> { String l = c.optString("lang", ""); return !l.isEmpty() && l.toLowerCase(Locale.ROOT).startsWith(lang); });
             if (pick == null) pick = list.optJSONObject(0);
             setSubtitles(pick.optString("id"), false);
+        } else {
+            subsChosen = false;
         }
+        // Subtitles off: a "forced" track in the language being listened to still shows (just the
+        // bits in another language, as the film intends).
+        String heard = tracks != null && audioIndex < tracks.length() ? tracks.optJSONObject(audioIndex).optString("lang", "") : "";
+        JSONObject forced = !subsChosen && !heard.isEmpty() ? bestSub(list, c -> c.optBoolean("forced") && !c.has("burn") && PlaybackPlan.sameLang(c.optString("lang"), heard)) : null;
+        if (forced != null) setSubtitles(forced.optString("id"), false);
         controlsUi.onBegin();
         String art = base + "/api/art/" + (isEp ? "thumb" : "backdrop") + "/" + it.optString("id") + "?v=" + it.optString("artV", "");
         mediaControls.setItem(title.getText().toString(), subtitle.getText().toString(), duration, offlineFile != null ? null : art);
@@ -316,6 +305,20 @@ public class PlayerActivity extends Activity {
         ui.removeCallbacks(tick);
         ui.post(tick);
         setControls(true);
+    }
+
+    /**
+     * The best subtitles that `ok` accepts: full ones before "forced" ones (just the foreign-language
+     * bits), text before pictures (Blu-ray / DVD ones need the video converted).
+     */
+    static JSONObject bestSub(JSONArray list, java.util.function.Predicate<JSONObject> ok) {
+        for (int pass = 0; list != null && pass < 4; pass++) {
+            for (int i = 0; i < list.length(); i++) {
+                JSONObject c = list.optJSONObject(i);
+                if (c.has("burn") == (pass >= 2) && c.optBoolean("forced") == (pass % 2 == 1) && ok.test(c)) return c;
+            }
+        }
+        return null;
     }
 
     JSONArray qualities() {

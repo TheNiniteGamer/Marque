@@ -204,6 +204,7 @@ function rankCard(x) {
 }
 
 function hubSection(hub) {
+  if (hub.key === 'continue') continueIds = new Set(hub.items.flatMap((x) => [x.id, x.showId].filter(Boolean)));
   const link = hub.libraryId ? `#/library/${hub.libraryId}` : hub.link;
   return html`<section class="hub">
     <div class="hub-head"><h2>${hub.title}</h2>${hub.note ? html`<span class="hub-note">${hub.note}</span>` : ''}${link ? html`<a class="see-all" href="${link}">See all ›</a>` : ''}</div>

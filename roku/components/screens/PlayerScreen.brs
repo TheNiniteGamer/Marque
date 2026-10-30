@@ -345,17 +345,20 @@ sub start()
         end for
     end if
     if want <> "" and want <> "off" then
-        for i = 0 to m.subs.Count() - 1
-            if m.subs[i].burn = invalid and mqStr(m.subs[i].lang) = want then
-                setSubtitle(i)
-                exit for
-            end if
-        end for
+        i = textSubIndex(want)
+        if i >= 0 then setSubtitle(i)
     end if
     ' Settings → Turn on subtitles by default: any language, when nothing else was picked.
     if m.subOn = invalid and want = "" and mqRead("subsOn:" + mqStr(m.global.username)) = "1" then
+        i = textSubIndex("")
+        if i >= 0 then setSubtitle(i)
+    end if
+    ' Subtitles off: a "forced" track in the language being listened to still shows (just the bits in
+    ' another language, as the film intends).
+    if m.subOn = invalid and x.audioTracks <> invalid and m.audio < x.audioTracks.Count() then
+        heard = mqStr(x.audioTracks[m.audio].lang)
         for i = 0 to m.subs.Count() - 1
-            if m.subs[i].burn = invalid then
+            if heard <> "" and m.subs[i].burn = invalid and mqIsTrue(m.subs[i].forced) and sameLang(m.subs[i].lang, heard) then
                 setSubtitle(i)
                 exit for
             end if
@@ -363,6 +366,18 @@ sub start()
     end if
     if m.subOn = invalid then m.video.globalCaptionMode = "Off"
 end sub
+
+' The first text subtitles in `lang` (any language when ""): full ones before "forced" ones (just
+' the foreign-language bits). -1 when there are none.
+function textSubIndex(lang as String) as Integer
+    for pass = 0 to 1
+        for i = 0 to m.subs.Count() - 1
+            s = m.subs[i]
+            if s.burn = invalid and mqIsTrue(s.forced) = (pass = 1) and (lang = "" or mqStr(s.lang) = lang) then return i
+        end for
+    end for
+    return -1
+end function
 
 ' Another sound track than the first: playing the file as it is, the Roku switches to it once the
 ' video has opened (onAudioTracks) when it decodes that track; otherwise the server converts with it.

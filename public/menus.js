@@ -40,9 +40,8 @@ window.addEventListener('scroll', closeMenu, { passive: true });
 
 // ---------- actions on items ----------
 async function setWatchedFor(x, watched) {
-  if (x.type === 'show') await api(`/api/shows/${x.id}/watched`, { method: 'POST', body: { watched } });
-  else await api(`/api/items/${x.id}/watched`, { method: 'POST', body: { watched } });
-  toast(watched ? 'Marked as watched' : 'Marked as unwatched');
+  const r = await api(`/api/${x.type === 'show' ? 'shows' : 'items'}/${x.id}/watched`, { method: 'POST', body: { watched } });
+  undoToast(watched ? 'Marked as watched' : 'Marked as unwatched', r?.undo);
   router();
 }
 
@@ -59,6 +58,11 @@ async function refreshMetadata(id) {
   router();
 }
 
+// Continue Watching's titles (and their shows), from the last home page: a title's own page offers
+// "Remove from Continue Watching" too, the only way on a TV, where cards have no ⋯. (Opened straight
+// from a link, anything part-way through offers it.)
+let continueIds = new Set();
+
 function itemMenu(anchor, x, { ctx } = {}) {
   const admin = state.user.role === 'admin';
   const watched = x.type === 'show' ? x.episodeCount > 0 && !x.unwatchedCount : !!x.progress?.watched;
@@ -70,8 +74,8 @@ function itemMenu(anchor, x, { ctx } = {}) {
     } },
     { label: watched ? '○  Mark as unwatched' : '✓  Mark as watched', onClick: () => setWatchedFor(x, !watched) },
     { label: x.inWatchlist ? '♥  Remove from My List' : '♡  Add to My List', hidden: x.type === 'episode', onClick: () => toggleWatchlist(x) },
-    { label: '✕  Remove from Continue Watching', hidden: ctx !== 'continue', onClick: async () => {
-      await api(`/api/continue/${x.id}/hide`, { method: 'POST' }); toast('Removed from Continue Watching'); router();
+    { label: '✕  Remove from Continue Watching', hidden: ctx !== 'continue' && !continueIds.has(x.id) && !(x.progress?.position > 15 && !x.progress.watched), onClick: async () => {
+      await api(`/api/continue/${x.id}/hide`, { method: 'POST' }); continueIds.delete(x.id); toast('Removed from Continue Watching'); router();
     } },
     { label: '📺  Go to show', hidden: x.type !== 'episode', onClick: () => { location.hash = `#/show/${x.showId}`; } },
     { sep: true, hidden: !admin },

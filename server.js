@@ -807,14 +807,17 @@ async function main() {
   if (scanEvery > 0) setInterval(() => scanner.enqueueAll(), scanEvery * 60_000).unref();
 }
 
+let stopping = false;
 function shutdown() {
+  if (stopping) return;
+  stopping = true;
   for (const p of transcodes) p.kill('SIGKILL');
   hls.stopAll();
   offline.stop();
   parties.closeAll();
   for (const p of downloader.procs.values()) p.kill('SIGTERM'); // interrupted downloads are requeued on next start
-  store.flush();
-  process.exit(0);
+  // An overnight conversion carries on from where it got to after the restart.
+  optimizer.suspendForRestart().finally(() => { store.flush(); process.exit(0); });
 }
 // A stray error in some background job shouldn't take the whole server down (Node stops on an
 // unhandled rejection): it's written to the log (Settings → Logs) instead.

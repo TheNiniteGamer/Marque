@@ -129,14 +129,31 @@ const avatarPic = (u) => (u?.avatar?.photo ? html`<img class="av-img" src="${u.a
 const pct = (p, d) => (d ? Math.min(100, Math.max(0, (p / d) * 100)) : 0);
 
 // ---------- ui helpers ----------
-function toast(msg, error = false) {
+// `action` adds a button to the message, e.g. { label: 'Undo', run }; it then stays a little longer.
+function toast(msg, error = false, action = null) {
   const el = document.createElement('div');
   el.className = `toast${error ? ' error' : ''}`;
   el.textContent = msg;
+  if (action) {
+    const b = document.createElement('button');
+    b.className = 'toast-action';
+    b.textContent = action.label;
+    b.onclick = () => { el.remove(); Promise.resolve(action.run()).catch((err) => toast(err.message, true)); };
+    el.append(b);
+  }
   const root = $('#toast-root');
   root.append(el);
   while (root.children.length > 2) root.firstElementChild.remove();
-  setTimeout(() => el.remove(), 3500);
+  setTimeout(() => el.remove(), action ? 8000 : 3500);
+}
+// After marking things watched or unwatched: "Undo" puts them back (the server keeps how they were
+// for a few minutes).
+function undoToast(msg, undo) {
+  toast(msg, false, undo ? { label: 'Undo', run: async () => {
+    await api('/api/watched/undo', { method: 'POST', body: { undo } });
+    toast('Put back as it was');
+    router();
+  } } : null);
 }
 // Image fallback: swap broken artwork for a text placeholder.
 document.addEventListener('error', (e) => {

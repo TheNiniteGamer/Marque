@@ -95,6 +95,42 @@ const until = async (fn, ms = 20_000) => {
     if (players) throw new Error(`${players} player(s) still open on Home`);
   });
 
+  await check('a film in Continue Watching can be removed from its own page (as on a TV)', async () => {
+    await api.post(`${BASE}/api/items/${film.id}/progress`, { data: { position: 16, stopped: true } });
+    await open('#/');
+    await page.locator('.hub .card').first().waitFor();
+    await page.evaluate((id) => { location.hash = `#/item/${id}`; }, film.id); // (from Home, as on a TV)
+    await page.locator('#detail-layer .dlg-top [data-menu]').click();
+    await page.locator('.popmenu button', { hasText: 'Remove from Continue Watching' }).click();
+    await until(async () => {
+      const home = await (await api.get(`${BASE}/api/home`)).json();
+      return !home.hubs.find((h) => h.key === 'continue')?.items.some((x) => x.id === film.id);
+    });
+  });
+
+  await check('marking a film watched from its ⋯ menu can be undone', async () => {
+    const before = (await (await api.get(`${BASE}/api/items/${film.id}`)).json()).progress;
+    await open(`#/item/${film.id}`);
+    await page.locator('#detail-layer .dlg-top [data-menu]').click();
+    await page.locator('.popmenu button', { hasText: 'Mark as watched' }).click();
+    await page.locator('.toast-action', { hasText: 'Undo' }).click();
+    await page.getByText('Put back as it was').waitFor();
+    const after = (await (await api.get(`${BASE}/api/items/${film.id}`)).json()).progress;
+    if (JSON.stringify(after) !== JSON.stringify(before)) throw new Error(`progress is ${JSON.stringify(after)}, was ${JSON.stringify(before)}`);
+  });
+
+  await check('on a phone, the player’s buttons all stay on the screen', async () => {
+    const phone = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, storageState: await ctx.storageState() });
+    const p = await phone.newPage();
+    p.on('pageerror', (e) => errors.push(e.message));
+    await p.goto(`${BASE}/?nointro#/play/${film.id}?t=0`);
+    await p.locator('.player .p-row').waitFor();
+    const off = await p.evaluate(() => [...document.querySelectorAll('.player .p-row > *')]
+      .filter((el) => el.offsetParent && el.getBoundingClientRect().right > innerWidth + 1).map((el) => el.dataset.a || el.className));
+    await phone.close();
+    if (off.length) throw new Error(`off the edge: ${off.join(', ')}`);
+  });
+
   await check('phones get the bar along the bottom', async () => {
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, storageState: await ctx.storageState() });
     const p = await phone.newPage();

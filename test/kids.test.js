@@ -15,6 +15,7 @@ test.before(async () => {
   clip(path.join(ROOT, 'Movies', 'Toy Story (1995)', 'Toy Story (1995).mp4'));
   clip(path.join(ROOT, 'Movies', 'Alien (1979)', 'Alien (1979).mp4'));
   clip(path.join(ROOT, 'Movies', 'Home Video (2020)', 'Home Video (2020).mp4'));
+  clip(path.join(ROOT, 'Movies', 'Mystery Film (2010)', 'Mystery Film (2010).mp4'));
   srv = await startServer({ DATA_DIR: path.join(ROOT, 'data'), AUTO_LIBRARIES: `Movies:movie:${path.join(ROOT, 'Movies')}` });
   admin = srv.client();
   await admin('POST', '/api/auth/setup', { username: 'admin', password: 'password1' });
@@ -22,9 +23,11 @@ test.before(async () => {
   const lib = (await admin('GET', '/api/libraries')).data[0].id;
   const items = (await admin('GET', `/api/libraries/${lib}/items`)).data.items;
   ids = Object.fromEntries(items.map((i) => [i.title, i.id]));
-  // Ratings by hand (no TMDB in tests): G and R; the home video has none.
+  // Ratings by hand (no TMDB in tests): G and R. The home video has none (an admin marked it as not
+  // a film); nothing is known about the mystery film (never matched).
   assert.equal((await admin('PATCH', `/api/meta/${ids['Toy Story']}`, { contentRating: 'g' })).status, 200);
   await admin('PATCH', `/api/meta/${ids.Alien}`, { contentRating: 'R' });
+  assert.equal((await admin('POST', `/api/meta/${ids['Home Video']}/unmatch`)).status, 200);
   assert.equal((await admin('PATCH', `/api/meta/${ids.Alien}`, { contentRating: 'Banana' })).status, 400);
   await admin('POST', '/api/users', { username: 'Ellie', password: 'password1' });
   kid = srv.client();
@@ -46,11 +49,16 @@ test('a kids profile only sees titles rated for its age', async () => {
     const lib = (await kid('GET', '/api/libraries')).data[0];
     return (await kid('GET', `/api/libraries/${lib.id}/items`)).data.items.map((i) => i.title).sort();
   };
-  assert.deepEqual(await titles(), ['Alien', 'Home Video', 'Toy Story']);
+  assert.deepEqual(await titles(), ['Alien', 'Home Video', 'Mystery Film', 'Toy Story']);
   const users = (await admin('GET', '/api/users')).data;
   const ellie = users.find((u) => u.username === 'Ellie');
   await admin('PATCH', `/api/users/${ellie.id}`, { maxAge: 7 });
-  assert.deepEqual(await titles(), ['Home Video', 'Toy Story'], 'R is hidden, unrated still shown');
+  assert.deepEqual(await titles(), ['Home Video', 'Toy Story'], 'R is hidden, unrated still shown, the unidentified film isn’t');
+  assert.equal((await kid('GET', `/api/items/${ids['Mystery Film']}`)).status, 404);
+  // Once someone gives it a rating, it's judged by that like any other.
+  await admin('PATCH', `/api/meta/${ids['Mystery Film']}`, { contentRating: 'TV-Y7' });
+  assert.deepEqual(await titles(), ['Home Video', 'Mystery Film', 'Toy Story']);
+  await admin('PATCH', `/api/meta/${ids['Mystery Film']}`, { contentRating: 'PG-13' });
   // Hidden titles look like they don't exist: details, playback, artwork, search.
   assert.equal((await kid('GET', `/api/items/${ids.Alien}`)).status, 404);
   assert.equal((await kid('GET', `/api/items/${ids.Alien}/playback`)).status, 404);
@@ -64,7 +72,7 @@ test('a kids profile only sees titles rated for its age', async () => {
   assert.equal((await kid('GET', '/api/auth/me')).data.user.maxAge, 7);
   // Admins always see everything.
   const lib = (await admin('GET', '/api/libraries')).data[0];
-  assert.equal((await admin('GET', `/api/libraries/${lib.id}/items`)).data.items.length, 3);
+  assert.equal((await admin('GET', `/api/libraries/${lib.id}/items`)).data.items.length, 4);
   assert.equal((await admin('PATCH', `/api/users/${ellie.id}`, { maxAge: 40 })).status, 400);
 });
 

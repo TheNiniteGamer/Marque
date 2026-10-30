@@ -22,6 +22,8 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$WORK/films:/films" --entrypoint 
   -f lavfi -i testsrc2=size=640x360:rate=25:duration=20 -f lavfi -i sine=frequency=440:duration=20 \
   -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -b:v 400k -c:a libopus "/films/Test Clip (2020).webm"
 cp "$WORK/films/Test Clip (2020).webm" "$WORK/films/Second Clip (2021).webm"
+# Subtitles beside the first, as most titles have (the player then has a subtitle menu too).
+printf '1\n00:00:01,000 --> 00:00:04,000\nHello there\n' > "$WORK/films/Test Clip (2020).en.srt"
 
 docker network create "$NET" >/dev/null
 docker run -d --name "$NET-server" --network "$NET" --user "$(id -u):$(id -g)" -v "$WORK/data:/data" -v "$WORK/films:/films:ro" \

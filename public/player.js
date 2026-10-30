@@ -120,6 +120,10 @@ function defaultQuality() {
 // Identifies this browser tab on the Activity page.
 const PAGE_ID = Math.random().toString(36).slice(2, 12);
 
+// Subtitles to turn on, best first: full ones before "forced" ones (only the foreign-language bits),
+// text before pictures (those need the video converted).
+const bySubRank = (subs) => [...subs].sort((a, b) => ((a.burn != null) * 2 + !!a.forced) - ((b.burn != null) * 2 + !!b.forced));
+
 class Player {
   constructor(item, start, { partyId = null } = {}) {
     this.item = item;
@@ -133,19 +137,20 @@ class Player {
     const pref = item.tracks;
     if (pref?.audio) this.audio = Math.max(0, (item.audioTracks || []).findIndex((t) => t.lang === pref.audio));
     if (pref?.subs === 'off') this.subId = null;
-    else if (pref?.subs) {
-      const subs = [...item.subtitles].sort((a, b) => (a.burn != null) - (b.burn != null));
-      this.subId = subs.find((s) => s.lang === pref.subs)?.id || this.subId;
-    }
+    else if (pref?.subs) this.subId = bySubRank(item.subtitles).find((s) => s.lang === pref.subs)?.id || this.subId;
     // Otherwise the account's languages (Account → Playback), when the title has them.
     if (!pref?.audio && playerPref('audioLang')) {
       const i = (item.audioTracks || []).findIndex((t) => sameLang(t.lang, playerPref('audioLang')));
       if (i >= 0) this.audio = i;
     }
     if (!pref?.subs && playerPref('subLang')) {
-      const s = [...item.subtitles].sort((a, b) => (a.burn != null) - (b.burn != null)).find((x) => sameLang(x.lang, playerPref('subLang')));
+      const s = bySubRank(item.subtitles).find((x) => sameLang(x.lang, playerPref('subLang')));
       if (s) this.subId = s.id;
     }
+    // Subtitles off: a "forced" track in the language being listened to still shows (just the bits
+    // in another language, as the film intends).
+    const heard = item.audioTracks?.[this.audio]?.lang;
+    if (!this.subId && heard) this.subId = item.subtitles.find((x) => x.forced && x.burn == null && sameLang(x.lang, heard))?.id || null;
     this.lastReported = -1;
     this.dragging = false;
     this.pb = null;          // signed links + streaming session from /playback
@@ -351,8 +356,7 @@ class Player {
   }
 
   pickDefaultSub() {
-    // Text subtitles first: picture ones need the video converted.
-    const subs = [...this.item.subtitles].sort((a, b) => (a.burn != null) - (b.burn != null));
+    const subs = bySubRank(this.item.subtitles);
     const lang = (navigator.language || 'en').slice(0, 2);
     return (subs.find((s) => s.lang && s.lang.toLowerCase().startsWith(lang)) || subs[0])?.id || null;
   }

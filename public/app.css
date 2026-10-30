@@ -411,6 +411,8 @@ label.check input { accent-color: var(--accent); width: 16px; height: 16px; }
 .toast { background: rgba(36,36,36,.92); backdrop-filter: blur(10px); border: 1px solid var(--line); border-left: 3px solid #4ade80; padding: 11px 18px 11px 14px;
   border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: rise .25s var(--ease); font-size: var(--fs-md); max-width: min(440px, 90vw); }
 .toast.error { border-color: var(--line); border-left-color: var(--danger); }
+.toast-action { margin-left: 14px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255,255,255,.08); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.toast-action:hover, .toast-action:focus-visible { background: rgba(255,255,255,.18); }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
 
 /* ---------- player ---------- */
@@ -497,7 +499,11 @@ input.p-volume { width: 90px; accent-color: var(--accent); }
   .episode .ep-overview { -webkit-line-clamp: 2; font-size: 13px; }
   .similar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .player .p-top, .player .p-bottom { padding-left: 12px; padding-right: 12px; }
-  input.p-volume, .p-hide-sm { display: none; }
+  /* (.player .p-btn would win over a plain .p-hide-sm.) Phones have volume buttons; what's left
+     wraps onto a second line rather than running off the screen. */
+  input.p-volume, .p-hide-sm, .player .p-hide-sm, .player [data-a="mute"] { display: none; }
+  .player .p-row { flex-wrap: wrap; row-gap: 4px; }
+  .player .p-time { font-size: 13px; margin-left: 4px; }
 }
 
 /* ---------- card menus ---------- */

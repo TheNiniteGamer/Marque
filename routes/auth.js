@@ -5,7 +5,7 @@
 const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
-const { playerPrefs, cleanPrefs, cleanAvatar } = require('../lib/auth');
+const { playerPrefs, cleanPrefs, cleanAvatar, sameHousehold } = require('../lib/auth');
 
 module.exports = function register(app) {
   const {
@@ -109,11 +109,13 @@ module.exports = function register(app) {
   });
 
   // --- profiles ("Who's watching?") ---
-  route('GET', '/api/profiles', async (req, res, p, url, user) => json(res, 200, { current: user.id, currentName: user.username, profiles: auth.profiles() }));
+  route('GET', '/api/profiles', async (req, res, p, url, user) => json(res, 200, { current: user.id, currentName: user.username, profiles: auth.profiles(user) }));
   route('POST', '/api/auth/switch', async (req, res, p, url, user) => {
     const body = await readBody(req);
     const target = auth.byId(String(body.userId || ''));
     if (target?.id === user.id) return json(res, 200, { user: publicUser(user) });
+    // (Only profiles from your own household, as listed above.)
+    if (target && !sameHousehold(target, user)) throw new HttpError(404, 'That profile isn’t available here');
     await auth.checkSwitch(target, body.pin);
     const token = auth.switchSession(req, res, target);
     json(res, 200, { user: publicUser(target), ...(token ? { token } : {}) });

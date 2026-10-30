@@ -140,11 +140,12 @@ async function onBarClick(e) {
 }
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-function finish(msg) { toast(msg); endSelect(); router(); }
+function finish(msg, undo) { if (undo) undoToast(msg, undo); else toast(msg); endSelect(); router(); }
 
 async function bulk(action, extra = {}) {
   const ids = selectedTitleIds();
-  await api('/api/bulk', { method: 'POST', body: { ids, action, ...extra } });
+  const r = await api('/api/bulk', { method: 'POST', body: { ids, action, ...extra } });
+  bulk.undo = r?.undo || null;
   return ids.length;
 }
 
@@ -156,7 +157,7 @@ async function titlesAction(act, anchor) {
     await api(`/api/collections/${id}/members/remove`, { method: 'POST', body: { ids } });
     return finish(`Removed ${plural(ids.length, 'title')} from the collection`);
   }
-  if (act === 'watched' || act === 'unwatched') return finish(`${plural(await bulk(act), 'title')} marked as ${act}`);
+  if (act === 'watched' || act === 'unwatched') return finish(`${plural(await bulk(act), 'title')} marked as ${act}`, bulk.undo);
   if (act === 'list') {
     return openMenu(anchor, [
       { label: '♡  Add to My List', onClick: async () => finish(`Added ${plural(await bulk('watchlist-add'), 'title')} to My List`) },

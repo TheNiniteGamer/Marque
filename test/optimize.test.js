@@ -85,6 +85,54 @@ test('a conversion on the graphics card is ended on a pause, carries on where it
   assert.deepEqual(fs.readdirSync(path.join(dir, 'copies')), [path.basename(item.optimized.file)], 'the parts are gone');
 });
 
+test('a conversion stopped for a restart carries on from there afterwards', async () => {
+  const dir = path.join(ROOT, 'restart');
+  const file = path.join(dir, 'Long Film.mkv');
+  fs.mkdirSync(dir, { recursive: true });
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=25:duration=60', '-f', 'lavfi', '-i', 'sine=d=60',
+    '-c:v', 'mpeg2video', '-b:v', '6M', '-c:a', 'ac3', file]);
+  const { probe } = require('../lib/media');
+  const item = { id: 'long2', type: 'movie', title: 'Long Film', file, mtime: 1, media: await probe(file) };
+  const store = { data: { items: { long2: item }, settings: { optimize: { enabled: true } } }, save() {} };
+  const copies = path.join(dir, 'copies');
+  const before = new Optimizer(store, copies, { active: 'software' }, { probe });
+  before.run(item);
+  await until(() => before.running?.progress > 0.2, 60_000);
+  await before.suspendForRestart();
+  const saved = store.data.optimizeResume;
+  assert.equal(saved?.parts.length, 1, 'what was done is kept');
+  assert.ok(saved.done > 5 && saved.done < 55, `part of the way (${saved.done}s)`);
+  before.tick();
+  assert.equal(before.running.proc, null, 'nothing more starts while Marquee is stopping');
+  const after = new Optimizer(store, copies, { active: 'software' }, { probe }); // Marquee started again
+  assert.ok(fs.existsSync(saved.parts[0]), 'the part survives the start-up tidy');
+  after.startNow(1);
+  await until(() => item.optimized, 120_000);
+  assert.ok(Math.abs(item.optimized.media.duration - 60) < 1, `the whole film, once (${item.optimized.media.duration}s)`);
+  assert.equal(store.data.optimizeResume, undefined);
+  assert.deepEqual(fs.readdirSync(copies), [path.basename(item.optimized.file)], 'the parts are gone');
+});
+
+test('a copy much shorter than the original isn’t used', async () => {
+  const dir = path.join(ROOT, 'short');
+  const file = path.join(dir, 'Cut Short.mkv');
+  fs.mkdirSync(dir, { recursive: true });
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=320x240:rate=10:duration=70', '-f', 'lavfi', '-i', 'sine=d=70',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'ac3', file]);
+  const { probe } = require('../lib/media');
+  const item = { id: 'short1', type: 'movie', title: 'Cut Short', file, mtime: 1, media: await probe(file) };
+  const store = { data: { items: { short1: item }, settings: { optimize: { enabled: true } } }, save() {} };
+  // As if ffmpeg stopped halfway through without saying so.
+  const halfway = async (f) => { const m = await probe(f); return f === file ? m : { ...m, duration: m.duration / 2 }; };
+  const copies = path.join(dir, 'copies');
+  const o = new Optimizer(store, copies, { active: 'software' }, { probe: halfway });
+  o.run(item);
+  await until(() => item.optimizeFailed, 60_000);
+  assert.match(item.optimizeFailed.error, /long/);
+  assert.equal(item.optimized, undefined);
+  assert.deepEqual(fs.readdirSync(copies), []);
+});
+
 test('admins pause, carry on, or stop for tonight', () => {
   const store = { data: { items: {}, settings: { optimize: { enabled: true, end: '07:00' } } }, save() {} };
   const o = new Optimizer(store, path.join(ROOT, 'hold'), null, { now: () => new Date('2026-10-20T23:30:00') });

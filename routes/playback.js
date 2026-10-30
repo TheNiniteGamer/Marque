@@ -24,6 +24,9 @@ module.exports = function register(app) {
     return n;
   }
 
+  // Drawing in picture subtitles on a converted copy: from the original (lib.pictureSubsOf).
+  const withPictureSubs = (item, url) => (url.searchParams.has('burn') ? lib.pictureSubsOf(store, item) : item);
+
   // Kids' bedtime and daily limit (screentime.js): nothing plays outside them, whatever the device.
   function checkScreenTime(user) {
     const b = screenTime.blocked(store, user);
@@ -88,7 +91,7 @@ module.exports = function register(app) {
   }, 'media');
 
   route('GET', '/api/items/:id/seekpoint', async (req, res, { id }, url, user) => {
-    const item = getItem(id, user);
+    const item = withPictureSubs(getItem(id, user), url);
     const t = Math.max(0, Number(url.searchParams.get('t')) || 0);
     // Request the transcode with `t`; the stream's first frame will be at `start` (<= t).
     // (With subtitles drawn in, the video is re-encoded and starts exactly at t.)
@@ -96,7 +99,7 @@ module.exports = function register(app) {
   }, 'media');
 
   route('GET', '/api/items/:id/transcode', async (req, res, { id }, url, user) => {
-    const item = getItem(id, user);
+    const item = withPictureSubs(getItem(id, user), url);
     checkScreenTime(user);
     if (!fs.existsSync(item.file)) throw new HttpError(404, 'File not found on disk');
     checkOriginalAllowed(req, item);
@@ -188,8 +191,8 @@ module.exports = function register(app) {
     for (const k of ['sid', 'audio', 'burn', 'night', 'mt', 'at']) if (url.searchParams.get(k)) q.set(k, url.searchParams.get(k));
     return `?${q}`;
   };
-  const hlsItem = (id, user) => {
-    const item = getItem(id, user);
+  const hlsItem = (id, user, url) => {
+    const item = withPictureSubs(getItem(id, user), url);
     checkScreenTime(user);
     if (!item.media?.video || !item.media.duration) throw new HttpError(400, 'This file cannot be streamed');
     if (!fs.existsSync(item.file)) throw new HttpError(404, 'File not found on disk');
@@ -206,20 +209,20 @@ module.exports = function register(app) {
     return k;
   };
   route('GET', '/api/items/:id/hls/master.m3u8', async (req, res, { id }, url, user) => {
-    const item = hlsItem(id, user);
+    const item = hlsItem(id, user, url);
     sourceKeyframes(req, item, url.searchParams.get('q'));
     const body = hlsLib.masterPlaylist(item, { only: url.searchParams.get('q') || null, query: hlsQuery(url), maxHeight: remoteLimit(req, item)?.maxHeight });
     res.writeHead(200, M3U8); res.end(body);
   }, 'media');
   route('GET', '/api/items/:id/hls/:quality/index.m3u8', async (req, res, { id, quality }, url, user) => {
-    const item = hlsItem(id, user);
+    const item = hlsItem(id, user, url);
     const body = hlsLib.mediaPlaylist(item, quality, { query: hlsQuery(url), maxHeight: remoteLimit(req, item)?.maxHeight, keyframes: sourceKeyframes(req, item, quality) });
     res.writeHead(200, M3U8); res.end(body);
   }, 'media');
   route('GET', '/api/items/:id/hls/:quality/:segment', async (req, res, { id, quality, segment }, url, user) => {
     const m = /^seg-(\d+)\.ts$/.exec(segment);
     if (!m) throw new HttpError(404, 'Not found');
-    const item = hlsItem(id, user);
+    const item = hlsItem(id, user, url);
     const file = await hls.segment(item, {
       quality, sid: url.searchParams.get('sid'), audio: Math.max(0, Number(url.searchParams.get('audio')) || 0),
       burn: burnParam(item, url), night: url.searchParams.get('night') === '1', maxHeight: remoteLimit(req, item)?.maxHeight, userId: user.id,

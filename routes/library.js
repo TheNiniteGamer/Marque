@@ -122,8 +122,8 @@ module.exports = function register(app) {
     const show = getShow(id, user);
     let eps = lib.episodesOf(store, show.id);
     if (body.season !== undefined) eps = eps.filter((e) => (e.season ?? null) === body.season);
-    lib.setWatched(store, user, eps.map((e) => e.id), body.watched !== false);
-    json(res, 200, lib.showDetail(store, user, show, { episodes: 'none' }));
+    const undo = lib.setWatched(store, user, eps.map((e) => e.id), body.watched !== false);
+    json(res, 200, { ...lib.showDetail(store, user, show, { episodes: 'none' }), undo });
   });
 
   route('GET', '/api/items/:id', async (req, res, { id }, url, user) => {
@@ -190,10 +190,11 @@ module.exports = function register(app) {
     const action = String(body.action || '');
     if (BULK_ADMIN.has(action) && user.role !== 'admin') throw new HttpError(403, 'Only admins can do that');
     const targets = ids.map((id) => getTarget(id, user));
+    let undo = null;
     const episodesOf = ({ target, kind }) => (kind === 'show' ? lib.episodesOf(store, target.id).map((e) => e.id) : [target.id]);
     switch (action) {
       case 'watched': case 'unwatched':
-        lib.setWatched(store, user, targets.flatMap(episodesOf), action === 'watched');
+        undo = lib.setWatched(store, user, targets.flatMap(episodesOf), action === 'watched');
         break;
       case 'watchlist-add': case 'watchlist-remove':
         for (const { target, kind } of targets) if (kind !== 'episode') lib.setWatchlist(store, user, target.id, action === 'watchlist-add');
@@ -225,7 +226,7 @@ module.exports = function register(app) {
       default:
         throw new HttpError(400, `Unknown action: ${action}`);
     }
-    json(res, 200, { ok: true, count: ids.length });
+    json(res, 200, { ok: true, count: ids.length, ...(undo ? { undo } : {}) });
   });
 
   route('POST', '/api/items/:id/progress', async (req, res, { id }, url, user) => {
@@ -257,8 +258,14 @@ module.exports = function register(app) {
   route('POST', '/api/items/:id/watched', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);
     const body = await readBody(req);
-    lib.setWatched(store, user, [item.id], body.watched !== false);
-    json(res, 200, lib.itemSummary(store, user, item));
+    const undo = lib.setWatched(store, user, [item.id], body.watched !== false);
+    json(res, 200, { ...lib.itemSummary(store, user, item), undo });
+  });
+  // Puts back what a "mark watched / unwatched" changed (its undo id, for a few minutes).
+  route('POST', '/api/watched/undo', async (req, res, p, url, user) => {
+    const body = await readBody(req);
+    if (!lib.undoWatched(store, user, body.undo)) throw new HttpError(410, 'That can’t be undone any more');
+    json(res, 200, { ok: true });
   });
 
   // --- people: the titles an actor is in, and their photo (fetched from TMDB once, then kept) ---

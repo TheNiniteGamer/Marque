@@ -112,6 +112,7 @@ sub buildButtons(x as Object)
         up = x.upNext
         if up <> invalid then
             label = "▶  Play " + mqEpLabel(up)
+            if mqIsTrue(up.again) then label = "▶  Watch again from the start"
             if up.progress <> invalid and mqNum(up.progress.position) > 0 and not mqIsTrue(up.progress.watched) then
                 label = "▶  Resume " + mqEpLabel(up)
                 m.progress.text = mqEpLabel(up) + " · " + mqStr(up.title) + " — " + mqTimeLeft(up)
