@@ -222,7 +222,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        if (Updater.onStatus(this, intent)) return;
         String q = searchQuery(intent);
         if (q != null) showSearch(q);
         // A Continue Watching card on the TV's home screen.
@@ -243,6 +242,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        Updater.pause(this);
         if (web != null) web.onPause();
         CookieManager.getInstance().flush();
         super.onPause();
