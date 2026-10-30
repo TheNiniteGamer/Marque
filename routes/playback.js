@@ -6,6 +6,9 @@ const { playerPrefs } = require('../lib/auth');
 const { saveDownloaded } = require('../lib/autosubs');
 const screenTime = require('../lib/screentime');
 
+// How long a conversion for a player (/transcode) waits for it to take more before it's stopped.
+const STALL_MS = Number(process.env.TRANSCODE_STALL_MS) || 30 * 60_000;
+
 module.exports = function register(app) {
   const {
     fs, crypto, path, pipeline, media, subs, lib, hlsLib,
@@ -47,7 +50,8 @@ module.exports = function register(app) {
 
   // --- downloads for watching offline (the phone app) ---
   // What can be downloaded: the original file (when allowed), and the sizes a copy can be made at.
-  // ?quality=&audio= also says how that copy is coming along.
+  // ?quality=&audio= also says how that copy is coming along. Like playing, none of it at a kid's
+  // bedtime or once their day's limit is used up (screentime.js).
   function offlineChoice(req, item, url, body = null) {
     if (!item.media?.video) throw new HttpError(400, 'This file cannot be downloaded');
     const quality = String(body?.quality ?? url.searchParams.get('quality') ?? '');
@@ -58,6 +62,7 @@ module.exports = function register(app) {
   }
   route('GET', '/api/items/:id/offline', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);
+    checkScreenTime(user);
     if (!item.media?.video) throw new HttpError(400, 'This file cannot be downloaded');
     const limit = remoteLimit(req, item);
     const out = {
@@ -69,10 +74,12 @@ module.exports = function register(app) {
   });
   route('POST', '/api/items/:id/offline', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);
+    checkScreenTime(user);
     json(res, 200, offline.request(item, { ...offlineChoice(req, item, url, await readBody(req)), userId: user.role === 'admin' ? null : user.id }));
   });
   route('GET', '/api/items/:id/offline/file', async (req, res, { id }, url, user) => {
     const item = getItem(id, user);
+    checkScreenTime(user);
     const choice = offlineChoice(req, item, url);
     const name = `${path.basename(item.file, path.extname(item.file))} (${choice.quality}).mp4`;
     sendFile(req, res, offline.path(item, choice), { type: 'video/mp4', headers: { 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}` } });
@@ -124,6 +131,21 @@ module.exports = function register(app) {
       const stop = () => { if (proc.exitCode === null) proc.kill('SIGKILL'); };
       const onClose = () => { finished = true; stop(); };
       res.once('close', onClose);
+      // A player that has stopped taking the video without hanging up (a TV switched off at the
+      // wall, a phone gone to sleep, a player left paused all evening) would keep ffmpeg waiting
+      // for ever, with its graphics-card session, and the background work that waits for viewers.
+      // Stopped once the player has taken nothing for STALL_MS. (What was made already still waits
+      // for it, and plays if it carries on; the conversion stops counting as soon as ffmpeg has.)
+      let taken = Date.now();
+      proc.stdout.on('data', () => { taken = Date.now(); });
+      const stall = setInterval(() => {
+        if (!res.writableNeedDrain || Date.now() - taken < STALL_MS) return;
+        console.log(`[transcode] stopped converting ${path.basename(item.file)} for ${user.username}: the player took none of it for ${Math.round((Date.now() - taken) / 60_000)} min`);
+        clearInterval(stall);
+        finished = true;
+        transcodes.delete(proc);
+        stop();
+      }, Math.min(60_000, STALL_MS / 4));
       // Headers go out with the first bytes, so a graphics-card encoder that can't start can be
       // swapped for the CPU before the player sees anything.
       proc.stdout.once('data', (first) => {
@@ -134,6 +156,7 @@ module.exports = function register(app) {
       });
       proc.on('close', (code, signal) => {
         transcodes.delete(proc);
+        clearInterval(stall);
         res.off('close', onClose);
         if (finished) return;
         if (!sent && code && encoder !== 'software') {
@@ -256,7 +279,7 @@ module.exports = function register(app) {
     const p = partyFor(id, user);
     const body = await readBody(req);
     if (body.itemId) getItem(String(body.itemId), user);
-    parties.update(p, body);
+    parties.update(p, user, body);
     json(res, 200, parties.view(p));
   });
 
