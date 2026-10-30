@@ -60,6 +60,11 @@
             android:name=".DownloadsActivity"
             android:exported="false" />
 
+        <!-- Android's package installer answering about an update (Updater) -->
+        <receiver
+            android:name=".UpdateReceiver"
+            android:exported="false" />
+
         <!-- Pictures for Continue Watching on the TV's home screen -->
         <provider
             android:name=".ArtProvider"

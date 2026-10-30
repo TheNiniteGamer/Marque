@@ -50,6 +50,11 @@
     <string name="update_no_info">The server has no app update information. Update the Marquee server first.</string>
     <string name="update_downloading">Downloading the update… %1$d%%</string>
     <string name="update_failed">The update didn\'t install: %1$s</string>
+    <string name="update_no_screen">Android didn\'t open its install screen for the update. Some phones stop apps from installing their own updates.</string>
+    <string name="update_unfinished">The update hasn\'t finished installing.</string>
+    <string name="update_try_browser">You can install it through your web browser instead: let it download the update, then open the file to install it.</string>
+    <string name="update_browser">Install through the browser</string>
+    <string name="update_no_browser">This device has no web browser. Open %1$s in an app that can download files, then open the file to install it.</string>
     <string name="update_allow_title">Allow Marquee to install updates</string>
     <string name="update_allow_message">Android needs your OK, once, for Marquee to install its own updates. On the next screen, turn on \"Allow from this source\", then press Back.</string>
     <string name="update_open_settings">Open settings</string>

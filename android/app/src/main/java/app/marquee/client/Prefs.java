@@ -26,10 +26,15 @@ final class Prefs {
         p(c).edit().putString("server", url).putString("recent", new JSONArray(recent).toString()).apply();
     }
 
-    /** The app version the user said "Later" to (not offered again at start-up). */
-    static long skippedUpdate(Context c) { return p(c).getLong("skippedUpdate", 0); }
+    /** Whether the user said "Later" to this app version in the last week (not offered at start-up then). */
+    static boolean skippedUpdate(Context c, long code) {
+        long ago = System.currentTimeMillis() - p(c).getLong("skippedUpdateAt", 0);
+        return p(c).getLong("skippedUpdate", 0) == code && ago >= 0 && ago < 7 * 24 * 3600_000L;
+    }
 
-    static void setSkippedUpdate(Context c, long code) { p(c).edit().putLong("skippedUpdate", code).apply(); }
+    static void setSkippedUpdate(Context c, long code) {
+        p(c).edit().putLong("skippedUpdate", code).putLong("skippedUpdateAt", System.currentTimeMillis()).apply();
+    }
 
     /** Notifications up to this time have been shown on the phone (see NotifyJob). */
     static long notifiedUpTo(Context c) { return p(c).getLong("notifiedUpTo", 0); }

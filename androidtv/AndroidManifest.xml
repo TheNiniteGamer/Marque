@@ -53,6 +53,10 @@
             android:screenOrientation="landscape"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation" />
+        <!-- Android's package installer answering about an update (Updater) -->
+        <receiver
+            android:name="app.marquee.client.UpdateReceiver"
+            android:exported="false" />
         <!-- Pictures for Continue Watching on the TV's home screen -->
         <provider
             android:name="app.marquee.client.ArtProvider"
