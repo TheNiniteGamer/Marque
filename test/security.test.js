@@ -86,3 +86,12 @@ test('an image address typed in can’t point at the server itself', async () =>
   }
   await assert.rejects(downloadImage('file:///etc/passwd', dir, 'x', { untrusted: true }), /http\(s\)/);
 });
+
+test('a cookie with a broken %-escape is ignored, not a server error', async () => {
+  const login = await fetch(`${srv.base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'password1' }) });
+  const session = login.headers.get('set-cookie').split(';')[0];
+  const me = (cookie) => fetch(`${srv.base}/api/auth/me`, { headers: { cookie } });
+  assert.equal((await me('mq_session=%zz')).status, 401);
+  assert.equal((await me('other=%E0%A4%A; theme=dark')).status, 401);
+  assert.equal((await me(`junk=100%; ${session}`)).status, 200, 'the good ones still count');
+});
