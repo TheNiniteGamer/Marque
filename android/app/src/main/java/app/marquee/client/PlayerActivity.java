@@ -695,11 +695,21 @@ public class PlayerActivity extends Activity {
             .setPositiveButton(android.R.string.ok, (d, w) -> finish()).setOnCancelListener(d -> finish()).show();
     }
 
+    private long retriedAt = -1; // where a stream that stopped early was last picked up again
     private void onEnded() {
         if (item == null || reconnecting) return;
-        // A stream that stops well before the end may just be the server restarting.
+        // A stream that stops well before the end: the server restarting, or a conversion it stopped
+        // after a long pause. It carries on from there (once: a file that really ends early just ends).
         if (offlineFile == null && duration > 0 && lastGood >= 0 && lastGood < duration - 60) {
-            io.execute(() -> { boolean up = serverUp(); runOnUiThread(() -> { if (isFinishing()) return; if (up) ended(); else reconnect(); }); });
+            final long at = Math.round(lastGood);
+            io.execute(() -> {
+                boolean up = serverUp();
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    if (up && retriedAt == at) ended();
+                    else { retriedAt = at; reconnect(); }
+                });
+            });
             return;
         }
         ended();

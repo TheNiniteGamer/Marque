@@ -863,9 +863,16 @@ class Player {
   }
 
   onEnded() {
-    // A stream that stops well before the end may just be the server restarting.
+    // A stream that stops well before the end: the server restarting, or a conversion it stopped
+    // after a long pause. It carries on from there (once: a file that really ends early just ends).
     if (this.mode !== 'direct' && this.duration && this.time < this.duration - 60) {
-      serverUp().then((up) => { if (!this.root.isConnected) return; if (up) this.finish(); else this.reconnect(); });
+      const at = Math.round(this.time);
+      serverUp().then((up) => {
+        if (!this.root.isConnected) return;
+        if (up && this.retriedAt === at) { this.finish(); return; }
+        this.retriedAt = at;
+        this.reconnect();
+      });
       return;
     }
     this.finish();
@@ -1126,7 +1133,7 @@ class Player {
     $('.p-center-msg', this.root)?.remove();
     const box = document.createElement('div');
     box.className = 'p-center-msg p-reconnect';
-    box.innerHTML = html`<div class="spinner"></div><h2>Reconnecting to Marquee…</h2><p class="muted">The server is restarting. This carries on where you were in a moment.</p>`.s;
+    box.innerHTML = html`<div class="spinner"></div><h2>Reconnecting to Marquee…</h2><p class="muted">This carries on where you were in a moment.</p>`.s;
     this.root.append(box);
     const started = Date.now();
     const attempt = async () => {
