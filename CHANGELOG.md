@@ -4,6 +4,15 @@ Updates marked **Significant update** add major features or change how Marquee r
 Updates highlights them, and it's worth making a backup (Settings → Backups → Back up now) before
 installing one.
 
+## 0.24.29
+
+- **A show in two folders is one show.** When Sonarr gets a new season of a show you already had
+  (in a folder it didn't make), it puts the season in a new folder, and Marquee used to list the
+  show twice. Now two folders matched to the same show and year are shown as one, whichever site
+  each was matched from. The show that was there first keeps everyone's progress and My List, and
+  new episodes in either folder go straight into it. (A match Marquee isn't sure of, or a different
+  year, like *Doctor Who* 1963 and 2005, stays separate.)
+
 ## 0.24.28
 
 Fixes from a review of how the family uses Marquee, and security fixes.

@@ -399,6 +399,10 @@ in curly brackets: `Heat (1995) {tmdb-949}/`, `Heat (1995) [imdbid-tt0113277].mk
 folder like `The Office (US) {tvdb-73244}/`. The id is on the title's page at themoviedb.org,
 imdb.com or thetvdb.com.
 
+A show in two folders (an old copy of the first seasons, and the folder Sonarr makes for a new one)
+shows as one, once both are matched to the same show and year. Films work the same way: copies
+matched to the same film become its versions.
+
 ## Settings reference
 
 With Docker, the common settings go in `.env` (each is explained there). Others can be added under
